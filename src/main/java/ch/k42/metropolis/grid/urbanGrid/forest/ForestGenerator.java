@@ -483,6 +483,9 @@ public final class ForestGenerator {
       ch.k42.metropolis.grid.common.Grid tile = generator.getGridProvider().getGrid(chunkX, chunkZ);
       if (!(tile instanceof UrbanGrid grid)) return -1;
       MorphomosRegion region = grid.getMorphomosRegionAt(chunkX, chunkZ);
+      // World-planned creek/interfluve wilderness uses a synthetic FOREST
+      // owner local to the tile, not a PlanRegions union-find region.
+      if (region == null) region = grid.localCreekNaturalForestAt(chunkX, chunkZ);
       if (region == null || region.getContext() != ContextType.FOREST) return -1;
 
       boolean hard = PluginConfig.isWildHardBorders();
@@ -512,6 +515,7 @@ public final class ForestGenerator {
       ch.k42.metropolis.grid.common.Grid tile = generator.getGridProvider().getGrid(chunkX, chunkZ);
       if (!(tile instanceof UrbanGrid grid)) return null;
       MorphomosRegion region = grid.getMorphomosRegionAt(chunkX, chunkZ);
+      if (region == null) region = grid.localCreekNaturalForestAt(chunkX, chunkZ);
       if (region == null || region.getContext() != ContextType.FOREST) return null;
       Ctx ctx = new Ctx(generator, grid, region, terrainFor(generator));
       if (ctx.wild == null) return null;
