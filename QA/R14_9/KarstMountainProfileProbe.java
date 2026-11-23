@@ -74,8 +74,9 @@ public final class KarstMountainProfileProbe {
                     "karst lacks deep mountain-to-valley relief: " + (uplandMedian-cutMedian));
             double buildableShare = buildableUplands / (double) uplands.length;
             check(shoulder >= shoulderDeltas.length, "insufficient shoulder samples for seed " + seed + ": " + shoulder);
-            Arrays.sort(shoulderDeltas);
-            double shoulderP95 = shoulderDeltas[(int)(shoulderDeltas.length * 0.95)];
+            double[] sortedShoulderDeltas = shoulderDeltas.clone();
+            Arrays.sort(sortedShoulderDeltas);
+            double shoulderP95 = sortedShoulderDeltas[(int)(sortedShoulderDeltas.length * 0.95)];
             if (shoulderP95 > 38.0) {
                 boolean[] emitted = new boolean[shoulderDeltas.length];
                 for (int rank = 0; rank < 8; rank++) {
