@@ -45,7 +45,7 @@ Each JSONL record contains:
 - center/reference coordinates;
 - verified interior candidate points with floor Y and standing-clearance flags.
 
-The hook is connected to the successful parcel-completion path. File-sliced schematics export once only after every declared slice has finished and all overflow slices have completed. Non-BUILD schematic types are ignored. Interior sampling inspects only chunks that are already loaded by generation; it never force-loads chunks for this export.
+The hook is connected to the successful parcel-completion path. File-sliced schematics export once only after every declared slice has finished and all overflow slices have completed. Non-BUILD types are ignored. Forced landmark districts are excluded even when they fall back to an ordinary district context; explicit LANDMARK and PARK contexts are also excluded. Placeholder parcels have no clipboard and are ignored. Interior sampling inspects only chunks that are already loaded by generation; it never force-loads chunks for this export.
 
 A dedicated single-thread writer handles serialization and disk work away from generation callbacks. It uses deterministic IDs, a restart-built duplicate index, newline-terminated records, file-channel force, retry-on-write-failure, and recovery of an interrupted final JSONL line. Dead Streets owns population assignment and all physical zombie lifecycle behavior.
 
