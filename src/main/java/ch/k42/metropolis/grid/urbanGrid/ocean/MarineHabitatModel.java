@@ -59,7 +59,7 @@ public final class MarineHabitatModel {
      * the seabed does not form concentric, sharply bounded rings.
      */
     public static int habitat(long seed, int x, int z, int depth, double shoreDistance) {
-        if (depth < 3 || depth > 48 || shoreDistance < 7.0) {
+        if (depth < 4 || depth > 48 || shoreDistance < 7.0) {
             return BARREN;
         }
 
@@ -70,42 +70,42 @@ public final class MarineHabitatModel {
 
         // Patchy reefs live on the brighter, shallower shelf and outer shelf.
         if (depth >= 5 && depth <= 18 && shoreDistance >= 20.0
-                && macro > 0.42 && macro < 0.92
-                && meso > 0.43 && meso < 0.88 && micro > 0.38
-                && roll < 0.78) {
+                && macro > 0.35 && macro < 0.97
+                && meso > 0.34 && meso < 0.92 && micro > 0.28
+                && roll < 0.84) {
             return CORAL_REEF;
         }
 
         // Dense kelp belts occupy mid-depth water, with large barren gaps
         // retained between forest patches.
         if (depth >= 9 && depth <= 36 && shoreDistance >= 25.0
-                && macro > 0.18 && macro < 0.74
-                && meso > 0.35 && micro > 0.36
-                && roll < 0.86) {
+                && macro > 0.10 && macro < 0.82
+                && meso > 0.28 && micro > 0.29
+                && roll < 0.91) {
             return KELP_FOREST;
         }
 
         // Deeper sponge fields add a different silhouette without turning the
         // whole abyss into vegetation.
         if (depth >= 16 && depth <= 42 && shoreDistance >= 42.0
-                && macro > 0.22 && macro < 0.90
-                && meso < 0.70 && micro > 0.46
-                && roll < 0.68) {
+                && macro > 0.14 && macro < 0.95
+                && meso < 0.77 && micro > 0.36
+                && roll < 0.78) {
             return SPONGE_GARDEN;
         }
 
         // Hydrothermal fields are deliberately rare and restricted to deep,
         // far-offshore water.
         if (depth >= 30 && depth <= 48 && shoreDistance >= 90.0
-                && macro > 0.70 && meso < 0.52 && micro > 0.42
-                && roll < 0.12) {
+                && macro > 0.66 && meso < 0.58 && micro > 0.35
+                && roll < 0.18) {
             return HYDROTHERMAL_VENTS;
         }
 
         // Broad meadows fill some of the nearshore and shelf gaps.
         if (depth >= 3 && depth <= 23 && shoreDistance >= 8.0
-                && meso < 0.74 && micro > 0.32
-                && roll < 0.78) {
+                && meso < 0.82 && micro > 0.25
+                && roll < 0.86) {
             return SEAGRASS_MEADOW;
         }
         return BARREN;
