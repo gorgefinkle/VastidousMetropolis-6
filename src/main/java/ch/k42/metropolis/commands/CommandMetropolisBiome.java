@@ -139,6 +139,7 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       private final double borderMinX, borderMaxX, borderMinZ, borderMaxZ;
       private final int maxRing;
       private final java.util.Set<Long> candidateChunks = ConcurrentHashMap.newKeySet();
+      private final java.util.Set<Long> plannerRejectedChunks = ConcurrentHashMap.newKeySet();
       private final List<Candidate> candidates = new ArrayList<>();
       private int ring;
       private long pointIndex;
@@ -243,12 +244,13 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             scannedSamples++;
             int chunkX = point[0] >> 4, chunkZ = point[1] >> 4;
             long chunkKey = ((long) chunkX << 32) ^ (chunkZ & 0xffffffffL);
-            if (candidateChunks.contains(chunkKey)) continue;
+            if (candidateChunks.contains(chunkKey) || plannerRejectedChunks.contains(chunkKey)) continue;
             try {
                int score = ForestGenerator.wildBiomeCandidateScore(generator, biome, point[0], point[1]);
                if (score == -2) {
                   targetBiomeSamples++;
                   plannerRejectedSamples++;
+                  plannerRejectedChunks.add(chunkKey);
                } else if (score >= 0) {
                   targetBiomeSamples++;
                   plannerOwnedSamples++;
