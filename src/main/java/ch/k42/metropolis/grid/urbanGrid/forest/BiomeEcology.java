@@ -77,7 +77,7 @@ public final class BiomeEcology {
         long seed=reliefSeed(prior);
         if (karstW>0) {
             double old=.55*prior.mountains(x,z)+.45*prior.profile(ch.k42.metropolis.grid.urbanGrid.wild.MountainKind.VOLCANO,x,z);
-            boolean bridge = allowKarstBridge && karstW >= 0.82;
+            boolean bridge = allowKarstBridge && karstW >= 0.65;
             // Long fractured valleys and their rock-ridge remnants are one terrain field.
             original+=karstW*(KarstLandforms.relief(seed,x,z,false,bridge)-old);
         }
@@ -187,7 +187,8 @@ public final class BiomeEcology {
                 else if(patch<.14 && breakage>.52)rock=Material.DIORITE;
                 else if(patch>.89 && breakage<.48)rock=Material.ANDESITE;
                 else rock=Material.STONE;
-                chunk.getBlock(lx,y,lz).setType(rock,false);
+                Block stratum=chunk.getBlock(lx,y,lz);
+                if(!stratum.getType().name().endsWith("_ORE")) stratum.setType(rock,false);
             }
         } else {
             top=nearby<.23?Material.ROOTED_DIRT:nearby<.51?Material.MYCELIUM:nearby<.79?Material.PODZOL:Material.MOSS_BLOCK;
