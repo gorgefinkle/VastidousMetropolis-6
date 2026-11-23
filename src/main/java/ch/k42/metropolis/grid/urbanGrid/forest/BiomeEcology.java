@@ -211,142 +211,115 @@ public final class BiomeEcology {
                 else if(fine<.445 && top==Material.ROOTED_DIRT)above.setType(Material.LEAF_LITTER,false);
             }
         }
-        // UNDERCUT is evaluated from exactly the same continuous ridge/fault model
-        // as the relief above. It removes ONLY the rock below a preexisting ridge
-        // remnant; both ends of that ridge remain naturally joined to land.
-        // The dry ravine approaches can be substantially below the old 17-block
-        // ceiling guard. Keep Bloomlands' original gate, but allow shallow
-        // Karst portal toes may sit just four blocks above sea level. The old
-        // +8 gate created solid, impassable lips wherever a natural grade
-        // dropped to 67..70 even though the floor itself remained dry.
-        if(h >= chunk.getWorld().getSeaLevel() + (karst?4:17)) {
-            // Short water-eroded cliff cavities are part of the same fracture
-            // field, only on exposed rock walls; never underneath boat water.
-            if(karst && h>=chunk.getWorld().getSeaLevel()+17
-               && KarstLandforms.archWeight(terrainSeed,x,z)<.055) {
-                // Independent cliff caves must not erode the continuous lower
-                // surface or load-bearing piers of a natural landbridge.
-                int caveTop=KarstLandforms.caveCeiling(terrainSeed,x,z,h);
-                if(caveTop>=0){
-                    for(int cy=Math.max(chunk.getWorld().getSeaLevel()+4,KarstLandforms.caveFloor(terrainSeed,x,z,h));cy<=caveTop;cy++){
-                        Block rock=chunk.getBlock(lx,cy,lz);
-                        Material m=rock.getType();
-                        if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE||m==Material.DIORITE||m==Material.ANDESITE)rock.setType(Material.AIR,false);
+        // All vertical carving is tied to the true build datum and to the
+        // already-decided forest parcel owner. A bridge is never allowed to
+        // infer its floor from a partially faded or mixed-biome surface.
+        if(h >= chunk.getWorld().getSeaLevel() + (karst ? 4 : 17)) {
+            if(karst) {
+                // Independent small cliff cavities remain part of the Karst
+                // fracture system. They are not part of a landbridge and do
+                // not touch the floor of a bridge.
+                if(h >= chunk.getWorld().getSeaLevel() + 17
+                   && KarstLandforms.archWeight(terrainSeed,x,z) < .055) {
+                    int caveTop=KarstLandforms.caveCeiling(terrainSeed,x,z,h);
+                    if(caveTop>=0) {
+                        int caveFloor=Math.max(chunk.getWorld().getSeaLevel()+4,
+                                KarstLandforms.caveFloor(terrainSeed,x,z,h));
+                        for(int cy=caveFloor;cy<=caveTop;cy++) {
+                            Block rock=chunk.getBlock(lx,cy,lz);
+                            Material m=rock.getType();
+                            if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE
+                                    ||m==Material.DIORITE||m==Material.ANDESITE) {
+                                rock.setType(Material.AIR,false);
+                            }
+                        }
                     }
                 }
-            }
-            if(karst && allowKarstBridge){
-                int minimumFloor=Math.max(chunk.getWorld().getMinHeight()+16,baseY-8);
-                int floor=KarstLandforms.bridgeFloor(terrainSeed,x,z,h,baseY,minimumFloor);
-                if(floor>=minimumFloor && h-floor>=48){
-                    int upperCut=KarstSpanVolume.undercutCeiling(terrainSeed,x,z,h,floor);
-                    // Do not turn the mountain into a cavern: a legitimate
-                    // span has a load-bearing rock keystone and a clearly
-                    // open arch, while its abutments remain solid.
-                    if(upperCut-floor>=30 && upperCut<h-8){
-                    for(int cy=floor+1;cy<=upperCut;cy++){
-                        Block rock=chunk.getBlock(lx,cy,lz);
-                        Material m=rock.getType();
-                        if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE
-                            ||m==Material.DIORITE||m==Material.ANDESITE
-                            ||m==Material.GRANITE||m==Material.DIRT||m==Material.MOSS_BLOCK
-                            ||m==Material.ROOTED_DIRT||m==Material.GRASS_BLOCK
-                            ||m==Material.PODZOL||m==Material.MYCELIUM)
-                            rock.setType(Material.AIR,false);
-                    }
-                    // R30dt: the ravine continues its NORMAL wild vegetation
-                    // right through the opening. This uses exactly the same
-                    // soil/plant fields as the unbridged ravine on either side;
-                    // no shaded dry spot, low-density interior, or cleared trail.
-                    // At exactly sea level the floor is still naturally dry
-                    // ground with air above it: older +3/+1 sea-level gates
-                    // left a continuous bare-rock strip along the deepest
-                    // part of the ravine, directly under the bridge. Paint it
-                    // like the adjoining ravine, but never replace water or
-                    // plants in a liquid column (the air/support checks guard
-                    // natural inundation).
-                    if(floor>=chunk.getWorld().getSeaLevel() && floor>4){
-                        Block footing=chunk.getBlock(lx,floor,lz);
-                        Material m=footing.getType();
-                        if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE
-                          ||m==Material.DIORITE||m==Material.ANDESITE){
-                            Material bedding=karstFloorMaterial(naturalHabitat,nearby,broad);
-                            footing.setType(bedding,false);
-                            Block growth=chunk.getBlock(lx,floor+1,lz);
-                            Block clearance=chunk.getBlock(lx,floor+2,lz);
-                            if(plants && growth.getType().isAir() && clearance.getType().isAir()){
-                                Material plant=karstFloorPlant(naturalHabitat,bedding,fine);
-                                if(plant!=null)growth.setType(plant,false);
+
+                // Strict ownership check must have been made by ForestGenerator
+                // before this method is called. Refuse the bridge completely
+                // on any mixed, shore, city, road, empty or fallback footprint.
+                if(allowKarstBridge) {
+                    int minimumFloor=Math.max(chunk.getWorld().getMinHeight()+16,baseY-6);
+                    int floor=KarstLandforms.bridgeFloor(
+                            terrainSeed,x,z,h,baseY,minimumFloor);
+                    if(floor>=minimumFloor && h-floor>=48) {
+                        int upperCut=KarstSpanVolume.undercutCeiling(
+                                terrainSeed,x,z,h,floor);
+                        // A real arch needs a generous open void and a
+                        // substantial limestone keystone. Do not hollow out
+                        // a mountain if either condition is not satisfied.
+                        if(upperCut-floor>=30 && upperCut<h-8) {
+                            for(int cy=floor+1;cy<=upperCut;cy++) {
+                                Block rock=chunk.getBlock(lx,cy,lz);
+                                Material m=rock.getType();
+                                if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE
+                                        ||m==Material.DIORITE||m==Material.ANDESITE
+                                        ||m==Material.GRANITE||m==Material.DIRT
+                                        ||m==Material.MOSS_BLOCK||m==Material.ROOTED_DIRT
+                                        ||m==Material.GRASS_BLOCK||m==Material.PODZOL
+                                        ||m==Material.MYCELIUM) {
+                                    rock.setType(Material.AIR,false);
+                                }
                             }
-                            // Optional overhead flora follows sheltered moisture
-                            // already present in the NATURAL valley, never a
-                            // separate patch that consumes the floor vegetation.
-                            double shade=smooth((h-floor-13.0)/32.0)
-                                *smooth(KarstSpanVolume.coverage(terrainSeed,x,z)/.60);
-                            double moisture=.53*naturalHabitat
-                                +.30*field(terrainSeed,x,z,32,0x574554504f434bL)
-                                +.17*field(terrainSeed,x,z,11,0x4645524e434f4c4cL);
-                            // Lush cave flowers are attached to the actual
-                            // remaining roof, not spawned in midair. A slow,
-                            // coherent colony field groups them into a few
-                            // sheltered ceiling pockets rather than grids.
-                            // Never attach below ocean level or at open portals.
-                            if(plants && shade>.62 && moisture>.61
-                               && upperCut>=floor+6 && upperCut<h-3){
-                                double ceilingColony=field(terrainSeed,x,z,29,0x53504f5245504f43L);
-                                double ceilingFine=unit(hash(seed,x,z,0x53504f52454b4559L));
-                                if(ceilingColony>.65 && ceilingFine<.13){
-                                    Block support=chunk.getBlock(lx,upperCut+1,lz);
-                                    Block hanging=chunk.getBlock(lx,upperCut,lz);
-                                    Material supportType=support.getType();
-                                    if((supportType==Material.STONE || supportType==Material.TUFF
-                                        || supportType==Material.CALCITE || supportType==Material.ANDESITE
-                                        || supportType==Material.DIORITE)
-                                        && hanging.getType().isAir())
-                                        hanging.setType(Material.SPORE_BLOSSOM,false);
+
+                            // Keep the natural ravine floor continuous beneath
+                            // the span, with its ordinary Karst ecology.
+                            if(floor>=chunk.getWorld().getSeaLevel() && floor>minimumFloor) {
+                                Block footing=chunk.getBlock(lx,floor,lz);
+                                Material m=footing.getType();
+                                if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE
+                                        ||m==Material.DIORITE||m==Material.ANDESITE) {
+                                    Material bedding=karstFloorMaterial(naturalHabitat,nearby,broad);
+                                    footing.setType(bedding,false);
+                                    Block growth=chunk.getBlock(lx,floor+1,lz);
+                                    Block clearance=chunk.getBlock(lx,floor+2,lz);
+                                    if(plants && growth.getType().isAir() && clearance.getType().isAir()) {
+                                        Material plant=karstFloorPlant(naturalHabitat,bedding,fine);
+                                        if(plant!=null) growth.setType(plant,false);
+                                    }
+
+                                    double shade=smooth((h-floor-13.0)/32.0)
+                                            *smooth(KarstSpanVolume.coverage(terrainSeed,x,z)/.60);
+                                    double moisture=.53*naturalHabitat
+                                            +.30*field(terrainSeed,x,z,32,0x574554504f434bL)
+                                            +.17*field(terrainSeed,x,z,11,0x4645524e434f4c4cL);
+                                    if(plants && shade>.62 && moisture>.61
+                                            && upperCut>=floor+6 && upperCut<h-3) {
+                                        double colony=field(terrainSeed,x,z,29,0x53504f5245504f43L);
+                                        double fineCeiling=unit(hash(seed,x,z,0x53504f52454b4559L));
+                                        if(colony>.65 && fineCeiling<.13) {
+                                            Block support=chunk.getBlock(lx,upperCut+1,lz);
+                                            Block hanging=chunk.getBlock(lx,upperCut,lz);
+                                            Material supportType=support.getType();
+                                            if((supportType==Material.STONE||supportType==Material.TUFF
+                                                    ||supportType==Material.CALCITE||supportType==Material.ANDESITE
+                                                    ||supportType==Material.DIORITE)
+                                                    && hanging.getType().isAir()) {
+                                                hanging.setType(Material.SPORE_BLOSSOM,false);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                    }
                 }
-            } } else {
-            int ceiling=KarstLandforms.ceiling(terrainSeed,x,z,h);
-            if(ceiling>=0){
-                int floor=KarstLandforms.floor(terrainSeed,x,z,h);
-                // The bridge is a true two-level landform. Preserve the lower
-                // natural ravine at the EXACT height it would have without
-                // the bridge, and leave a mineable roof spanning the cliffs.
-                // Low end-portals cut to sky, smoothly joining the exposed
-                // ravine on each side without an impassable rock threshold.
-                boolean portal=karst && ceiling>=h;
-                for(int y=Math.max(4,karst?floor+1:floor);y<=ceiling;y++){
-                    Block rock=chunk.getBlock(lx,y,lz);
-                    Material m=rock.getType();
-                    if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE
-                       ||m==Material.DIORITE||m==Material.DIRT||m==Material.GRANITE
-                       ||m==Material.ANDESITE||(portal&&(m==Material.MOSS_BLOCK
-                       ||m==Material.ROOTED_DIRT||m==Material.GRASS_BLOCK
-                       ||m==Material.PODZOL||m==Material.MYCELIUM)))rock.setType(Material.AIR,false);
-                }
-                // Sheltered growth belongs on the original ravine floor, never
-                // the exposed upper deck. Do not invent an underwater garden.
-                if(karst && floor>chunk.getWorld().getSeaLevel()+3 && floor>4){
-                    Block floorRock=chunk.getBlock(lx,floor,lz);
-                    Material existing=floorRock.getType();
-                    if(existing==Material.STONE||existing==Material.TUFF||existing==Material.CALCITE
-                       ||existing==Material.DIORITE||existing==Material.ANDESITE){
-                        Material bedding=nearby<.39?Material.MOSS_BLOCK:nearby<.71?Material.ROOTED_DIRT:Material.GRASS_BLOCK;
-                        floorRock.setType(bedding,false);
-                        Block growth=chunk.getBlock(lx,floor+1,lz);
-                        if(plants && growth.getType().isAir()){
-                            if(fine<.25)growth.setType(Material.FERN,false);
-                            else if(fine<.32)growth.setType(Material.SHORT_GRASS,false);
-                            else if(fine<.35 && bedding==Material.MOSS_BLOCK)growth.setType(Material.MOSS_CARPET,false);
+            } else {
+                // Bloomlands retains its independent, older crevasse geometry.
+                int ceiling=KarstLandforms.ceiling(terrainSeed,x,z,h);
+                if(ceiling>=0) {
+                    int floor=KarstLandforms.floor(terrainSeed,x,z,h);
+                    for(int y=Math.max(chunk.getWorld().getMinHeight()+8,floor);y<=ceiling;y++) {
+                        Block rock=chunk.getBlock(lx,y,lz);
+                        Material m=rock.getType();
+                        if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE
+                                ||m==Material.DIORITE||m==Material.DIRT||m==Material.GRANITE
+                                ||m==Material.ANDESITE) {
+                            rock.setType(Material.AIR,false);
                         }
                     }
                 }
-            }
             }
         }
         if(karst && allowKarstBridge && h>chunk.getWorld().getSeaLevel()+17
