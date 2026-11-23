@@ -279,10 +279,25 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         // Delete the hint first. If job deletion fails, the still-durable job
         // becomes immediately eligible rather than being hidden by stale metadata.
         Files.deleteIfExists(retryMarker(record));
-        transientRetries.remove(active);
         if (!Files.deleteIfExists(record))
             throw new IOException("Cannot acknowledge missing pending population: " + record);
-        forceDirectory(record.getParent());
+        try {
+            // The acknowledgement is not complete until the directory entry
+            // removal is durable. If the directory force fails, restore the
+            // job marker before releasing the active in-flight slot.
+            forceDirectory(record.getParent());
+        } catch (IOException forceFailure) {
+            try {
+                if (!Files.exists(record)) {
+                    Files.createFile(record);
+                    forceDirectory(record.getParent());
+                }
+            } catch (IOException restoreFailure) {
+                forceFailure.addSuppressed(restoreFailure);
+            }
+            throw forceFailure;
+        }
+        transientRetries.remove(active);
         active = null;
         pending--;
     }
