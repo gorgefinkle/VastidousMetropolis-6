@@ -29,7 +29,7 @@ public final class KarstMountainProfileProbe {
             double maxUpland = Double.NEGATIVE_INFINITY;
             double minCut = Double.POSITIVE_INFINITY;
             double maxCut = Double.NEGATIVE_INFINITY;
-            for (int i = 0; i < 180000 && (up < uplands.length || cut < cuts.length); i++) {
+            for (int i = 0; i < 240000 && (up < uplands.length || cut < cuts.length || shoulder < shoulderDeltas.length); i++) {
                 int x = random.nextInt(400001) - 200000;
                 int z = random.nextInt(400001) - 200000;
                 double v = KarstLandforms.valley(seed, x, z);
