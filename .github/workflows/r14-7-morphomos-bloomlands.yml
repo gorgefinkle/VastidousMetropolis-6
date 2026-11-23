@@ -1,0 +1,40 @@
+name: R14.7 Morphomos and Bloomlands verification
+
+on:
+  push:
+    branches:
+      - integration/morphomos-natural-family-bloomlands
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Maven clean verify
+        run: mvn -B -ntp clean verify
+      - name: Morphomos boundary-family probe
+        run: sh QA/R14_7/run_boundary_family_probe.sh
+      - name: Assemble complete source archive
+        run: |
+          zip -r Metropolis_R14_7_Morphomos_Bloomlands_SOURCE.zip \
+            pom.xml README_MAVEN.md README_R14_6_BUFFER_DEV.md \
+            README_R14_7_MORPHOMOS_BLOOMLANDS.md QA src
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metropolis_R14_7_Morphomos_Bloomlands_DEV
+          if-no-files-found: error
+          path: |
+            target/Metropolis_R14_7_Morphomos_Bloomlands_DEV.jar
+            Metropolis_R14_7_Morphomos_Bloomlands_SOURCE.zip
