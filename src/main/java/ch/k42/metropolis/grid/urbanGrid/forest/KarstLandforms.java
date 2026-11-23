@@ -249,7 +249,7 @@ public final class KarstLandforms {
     double tt=along(seed,x,z)+3*(noise(seed,x,z,220,0x5350414e41584953L)*2-1);
     double offset=nearest(tt,319);
     double envelope=1-smooth((offset-25)/83.0);
-    double bank=smooth((r-.30)/.19)*(1-smooth((r-1.52)/.27));
+    double bank=smooth((r-.10)/.65)*(1-smooth((r-1.18)/1.10));
     double broad=1-smooth((r-.18)/2.20);
     double ledges=1.9*(noise(seed,x,z,54,0x53484f554c4445L)-.5)
                  +2.5*(noise(seed,x,z,26,0x4c454447455aL)-.5);
