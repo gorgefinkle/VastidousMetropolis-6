@@ -310,7 +310,7 @@ public final class BiomeEcology {
                     }
                     }
                 }
-            } else {
+            } } else {
             int ceiling=KarstLandforms.ceiling(terrainSeed,x,z,h);
             if(ceiling>=0){
                 int floor=KarstLandforms.floor(terrainSeed,x,z,h);
