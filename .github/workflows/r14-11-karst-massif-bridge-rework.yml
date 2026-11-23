@@ -12,6 +12,7 @@ on:
       - integration/morphomos-natural-family-bloomlands
   workflow_dispatch:
 
+ # R14.12 release-candidate CI: final-field Bloomlands calibration and exact two-file packaging.
 permissions:
   contents: read
 
