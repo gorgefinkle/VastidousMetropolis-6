@@ -38,11 +38,11 @@ public final class KarstLandforms {
     // Side tributaries: branching, curved, finite valley arms from each
     // nearby main drainage. Different ages and lengths break regular spacing.
     double tributary=9999;
-    for(int di=-1;di<=1;di++){
+    for(int di=-2;di<=2;di++){
       long n=laneN+di;
       double base=n*340.0-warp;
       long slot=Math.round((v+37*n)/250.0);
-      for(int ds=-1;ds<=1;ds++){
+      for(int ds=-2;ds<=2;ds++){
         long k=slot+ds;
         long h=mix(seed^mix(n*0x9e3779b97f4a7c15L+k*0xc2b2ae3d27d4eb4fL));
         double v0=k*250-37*n+(unit(h)-.5)*58;
@@ -88,7 +88,7 @@ public final class KarstLandforms {
   public static double valley(long seed,int x,int z){
     double d=distance(seed,x,z),w=width(seed,x,z);
     // Broad, nearly flat valley floor, then long graded limestone shoulders. The ramp is deliberately wider than the old narrow escarpment band.
-    double interior=1-smooth((d-w*.22)/(w*3.60));
+    double interior=1-smooth((d-w*.22)/(w*2.10));
     double ledge=.075*(smooth((d/w-.48)/.035)-smooth((d/w-.59)/.06));
     return clamp(interior-ledge);
   }
