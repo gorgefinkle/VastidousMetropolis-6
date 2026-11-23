@@ -76,6 +76,14 @@ public final class MarineHabitatModel {
             return CORAL_REEF;
         }
 
+        // Hydrothermal fields are deliberately rare and restricted to deep,
+        // far-offshore water.
+        if (depth >= 30 && depth <= 48 && shoreDistance >= 90.0
+                && macro > 0.66 && meso < 0.58 && micro > 0.35
+                && roll < 0.18) {
+            return HYDROTHERMAL_VENTS;
+        }
+
         // Dense kelp belts occupy mid-depth water, with large barren gaps
         // retained between forest patches.
         if (depth >= 9 && depth <= 36 && shoreDistance >= 25.0
@@ -83,14 +91,6 @@ public final class MarineHabitatModel {
                 && meso > 0.28 && micro > 0.29
                 && roll < 0.91) {
             return KELP_FOREST;
-        }
-
-        // Hydrothermal fields are deliberately rare and restricted to deep,
-        // far-offshore water.
-        if (depth >= 30 && depth <= 48 && shoreDistance >= 90.0
-                && macro > 0.66 && meso < 0.58 && micro > 0.35
-                && roll < 0.18) {
-            return HYDROTHERMAL_VENTS;
         }
 
         // Deeper sponge fields add a different silhouette without turning the
