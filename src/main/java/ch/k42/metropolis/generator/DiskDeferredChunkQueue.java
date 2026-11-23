@@ -163,7 +163,7 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
     }
 
     private void addToWindow(long key) {
-        if (window.size() >= MAX_IN_MEMORY || !windowKeys.add(key)) return;
+        if (window.size() + transientRetries.size() >= MAX_IN_MEMORY || !windowKeys.add(key)) return;
         window.addLast(new Entry(key));
     }
 
@@ -217,7 +217,7 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         }
 
         int visitedShards = 0;
-        while (window.size() < MAX_IN_MEMORY && visitedShards < SHARDS) {
+        while (window.size() + transientRetries.size() < MAX_IN_MEMORY && visitedShards < SHARDS) {
             if (iterator != null && iterator.hasNext()) {
                 Path candidate = iterator.next();
                 long found = parseName(candidate);
@@ -310,7 +310,8 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
             // Filesystem trouble writing the optional hint must not lose the job.
             // Keep at most 128 transient deadlines; any overflow remains durable
             // and immediately eligible rather than consuming the RAM ready window.
-            if (transientRetries.containsKey(key) || transientRetries.size() < MAX_IN_MEMORY) {
+            if (transientRetries.containsKey(key)
+                    || window.size() + transientRetries.size() < MAX_IN_MEMORY) {
                 transientRetries.put(key, retryAtMillis);
                 if (earliestRetryAtMillis == 0L || retryAtMillis < earliestRetryAtMillis)
                     earliestRetryAtMillis = retryAtMillis;
