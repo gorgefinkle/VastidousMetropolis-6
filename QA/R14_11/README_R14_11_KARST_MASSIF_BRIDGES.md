@@ -1,4 +1,4 @@
-# R14.11 — Karst Massifs and Safe Landbridges
+# R14.11 — Karst Massifs, Safe Landbridges and Ocean Ecology
 
 This revision corrects Karst's terrain identity and landbridge ownership.
 
@@ -14,6 +14,13 @@ This revision corrects Karst's terrain identity and landbridge ownership.
 - The bridge floor is reconstructed from the unbridged relief and the actual build baseline, not from a partially blended surface height.
 - A candidate is refused if its actual top disagrees with the expected complete-profile top, if the floor is below the safe datum, or if the open void / keystone dimensions are inadequate.
 - The central span has a substantial limestone keystone and a broad open arch. No bridge carve loop starts at Y=4.
+
+
+## Underwater ocean ecology
+- The ocean-owned seabed pass now selects coherent seeded habitat patches: seagrass meadows, kelp forests, coral reefs, sponge gardens and rare hydrothermal vent fields.
+- Habitats vary with water depth and offshore distance; barren seabed remains between patches.
+- All plants and formations are painted through the existing ocean seabed owner, with a conservative feature-height envelope used by ship-hull clearance.
+- Existing config values still scale seagrass, kelp and reef/sponge density; fresh-install defaults also increase those values.
 
 ## Bloomlands search
 The biome search now evaluates the deterministic requested-biome field before asking the GridProvider to construct or retrieve the expensive planner tile. Only actual target hits pay the planner ownership lookup cost.
