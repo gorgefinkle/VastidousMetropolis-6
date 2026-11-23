@@ -135,25 +135,33 @@ final class WildLayers {
          goal[i] /= total;
          this.prior[i] = goal[i];
       }
-      final int level = 2;
-      final int window = 256;
+      // Calibrate the exact final map, not level 2 of the zoom stack. The
+      // old intermediate-level estimate could report the requested rare-biome
+      // share even when the final zoom, domain warp and 3x3 region protection
+      // produced a materially different distribution.
+      final int samples = 4096;
       double[] real = new double[this.n];
-      for (int it = 0; it < 30; it++) {
+      for (int it = 0; it < 16; it++) {
          this.memo.clear();
+         this.regionMemo.clear();
          java.util.Arrays.fill(real, 0.0);
-         for (int i = 0; i < window; i++) {
-            for (int j = 0; j < window; j++) {
-               real[this.value(level, i - window / 2 + 311, j - window / 2 - 187)] += 1.0;
-            }
+         for (int sample = 0; sample < samples; sample++) {
+            // Use independent hash-distributed world coordinates. A regular
+            // lattice can alias the zoom cells and domain warp, making a
+            // rare habitat appear to occupy most of the calibration sample
+            // even when a uniform random survey shows it is uncommon.
+            int x = (int) Math.floorMod(this.hash(91 + it, sample, 311), 600001L) - 300000;
+            int z = (int) Math.floorMod(this.hash(173 + it, sample, -187), 600001L) - 300000;
+            real[this.label(x, z)] += 1.0;
          }
          double err = 0.0;
          for (int b = 0; b < this.n; b++) {
-            real[b] /= (double) window * window;
+            real[b] /= (double) samples;
             err = Math.max(err, Math.abs(real[b] - goal[b]));
             this.realised[b] = real[b];
          }
          this.calibrationError = err;
-         if (err < 0.008) {
+         if (err < 0.006) {
             break;
          }
          double sum = 0.0;

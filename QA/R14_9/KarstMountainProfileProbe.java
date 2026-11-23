@@ -23,6 +23,7 @@ public final class KarstMountainProfileProbe {
             double[] uplands = new double[5000];
             double[] cuts = new double[5000];
             int up = 0, cut = 0;
+            int buildableUplands = 0;
             double minUpland = Double.POSITIVE_INFINITY;
             double maxUpland = Double.NEGATIVE_INFINITY;
             double minCut = Double.POSITIVE_INFINITY;
@@ -36,6 +37,12 @@ public final class KarstMountainProfileProbe {
                     uplands[up++] = relief;
                     minUpland = Math.min(minUpland, relief);
                     maxUpland = Math.max(maxUpland, relief);
+                    double maxNeighbourDelta = Math.max(
+                            Math.max(Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x+16,z)),
+                                     Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x-16,z))),
+                            Math.max(Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x,z+16)),
+                                     Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x,z-16))));
+                    if (maxNeighbourDelta <= 6.0) buildableUplands++;
                 } else if (v > .88 && cut < cuts.length) {
                     cuts[cut++] = relief;
                     minCut = Math.min(minCut, relief);
@@ -46,14 +53,18 @@ public final class KarstMountainProfileProbe {
                     "insufficient upland/cut samples for seed " + seed + " up=" + up + " cuts=" + cut);
             double uplandMedian = median(uplands);
             double cutMedian = median(cuts);
-            check(uplandMedian >= 48.0,
+            check(uplandMedian >= 70.0,
                     "karst uplands are not mountain-height: median relief=" + uplandMedian);
             check(cutMedian >= -8.0 && cutMedian <= 8.0,
                     "inner cut floor is not near build-height datum: median relief=" + cutMedian);
-            check(uplandMedian - cutMedian >= 52.0,
+            check(uplandMedian - cutMedian >= 75.0,
                     "karst lacks deep mountain-to-valley relief: " + (uplandMedian-cutMedian));
+            double buildableShare = buildableUplands / (double) uplands.length;
+            check(buildableShare >= 0.15,
+                    "too little broad, low-gradient upland for construction: " + buildableShare);
             System.out.println("seed=" + seed + " uplandMedian=" + uplandMedian
                     + " innerCutMedian=" + cutMedian + " reliefSpan=" + (uplandMedian-cutMedian)
+                    + " buildableUpland=" + String.format(java.util.Locale.ROOT,"%.1f%%",100.0*buildableShare)
                     + " uplandRange=" + minUpland + ".." + maxUpland
                     + " cutRange=" + minCut + ".." + maxCut);
         }
