@@ -165,7 +165,7 @@ public final class BiomeEcology {
             // Here rare fractured lenses form short, offset, discontinuous
             // patches controlled by 3-D noise and warped elevation.
             boolean bridgeCliff=allowKarstBridge && KarstLandforms.bridgeApproachActive(terrainSeed,x,z);
-            int textureDepth=bridgeCliff?36:(valley>.40?13:8);
+            int textureDepth=bridgeCliff?72:(valley>.40?48:32);
             for(int y=Math.max(2,h-textureDepth);y<h;y++){
                 double warped=y/9.6
                     +1.7*(field(terrainSeed,x,z,44,0x535452415441L)-.5)
