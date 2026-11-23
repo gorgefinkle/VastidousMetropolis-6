@@ -261,9 +261,16 @@ public final class MetropolisBuildFlagExporter implements AutoCloseable {
       closed = true;
       writer.shutdown();
       try {
-         if (!writer.awaitTermination(5, TimeUnit.SECONDS)) writer.shutdownNow();
+         if (!writer.awaitTermination(30, TimeUnit.SECONDS)) {
+            // Do not cancel accepted records: the daemon writer remains in
+            // orderly-shutdown mode and continues draining its queue while
+            // the server process is still alive.
+            logger.severe("[BUILD-FLAGS] Export queue is still draining after 30 seconds; accepted records were not cancelled.");
+         }
       } catch (InterruptedException interrupted) {
-         writer.shutdownNow();
+         // shutdown() has already forbidden new work; leave queued records
+         // running instead of interrupting a write in the middle of a line.
+         logger.log(Level.WARNING, "[BUILD-FLAGS] Interrupted while waiting for export queue to drain.", interrupted);
          Thread.currentThread().interrupt();
       }
    }
