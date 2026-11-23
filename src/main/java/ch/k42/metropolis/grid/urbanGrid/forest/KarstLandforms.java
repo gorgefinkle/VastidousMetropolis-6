@@ -48,7 +48,10 @@ public final class KarstLandforms {
         double v0=k*250-37*n+(unit(h)-.5)*58;
         double length=105+unit(h+3)*106;
         double p=(v-v0)/length;
-        if(p<-.12||p>1.13)continue;
+        // Carry each tributary well beyond its visible branch tip. The long
+        // endpoint envelopes prevent the old short fade from changing the
+        // nearest-fracture distance too quickly and producing cliff bands.
+        if(p<-.65||p>1.65)continue;
         // Arc starts embedded in the main canyon then wanders to a shallow
         // dying cleft in the uplands. Side alternates by section and seed.
         double sign=(h&1L)==0?1:-1;
@@ -56,14 +59,12 @@ public final class KarstLandforms {
         double t=clamp(p);
         double lateral=sign*(153*Math.sin(t*1.27)+18*Math.sin(t*4.6+bend));
         double channelU=base+lateral;
-        double weight=smooth((p+.12)/.23)*smooth((1.13-p)/.27);
+        // A long, smooth taper at both ends turns the tributary into a
+        // gradually dying fracture rather than an abrupt ravine endpoint.
+        double weight=smooth((p+.65)/.65)*smooth((1.65-p)/.65);
         // Anisotropic distance converts the curved channel into a natural
-        // tributary with tapering width toward its dead head.
+        // tributary whose influence fades over a broad upland transition.
         double duDv=sign*(153*1.27*Math.cos(t*1.27)+82.8*Math.cos(t*4.6+bend))/length;
-        // Fade finite tributaries into the main fracture field at BOTH
-        // endpoints. Dropping a branch with a hard p cutoff created a
-        // discontinuous distance jump: one neighboring column could be at
-        // the ravine floor while the next snapped back to upland height.
         double branchDistance=Math.abs(u-channelU)/Math.sqrt(1+duDv*duDv);
         double d=major+(branchDistance-major)*weight;
         if(d<tributary)tributary=d;
