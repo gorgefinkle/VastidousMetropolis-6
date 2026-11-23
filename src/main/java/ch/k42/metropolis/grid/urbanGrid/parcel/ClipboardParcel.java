@@ -115,14 +115,25 @@ public class ClipboardParcel extends Parcel {
    synchronized void overflowCompleted(int chunkX, int chunkZ, MetropolisGenerator generator) {
       if (outstandingOverflow <= 0) throw new IllegalStateException(
               "Unexpected overflow completion at " + chunkX + "," + chunkZ);
-      // SchematicOverflowDrain holds a plugin chunk ticket until this callback
-      // returns, so inspect this overflow slice without requesting a chunk load.
-      if (generator.getWorld() != null && generator.getWorld().isChunkLoaded(chunkX, chunkZ)) {
-         collectInteriorCandidates(generator, generator.getWorld().getChunkAt(chunkX, chunkZ));
+      try {
+         // SchematicOverflowDrain holds a plugin chunk ticket until this callback
+         // returns, so inspect this overflow slice without requesting a chunk load.
+         if (generator.getWorld() != null && generator.getWorld().isChunkLoaded(chunkX, chunkZ)) {
+            collectInteriorCandidates(generator, generator.getWorld().getChunkAt(chunkX, chunkZ));
+         }
+      } catch (RuntimeException failure) {
+         Minions.w("[BUILD-FLAGS] Could not inspect overflow slice (%d,%d) for %s: %s",
+                 chunkX, chunkZ, this.clipboard == null ? "<null>" : this.clipboard.getGroupId(), failure.toString());
+      } finally {
+         // A candidate-inspection failure must not strand the logical BUILD
+         // in an outstanding-overflow state forever.
+         --outstandingOverflow;
+         try {
+            PlacedParcels.of(generator).afterOverflow(this, chunkX, chunkZ, generator);
+         } finally {
+            reportSliceFinished(generator);
+         }
       }
-      --outstandingOverflow;
-      PlacedParcels.of(generator).afterOverflow(this, chunkX, chunkZ, generator);
-      reportSliceFinished(generator);
    }
 
    @Override
