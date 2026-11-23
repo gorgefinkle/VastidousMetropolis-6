@@ -314,7 +314,7 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
                     candidate.x, candidate.z, ex.toString());
             landing = null;
          }
-         if (landing != null) {
+         if (landing != null && insideBorder(landing[0], landing[2])) {
             long distance = distanceSquared(landing[0], landing[2]);
             if (distance < bestDistanceSquared) {
                bestDistanceSquared = distance;
