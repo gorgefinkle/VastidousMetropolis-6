@@ -144,20 +144,25 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         } catch (java.nio.file.FileAlreadyExistsException duplicate) {
             return false;
         }
-        forceDirectory(record.getParent());
+        // Publish the in-memory accounting before the directory force. If
+        // the filesystem rejects the force, the durable marker is still
+        // visible to the watchdog/recovery scan and must not be orphaned from
+        // this process's pending count.
         pending++;
         lastCompleteScanAtMillis = 0L; // invalidate an earlier disk sweep
         earliestRetryAtMillis = 0L;
         addToWindow(key);
+        forceDirectory(record.getParent());
         return true;
     }
 
-    private static void forceDirectory(Path path) {
+    private static void forceDirectory(Path path) throws IOException {
         try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
             dir.force(true);
-        } catch (IOException | UnsupportedOperationException ignored) {
-            // Some filesystems do not permit directory handles. The job marker
-            // itself remains present; the platform filesystem durability model applies.
+        } catch (UnsupportedOperationException unsupported) {
+            // Some filesystems do not expose directory handles. In that case
+            // the job file itself is still force-written by its creator and
+            // the platform's filesystem durability model applies.
         }
     }
 
