@@ -122,7 +122,10 @@ public final class WildGeography {
          // field used by KarstLandforms itself, not by the unrelated volcano
          // mountain-kind mask. Keep a modest upland floor so a requested
          // karst patch is not erased where its valleys open into limestone.
-         return KarstLandforms.habitat(this.reliefSeed, x, z);
+         double habitat = KarstLandforms.habitat(this.reliefSeed, x, z);
+         if (this.ocean == null) return habitat;
+         double oceanDistance = this.ocean.oceanDistanceInsideShoreBlock(x, z);
+         return habitat * KarstCoastalExclusion.factor(oceanDistance);
       }
       double rain = .5 + .5 * rainfall.fbm(x / 1450.0, z / 1450.0, 3, .55);
       double temp = .5 + .5 * temperature.fbm(x / 2100.0, z / 2100.0, 3, .5);
