@@ -509,7 +509,9 @@ public final class ForestGenerator {
       if (wild.pick(x, z, roll) != biome) return -1;
 
       WildBiomeOwner owner = wildBiomeOwner(generator, x >> 4, z >> 4);
-      return owner == null ? -1 : 10000;
+      // -2 means the biome field matched, but the planner does not expose a
+      // forest-owned destination chunk here. -1 means the field did not match.
+      return owner == null ? -2 : 10000;
    }
 
    /** Verify the generated destination chunk and return its nearest safe column {x, feetY, z}. */
