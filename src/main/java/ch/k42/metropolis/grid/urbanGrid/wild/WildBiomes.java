@@ -116,7 +116,16 @@ public final class WildBiomes {
    public static void sharpen(double[] weights, double[] output) {
       double total = 0.0;
       for (int i = 0; i < weights.length; ++i) {
-         double t = Math.max(0.0, Math.min(1.0, (weights[i] - .10) / .80));
+         // Standard habitats retain the original 10% sharpening threshold.
+         // Bloomlands is intentionally the rarest biome and karst the next
+         // rarest, so their coherent cores need a lower threshold to survive
+         // the same smoothing without turning their margins into stipple.
+         double threshold = switch (WildBiome.ALL[i]) {
+            case BLOOMLANDS -> 0.012;
+            case VOLCANIC_BARRENS -> 0.028;
+            default -> 0.10;
+         };
+         double t = Math.max(0.0, Math.min(1.0, (weights[i] - threshold) / (1.0 - threshold)));
          output[i] = t * t * (3.0 - 2.0 * t);
          total += output[i];
       }
