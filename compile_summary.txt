@@ -1,2 +1,13 @@
-sources=253 classes=531
-a3a132a28c7a563eccf533f4b5590df7f0380457096138c98e860f5aff5a858f  /mnt/data/r14_5/Metropolis_R14_5_RoadCornerOrder_DEV.jar
+R14.10 DEV — Universal Biome Teleport
+Java target: 25
+Paper API: 26.2.build.129-stable
+
+R14.10 retains the R14.9 queue/backpressure, Morphomos, Karst mountain and open-landbridge implementation, and adds:
+- /metrobiome tp <biome> for all active WildBiome catalog entries.
+- Planner-backed candidate checks using the same deterministic field and forest ownership as world generation.
+- Incremental asynchronous outward search with no arbitrary radius cap; candidate destination chunks are loaded only after a planner hit.
+- Generated-terrain verification and safe landing selection before teleport.
+- /metrobiome list, /metrobiome cancel, aliases for karst / dry-forest / old-growth / coastal-dunes.
+- Removed the standalone /bloomlands command; use /metrobiome tp bloomlands.
+
+Build/test results are recorded by the R14.10 GitHub Actions run associated with this commit.
