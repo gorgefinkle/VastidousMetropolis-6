@@ -18,6 +18,31 @@ public final class BuildFlagExporterProbe {
    }
 
    public static void main(String[] args) throws Exception {
+      check(MetropolisBuildFlagExporter.isEligibleBuild(
+              ch.k42.metropolis.grid.urbanGrid.enums.SchematicType.BUILD,
+              ch.k42.metropolis.grid.urbanGrid.enums.ContextType.RESIDENTIAL, false),
+              "ordinary residential BUILD should export");
+      check(!MetropolisBuildFlagExporter.isEligibleBuild(
+              ch.k42.metropolis.grid.urbanGrid.enums.SchematicType.BUILD,
+              ch.k42.metropolis.grid.urbanGrid.enums.ContextType.RESIDENTIAL, true),
+              "forced landmark BUILD must not export, even with fallback district context");
+      check(!MetropolisBuildFlagExporter.isEligibleBuild(
+              ch.k42.metropolis.grid.urbanGrid.enums.SchematicType.BUILD,
+              ch.k42.metropolis.grid.urbanGrid.enums.ContextType.LANDMARK, false),
+              "explicit LANDMARK context must not export");
+      check(!MetropolisBuildFlagExporter.isEligibleBuild(
+              ch.k42.metropolis.grid.urbanGrid.enums.SchematicType.BUILD,
+              ch.k42.metropolis.grid.urbanGrid.enums.ContextType.PARK, false),
+              "PARK BUILD must not export");
+      for (ch.k42.metropolis.grid.urbanGrid.enums.SchematicType type :
+              ch.k42.metropolis.grid.urbanGrid.enums.SchematicType.values()) {
+         if (type != ch.k42.metropolis.grid.urbanGrid.enums.SchematicType.BUILD) {
+            check(!MetropolisBuildFlagExporter.isEligibleBuild(type,
+                    ch.k42.metropolis.grid.urbanGrid.enums.ContextType.RESIDENTIAL, false),
+                    type + " must not export");
+         }
+      }
+
       Path temp = Files.createTempDirectory("metro-build-flags-qa");
       UUID world = UUID.fromString("7d0b8ca1-8b65-4bc8-aac9-c8ddf5d5be11");
       MetropolisBuildFlagExporter.Footprint footprint =
