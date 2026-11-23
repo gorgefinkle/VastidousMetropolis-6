@@ -1023,7 +1023,7 @@ public final class ForestGenerator {
                continue;
             }
             setShoreBiome(world, x, z, naturalShoreBiome(biome, w));
-            if (biome == WildBiome.WETLANDS || biome == WildBiome.OLD_GROWTH ||
+            if (biome == WildBiome.BLOOMLANDS || biome == WildBiome.WETLANDS || biome == WildBiome.OLD_GROWTH ||
                     biome == WildBiome.COASTAL_DUNES || biome == WildBiome.VOLCANIC_BARRENS) {
                paintHabitat(chunk, lx, lz, x, z, topY, seed, biome,
                        coverAllowed && ForestTerrain.unit(ForestTerrain.hash(seed,x,z,15))*100.0<effectiveCoverPercent,
@@ -1580,7 +1580,8 @@ public final class ForestGenerator {
                                         boolean allowKarstBridge) {
       double ordinary = WildBiome.weight(n, WildBiome.FOREST)
               - n[WildBiome.PRAIRIE.ordinal()] - n[WildBiome.WETLANDS.ordinal()]
-              - n[WildBiome.COASTAL_DUNES.ordinal()] - n[WildBiome.VOLCANIC_BARRENS.ordinal()];
+              - n[WildBiome.COASTAL_DUNES.ordinal()] - n[WildBiome.VOLCANIC_BARRENS.ordinal()]
+              - n[WildBiome.BLOOMLANDS.ordinal()];
       double r = Math.max(0.0, ordinary) * forestRelief;
       r += n[WildBiome.PRAIRIE.ordinal()] * wild.relief.prairie(x,z);
       r += n[WildBiome.WETLANDS.ordinal()] * wild.relief.wetlands(x,z);
@@ -1805,6 +1806,7 @@ public final class ForestGenerator {
 
    /** R30ea's canonical biome assignment for dry bank and beach columns. */
    private static Biome naturalShoreBiome(WildBiome biome, double[] weights) {
+      if (biome == WildBiome.BLOOMLANDS) return BiomeNames.bloomlands();
       if (biome == WildBiome.PRAIRIE) return BiomeNames.prairie();
       if (biome == WildBiome.WETLANDS) return BiomeNames.wetlands();
       if (biome == WildBiome.OLD_GROWTH) return BiomeNames.oldGrowth();
@@ -2022,6 +2024,7 @@ public final class ForestGenerator {
    /** The biome of the column: the forest type's, or desert / mesa / mountains (snowy high up) so grass tint and weather match. */
    private static Biome biomeFor(Ctx ctx, int x, int z, int h, double[] w, WildBiome b) {
       if (ctx.wild != null) {
+         if (b == WildBiome.BLOOMLANDS) return BiomeNames.bloomlands();
          if (b == WildBiome.PRAIRIE) return BiomeNames.prairie();
          if (b == WildBiome.WETLANDS) return BiomeNames.wetlands();
          if (b == WildBiome.OLD_GROWTH) return BiomeNames.oldGrowth();
