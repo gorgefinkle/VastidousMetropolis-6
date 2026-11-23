@@ -93,7 +93,13 @@ final class WildLayers {
       for (int b = 0; b < this.n; ++b) {
          if (counts[b] > counts[best]) best = b;
       }
-      int label = counts[center] >= 4 || counts[best] < 3 ? center : best;
+      // The two deliberately rare special habitats have broad, coherent
+      // source cells but can be outvoted by ordinary forest around their
+      // narrow/irregular margins. Never let the final 3x3 majority pass erase
+      // every surviving karst or Bloomlands core cell.
+      boolean preserveRareCore = center == WildBiome.VOLCANIC_BARRENS.ordinal()
+              || center == WildBiome.BLOOMLANDS.ordinal();
+      int label = preserveRareCore || counts[center] >= 4 || counts[best] < 3 ? center : best;
       if (regionMemo.size() > 250000) regionMemo.clear();
       regionMemo.put(key, (byte) label);
       return label;
