@@ -94,6 +94,8 @@ public final class KarstMountainProfileProbe {
                             +" valley="+KarstLandforms.valley(seed,px,pz)
                             +" r="+(KarstLandforms.distance(seed,px,pz)/KarstLandforms.width(seed,px,pz))
                             +" center="+center+" E/W/S/N="+east+"/"+west+"/"+south+"/"+north
+                            +" dE/W/S/N="+KarstLandforms.distance(seed,px+16,pz)+"/"+KarstLandforms.distance(seed,px-16,pz)+"/"+KarstLandforms.distance(seed,px,pz+16)+"/"+KarstLandforms.distance(seed,px,pz-16)
+                            +" vE/W/S/N="+KarstLandforms.valley(seed,px+16,pz)+"/"+KarstLandforms.valley(seed,px-16,pz)+"/"+KarstLandforms.valley(seed,px,pz+16)+"/"+KarstLandforms.valley(seed,px,pz-16)
                             +" deltas="+Math.abs(center-east)+"/"+Math.abs(center-west)+"/"+Math.abs(center-south)+"/"+Math.abs(center-north));
                 }
             }
