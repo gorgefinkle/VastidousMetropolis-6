@@ -2381,6 +2381,11 @@ public final class ForestGenerator {
                  || this.region.getContext() != ContextType.FOREST
                  || weights == null
                  || weights[WildBiome.VOLCANIC_BARRENS.ordinal()] < 0.96) return false;
+         // Bridge geometry must agree with the exact biome column the painter
+         // will write. This also protects configurations that use stochastic
+         // (rather than hard) biome borders.
+         double roll = ForestTerrain.unit(ForestTerrain.hash(this.terrain.getSeed(), x, z, 41));
+         if (this.wild.pick(x, z, roll) != WildBiome.VOLCANIC_BARRENS) return false;
          // A natural arch must be seated on the un-faded interior massif.
          // At parcel edges the height field is intentionally eased to the
          // street/water datum, so carving an arch there would have no matching
