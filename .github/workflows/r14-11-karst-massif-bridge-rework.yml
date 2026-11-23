@@ -5,6 +5,7 @@ on:
     branches:
       - feature/r14-11-karst-massif-bridge-rework
       - feature/r14-12-bloomlands-final-calibration-release
+      - feature/r14-12-bloomlands-final-field-tested
   pull_request:
     branches:
       - integration/morphomos-natural-family-bloomlands
