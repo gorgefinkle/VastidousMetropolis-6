@@ -158,13 +158,21 @@ public class ClipboardParcel extends Parcel {
       }
    }
 
+   /** One shared gate for the candidate scanner and final file export. */
+   private boolean isEligiblePopulationBuild() {
+      ch.k42.metropolis.grid.urbanGrid.districts.District district = this.getDistrict();
+      ContextType context = district == null ? this.getContextType() : district.getContext();
+      return MetropolisBuildFlagExporter.isEligibleBuild(this.getSchematicType(), context,
+              district != null && district.isForced());
+   }
+
    /**
     * Inspect only the already-loaded slice that has just completed. Four
     * deterministic sample columns per chunk (two by two) keep generation
     * overhead bounded while still finding interiors on multiple floors.
     */
    private synchronized void collectInteriorCandidates(MetropolisGenerator generator, Chunk chunk) {
-      if (this.getSchematicType() != SchematicType.BUILD || this.clipboard == null
+      if (!this.isEligiblePopulationBuild() || this.clipboard == null
               || generator == null || generator.getWorld() == null || chunk == null) return;
       long key = ((long)chunk.getX() << 32) ^ (chunk.getZ() & 0xffffffffL);
       if (!this.interiorScannedChunks.add(key)) return;
@@ -210,7 +218,7 @@ public class ClipboardParcel extends Parcel {
 
    /** Non-sliced legacy clips are inspected only in chunks already loaded by worldgen. */
    private void collectLoadedFootprintInteriors(MetropolisGenerator generator) {
-      if (this.getSchematicType() != SchematicType.BUILD || this.clipboard == null
+      if (!this.isEligiblePopulationBuild() || this.clipboard == null
               || generator == null || generator.getWorld() == null) return;
       if (this.isChunkSliced()) {
          World world = generator.getWorld();
@@ -268,7 +276,7 @@ public class ClipboardParcel extends Parcel {
    }
 
    private synchronized void exportCompletedBuild(MetropolisGenerator generator) {
-      if (this.completionExported || this.getSchematicType() != SchematicType.BUILD
+      if (this.completionExported || !this.isEligiblePopulationBuild()
               || this.clipboard == null || generator == null || generator.getWorld() == null
               || generator.getPlugin() == null) return;
       ch.k42.metropolis.plugin.MetropolisPlugin plugin = generator.getPlugin();
@@ -278,15 +286,8 @@ public class ClipboardParcel extends Parcel {
       // The parcel's actual assigned district is authoritative. Schematic
       // names, filenames and group IDs are never used to infer context.
       ch.k42.metropolis.grid.urbanGrid.districts.District district = this.getDistrict();
-      // Landmark placements are forced BUILD districts (including those that
-      // fall back to an ordinary zoning context), so filter the forced marker
-      // rather than relying only on ContextType.LANDMARK or schematic tags.
-      if (district != null && district.isForced()) return;
       ch.k42.metropolis.grid.urbanGrid.enums.ContextType context =
               district == null ? this.getContextType() : district.getContext();
-      // Parks and the explicit landmark pool are not building population
-      // sources for Dead Streets, even if a config tags one as BUILD.
-      if (context == null || context == ContextType.PARK || context == ContextType.LANDMARK) return;
 
       Cartesian3D dimensions = this.clipboard.getSize();
       int minX = this.chunkX << 4, minZ = this.chunkZ << 4;
