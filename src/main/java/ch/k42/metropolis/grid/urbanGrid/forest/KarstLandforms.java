@@ -78,7 +78,7 @@ public final class KarstLandforms {
   public static double valley(long seed,int x,int z){
     double d=distance(seed,x,z),w=width(seed,x,z);
     // Broad, nearly flat valley floor, then long graded limestone shoulders. The ramp is deliberately wider than the old narrow escarpment band.
-    double interior=1-smooth((d-w*.34)/(w*1.45));
+    double interior=1-smooth((d-w*.22)/(w*2.10));
     double ledge=.075*(smooth((d/w-.48)/.035)-smooth((d/w-.59)/.06));
     return clamp(interior-ledge);
   }
@@ -250,7 +250,7 @@ public final class KarstLandforms {
     double offset=nearest(tt,319);
     double envelope=1-smooth((offset-25)/83.0);
     double bank=smooth((r-.30)/.19)*(1-smooth((r-1.52)/.27));
-    double broad=1-smooth((r-.22)/1.62);
+    double broad=1-smooth((r-.18)/2.20);
     double ledges=1.9*(noise(seed,x,z,54,0x53484f554c4445L)-.5)
                  +2.5*(noise(seed,x,z,26,0x4c454447455aL)-.5);
     double grade=upland+ledge*.60+shoulder*.25+terrace*.5+talus*.55+rubble*.35
