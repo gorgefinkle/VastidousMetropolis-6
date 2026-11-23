@@ -1,4 +1,4 @@
-name: R14.12 Bloomlands final-field calibration and R14.11 worldgen validation
+name: R14.13 Inland Karst, open landbridges and deep geology validation
 
 on:
   push:
@@ -7,12 +7,13 @@ on:
       - feature/r14-12-bloomlands-final-calibration-release
       - feature/r14-12-bloomlands-final-field-tested
       - feature/r14-12-bloomlands-ci-release
+      - feature/r14-13-karst-massif-landbridges-geology
   pull_request:
     branches:
       - integration/morphomos-natural-family-bloomlands
   workflow_dispatch:
 
- # R14.12 release-candidate CI: final-field Bloomlands calibration and exact two-file packaging.
+ # R14.13 release-candidate CI: inland Karst, open landbridge and deep geology QA with exact two-file packaging.
 permissions:
   contents: read
 
@@ -53,21 +54,21 @@ jobs:
         run: bash QA/R14_11/run_marine_habitat_probe.sh
       - name: Assemble complete source archive
         run: |
-          zip -r Metropolis_R14_12_Bloomlands_Field_Calibration_SOURCE.zip \
+          zip -r Metropolis_R14_13_Inland_Karst_Landbridges_Geology_SOURCE.zip \
             .gitattributes .gitignore .github pom.xml compile_summary.txt \
             README*.md QA src
       - name: Assemble exact two-file development package
         run: |
-          mkdir -p r14-12-package
-          cp target/Metropolis_R14_12_Bloomlands_Field_Calibration_DEV.jar r14-12-package/
-          cp Metropolis_R14_12_Bloomlands_Field_Calibration_SOURCE.zip r14-12-package/
-          (cd r14-12-package && zip -q ../Metropolis_R14_12_Bloomlands_Field_Calibration_DEV_PACKAGE.zip ./*)
+          mkdir -p r14-13-package
+          cp target/Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV.jar r14-13-package/
+          cp Metropolis_R14_13_Inland_Karst_Landbridges_Geology_SOURCE.zip r14-13-package/
+          (cd r14-13-package && zip -q ../Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV_PACKAGE.zip ./*)
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_12_Bloomlands_Field_Calibration_DEV
+          name: Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_12_Bloomlands_Field_Calibration_DEV.jar
-            Metropolis_R14_12_Bloomlands_Field_Calibration_SOURCE.zip
-            Metropolis_R14_12_Bloomlands_Field_Calibration_DEV_PACKAGE.zip
+            target/Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV.jar
+            Metropolis_R14_13_Inland_Karst_Landbridges_Geology_SOURCE.zip
+            Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV_PACKAGE.zip
