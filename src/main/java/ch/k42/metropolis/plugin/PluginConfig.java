@@ -1991,7 +1991,12 @@ public class PluginConfig {
          if (configuredShare > 0 && biome == WildBiome.BLOOMLANDS)
             configuredShare = Math.max(2, configuredShare);
          wildShares[biome.ordinal()] = configuredShare;
-         wildAways[biome.ordinal()] = Math.max(0, cfg.getInt(pathWildAwayPrefix + biome.key(), biome.defaultAway()));
+         int configuredAway = Math.max(0, cfg.getInt(pathWildAwayPrefix + biome.key(), biome.defaultAway()));
+         // Migrate only the two historical defaults. Operator-tuned values
+         // and explicit zero keep-away settings remain untouched.
+         if (biome == WildBiome.VOLCANIC_BARRENS && configuredAway == 8) configuredAway = 6;
+         if (biome == WildBiome.BLOOMLANDS && configuredAway == 12) configuredAway = 8;
+         wildAways[biome.ordinal()] = configuredAway;
       }
       wildWetlandReach = Math.max(1, Math.min(24, cfg.getInt("generator.wilderness.geography.riverWetlandReachChunks", 12)));
       wildDuneReach = Math.max(32, Math.min(1024, cfg.getInt("generator.wilderness.geography.duneInlandBlocks", 420)));
