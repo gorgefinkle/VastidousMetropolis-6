@@ -36,6 +36,9 @@ public final class DiskDeferredChunkQueueProbe {
             verify(first != null, "startup did not load pending jobs");
             q.retry(10_000_000_000L);
             verify(q.pending() == total, "retry incorrectly acknowledged a job");
+            // Persisted retry hints use wall-clock time; wait out the one-second cooldown
+            // so this probe remains deterministic across fast and slow CI hosts.
+            Thread.sleep(1100L);
             long now = 20_000_000_000L;
             while (processed < 275) {
                 var item = q.poll(now++);
