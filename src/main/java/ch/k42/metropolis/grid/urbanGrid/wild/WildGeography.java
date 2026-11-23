@@ -109,7 +109,7 @@ public final class WildGeography {
       float stored=(float)Math.min(KARST_WATER_SCAN_RADIUS*2.0,nearest);
       if(karstWaterNodes.size()>16384)karstWaterNodes.clear();
       Float prior=karstWaterNodes.putIfAbsent(key,stored);
-      return prior==null?stored.doubleValue():prior.doubleValue();
+      return prior==null?(double)stored:prior.doubleValue();
    }
 
    private static double riverBankDistance(RiverProvider river,double x,double z) {
