@@ -159,8 +159,13 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         int visitedShards = 0;
         while (window.size() < MAX_IN_MEMORY && visitedShards < SHARDS) {
             if (iterator != null && iterator.hasNext()) {
-                long found = parseName(iterator.next());
-                if ((active == null || active != found) && !windowKeys.contains(found))
+                Path candidate = iterator.next();
+                long found = parseName(candidate);
+                // A failed job is cooled down on disk, not left occupying one
+                // of the 128 ready-work slots. Otherwise one poison chunk (or
+                // 128 simultaneous failures) can starve every later marker.
+                if ((active == null || active != found) && !windowKeys.contains(found)
+                        && retryAfter(candidate) <= System.currentTimeMillis())
                     addToWindow(found);
                 continue;
             }
@@ -180,7 +185,10 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
     public synchronized Chunk poll(long nowNanos) throws IOException {
         checkOpen();
         if (active != null) throw new IllegalStateException("A pending population is still in flight");
-        if (window.isEmpty()) refill();
+        // Refill whenever there is room, not only when the window is empty.
+        // Delayed retries are skipped by refill, so they cannot head-of-line
+        // block ready work elsewhere in the disk spool.
+        if (window.size() < MAX_IN_MEMORY) refill();
         int trials = window.size();
         for (int i = 0; i < trials; i++) {
             Entry entry = window.removeFirst();
@@ -216,11 +224,37 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         checkOpen();
         if (active == null) throw new IllegalStateException("No population in flight");
         long key = active;
+        Path record = marker(key);
+        // Persist a wall-clock retry deadline in the marker. On restart the
+        // cooldown survives, while the failed job does not occupy a RAM slot.
+        // If writing the hint fails, retain a bounded in-memory cooldown; the
+        // durable empty marker still guarantees recovery after restart.
+        long retryAt = System.currentTimeMillis() + Math.max(1L, RETRY_NS / 1_000_000L);
+        boolean persisted = false;
+        try (FileChannel channel = FileChannel.open(record, StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING)) {
+            java.nio.ByteBuffer bytes = StandardCharsets.UTF_8.encode(Long.toString(retryAt));
+            while (bytes.hasRemaining()) channel.write(bytes);
+            channel.force(true);
+            persisted = true;
+        } catch (IOException ignored) {
+            // Keep the original durable marker. Do not drop or acknowledge it.
+        }
         active = null;
-        if (windowKeys.add(key)) {
+        if (!persisted && windowKeys.add(key) && window.size() < MAX_IN_MEMORY) {
             Entry retry = new Entry(key);
             retry.retryAfter = nowNanos + RETRY_NS;
             window.addLast(retry);
+        }
+    }
+
+    private static long retryAfter(Path marker) throws IOException {
+        if (Files.size(marker) == 0L) return 0L; // never failed
+        String value = Files.readString(marker, StandardCharsets.UTF_8).trim();
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException ex) {
+            throw new IOException("Invalid deferred-populate retry deadline: " + marker, ex);
         }
     }
 
