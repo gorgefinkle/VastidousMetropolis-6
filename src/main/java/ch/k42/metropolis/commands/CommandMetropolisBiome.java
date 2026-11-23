@@ -147,9 +147,6 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       private boolean closed;
       private boolean resolving;
       private long scannedSamples;
-      private long targetBiomeSamples;
-      private long plannerRejectedSamples;
-      private long plannerOwnedSamples;
       private long bestDistanceSquared = Long.MAX_VALUE;
       private int[] bestLanding;
       private long lastProgressMillis = System.currentTimeMillis();
@@ -248,12 +245,8 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             try {
                int score = ForestGenerator.wildBiomeCandidateScore(generator, biome, point[0], point[1]);
                if (score == -2) {
-                  targetBiomeSamples++;
-                  plannerRejectedSamples++;
                   plannerRejectedChunks.add(chunkKey);
                } else if (score >= 0) {
-                  targetBiomeSamples++;
-                  plannerOwnedSamples++;
                   if (candidateChunks.add(chunkKey)) {
                      candidates.add(new Candidate(point[0], point[1], distanceSquared(point[0], point[1])));
                   }
@@ -281,10 +274,10 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          lastProgressMillis = now;
          player.sendMessage("Still searching for " + MetropolisBiomeTargets.displayName(biome)
                  + "... sampled " + String.format(Locale.ROOT, "%,d", scannedSamples) + " biome-field positions; "
-                 + String.format(Locale.ROOT, "%,d", targetBiomeSamples) + " matched the biome, "
-                 + String.format(Locale.ROOT, "%,d", plannerOwnedSamples) + " passed planner ownership across "
-                 + String.format(Locale.ROOT, "%,d", candidateChunks.size()) + " chunks, "
-                 + String.format(Locale.ROOT, "%,d", plannerRejectedSamples) + " were rejected by planner ownership.");
+                 + String.format(Locale.ROOT, "%,d", candidateChunks.size() + plannerRejectedChunks.size())
+                 + " chunks contain a biome match ("
+                 + String.format(Locale.ROOT, "%,d", candidateChunks.size()) + " planner-owned, "
+                 + String.format(Locale.ROOT, "%,d", plannerRejectedChunks.size()) + " rejected by ownership).");
       }
 
       private void processCandidates() {
