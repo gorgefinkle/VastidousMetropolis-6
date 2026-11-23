@@ -138,11 +138,15 @@ public final class SchematicOverflowDrain {
                 return;
             }
             jobs.removeFirst();
-            release(job);
             try {
+                // Keep the chunk ticket through the building callback: it
+                // records interior candidates from this already-loaded slice
+                // and may finish the logical BUILD after the final overflow.
                 job.building.overflowCompleted(job.x, job.z, generator);
             } catch (Throwable e) {
                 Minions.w("[R30bp] Overflow notification failed for [%d,%d]: %s", job.x, job.z, e.toString());
+            } finally {
+                release(job);
             }
             schedule(1L);
         }
