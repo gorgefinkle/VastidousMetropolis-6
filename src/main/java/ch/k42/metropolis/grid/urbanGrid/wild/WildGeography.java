@@ -1,6 +1,7 @@
 package ch.k42.metropolis.grid.urbanGrid.wild;
 
 import ch.k42.metropolis.grid.urbanGrid.layout.WaterField;
+import ch.k42.metropolis.grid.urbanGrid.forest.KarstLandforms;
 import ch.k42.metropolis.grid.urbanGrid.layout.WorldLayouts;
 import ch.k42.metropolis.grid.urbanGrid.ocean.OceanProvider;
 import java.util.LinkedHashMap;
@@ -21,6 +22,7 @@ public final class WildGeography {
    private final int riverReach;
    private final int duneReach;
    private final int minimumRegionBlocks;
+   private final long reliefSeed;
    private final ConcurrentHashMap<Long, double[]> habitatNodes = new ConcurrentHashMap<>();
    private static final int HABITAT_NODE = 128;
    private final Map<Long, Float> riverNodes = new LinkedHashMap<>(1024, .75f, true) {
@@ -31,6 +33,7 @@ public final class WildGeography {
       this(seed, relief, riverReachChunks, duneReach, 480);
    }
    public WildGeography(long seed, WildRelief relief, int riverReachChunks, int duneReach, int minimumRegionBlocks) {
+      this.reliefSeed = seed;
       this.water = WorldLayouts.waterFor(seed);
       this.ocean = water.ocean();
       this.relief = relief;
@@ -84,7 +87,7 @@ public final class WildGeography {
    public double regionSuitability(WildBiome biome, int x, int z) {
       if (minimumRegionBlocks == 0 || (biome != WildBiome.PRAIRIE && biome != WildBiome.WETLANDS &&
             biome != WildBiome.OLD_GROWTH && biome != WildBiome.DECIDUOUS &&
-            biome != WildBiome.COASTAL_DUNES && biome != WildBiome.VOLCANIC_BARRENS)) {
+            biome != WildBiome.COASTAL_DUNES)) {
          return suitability(biome, x, z);
       }
       int nx = Math.floorDiv(x, 128), nz = Math.floorDiv(z, 128);
@@ -114,7 +117,13 @@ public final class WildGeography {
    }
    public double suitability(WildBiome biome, int x, int z) {
       if (biome == WildBiome.COASTAL_DUNES) return coastalProximity(x, z);
-      if (biome == WildBiome.VOLCANIC_BARRENS) return relief.volcanicInfluence(x, z);
+      if (biome == WildBiome.VOLCANIC_BARRENS) {
+         // Karst is formed by the continuous fractured-limestone drainage
+         // field used by KarstLandforms itself, not by the unrelated volcano
+         // mountain-kind mask. Keep a modest upland floor so a requested
+         // karst patch is not erased where its valleys open into limestone.
+         return 0.28 + 0.72 * KarstLandforms.habitat(this.reliefSeed(), x, z);
+      }
       double rain = .5 + .5 * rainfall.fbm(x / 1450.0, z / 1450.0, 3, .55);
       double temp = .5 + .5 * temperature.fbm(x / 2100.0, z / 2100.0, 3, .5);
       if (biome == WildBiome.WETLANDS) return Math.max(riverProximity(x,z), .72 * coastalProximity(x,z)) * ramp(.31, .56, rain);
