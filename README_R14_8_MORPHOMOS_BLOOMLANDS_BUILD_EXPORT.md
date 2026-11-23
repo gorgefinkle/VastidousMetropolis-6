@@ -15,10 +15,10 @@ The policy is centralized in `MorphomosBoundaryFamily`; `PlanRegions` uses it fo
 
 ## Bloomlands and karst
 
-Bloomlands was already a real `WildBiome` with a complete terrain/ecology painter, including mushrooms, companion trees and Mother Willow. The previous default selection pipeline could erase its small regions during the layer smoothing and 3x3 majority stages. Its sharpen threshold was also the same 10% threshold as common biomes.
+Bloomlands was already a real `WildBiome` with a complete terrain/ecology painter, including mushrooms, companion trees and Mother Willow. The previous default selection pipeline could erase its small regions during the layer smoothing and 3x3 majority stages. Its sharpen threshold was also the same 10% threshold as common biomes, and the later 192-block wilderness-weight blur could wash out the remaining rare cores.
 
 R14.8 now:
-- Preserves coherent Bloomlands and karst core labels through the late smoothing / majority selection stages.
+- Preserves coherent Bloomlands and karst core labels through the zoom smoothing / majority selection stages, then carries their center weights through the broad wilderness blur so their last surviving cores remain selectable.
 - Uses lower core thresholds for those two deliberately rare biomes without changing the common-biome threshold.
 - Keeps Bloomlands at the smaller default share (2) and karst at 4, so Bloomlands remains the rarer one.
 - Migrates legacy default keep-away values (Bloomlands 12 to 8 chunks; karst 8 to 6) while preserving operator overrides and explicit zeroes.
