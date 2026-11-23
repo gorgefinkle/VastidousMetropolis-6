@@ -3779,6 +3779,9 @@ public class UrbanGrid extends Grid implements DistrictHost {
             @Override public boolean hasExactBankReservation() { return true; }
             @Override public boolean useRiverPlanningLattice() { return true; }
             @Override public boolean protectedDryParkAt(int x,int z) { return sites.protectedDryParkAt(x,z); }
+            @Override public double nearestBankDistanceBlocks(double x,double z,double maxDistance) {
+               return sites.nearestBankDistanceBlocks(x,z,maxDistance);
+            }
          });
       }
    }
