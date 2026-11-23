@@ -36,7 +36,7 @@ public final class MorphomosBoundaryFamily {
     */
    public static boolean shouldDissolve(int family, int distinctBlocks, boolean naturalExterior) {
       if (family == FARM) return distinctBlocks >= 2;
-      if (family == NATURAL) return distinctBlocks >= 2 || (distinctBlocks >= 1 && naturalExterior);
+      if (family == NATURAL) return distinctBlocks >= 2 || naturalExterior;
       return false;
    }
 }
