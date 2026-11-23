@@ -1,0 +1,438 @@
+consoleOutput:
+  debug: false
+  debugCutouts: false
+  debugAsciiMap: true      # true = write every tile's parcel map to <plugin>/ascii/tile_X_Z.txt as it is built: [Hs] [Hb] [Ht n] [Hc ne] highway, [Ri] [Rt n] [Rc ne] [Rx] [Rd n] street, [Pf] building parcel, water/forest/farm/bridge codes -- the legend is at the top of each file
+  debugDistricts: false
+  debugDistrictsVerbose: false  # Optional bounded recursive trace (max 250/min); ordinary debugDistricts prints FARM/FOREST/MORPHOMOS and district summaries without flooding logs
+  debugDecay: false
+  debugBranchNodes: false         # coarse branch tracing -> <plugin>/branch-nodes.log (budget, built/failed per branch, chain outcomes)
+  debugBranchNodesVerbose: false   # additionally logs every candidate/attempt tried along the way -- large; only needed if debugBranchNodes doesn't answer it
+  debugShore: true
+  debugFillers: false
+  debugFillerRolls: false
+  debugFillerQueries: false
+  debugFillerCandidates: false
+  debugFillerRejections: true
+  debugFillerSelections: false
+  debugFillerFallbacks: false
+  debugFillerResults: false
+  debugDenseResidentialFamilies: false
+  debugRiver: true
+  debugCreekPaintLifecycle: false # R14 bounded-creek parcel ownership: first writer, authorized Morphomos repaint, overwriter and reclaim failures
+  debugCreekPhysicalPaint: false # separate expensive physical-block survival sampling; leave off for parcel ownership diagnosis
+  debugReclaimRoads: true
+  debugOcean: true          # dedicated trace for the ocean feature (placement, per-tile carve decisions) -- see Minions.dOcean()
+  debugLandmarks: true      # dedicated trace for landmark districts: each attempt, why one was abandoned (no size / river overlap / margin / no direction / duplicate), and each placement -- see Minions.dLandmark()
+
+generator:
+  maxCachedGridTiles: 1000
+  enableChestRenaming: true
+  enableSpawnerPlacing: true
+
+  enableLandmarkDistricts: true                       # this is for schematics so large they would never get picked for placement. it creates its own district around the "landmark"
+  landmarkAttemptChancePercent: 100
+  landmarkMaxPerGrid: 2
+  # Names match installed schematic groupId values after ignoring case, spaces and punctuation.
+  # Site 0 in each cell prioritizes CentralPark or MegaMall (alternating), and never
+  # substitutes a generic building when an installed priority landmark cannot fit.
+  # Each accepted landmark receives a complete perimeter road; missing/mismatched
+  # schematic files are reported in the log instead of pretending placement succeeded.
+  priorityLandmarkGroups: [CentralPark, MegaMall, ikea12x15noscaf]
+  landmarkCloneRadius: 3
+  landmarkMinSpacing: 12                             # chunks of clear gap kept between any two landmark footprints (the old tile carve spaced them by giving each tile at most landmarkMaxPerGrid, carved inside its own region; the plan has no tiles, so this does it). landmarkCloneRadius is separate: it only stops the same schematic repeating within that many tiles. 0 = only keep footprints from overlapping
+  landmarkZoneMatch: true                            # true = a landmark (and the building a creek is built around) is only placed where its own CONFIG.json "context" zones fit: the zone at its centre must be one it lists, and at least 3 of its 4 sides must be bordered by zones it lists (it does not have to fit inside one band, since landmarks are wider than most bands). e.g. ["LOWRISE","MIDRISE"] sits in a lowrise band with midrise behind it but not with residential on 2+ sides. a schematic with a directional cutout counts as a landmark and is held to its listed zones too. list every zone a landmark may touch. a schematic that names no zone (["LANDMARK"] only) stays unrestricted. needs nothing else, but with districtNeighborRules on it also pins the landmark's district to that zone. false = landmarks go in any district, as before
+
+  streetBranchSeedChancePercent: 4
+  clearStreetsOnly: false
+  newCityMode: false
+
+  iterations: 15                       # leave at 1 for fast generation, turn up for more expensive, cleaner generation.
+  dynamicIterations: true             # true = ignore "iterations" and keep re-running the district's placement search until builds cover dynamicTargetCoverage percent of its area, instead of always running a fixed number of passes. Most districts reach the target in one or two passes, so this is cheaper than a high fixed count, and a district that cannot reach it is reported loudly (a WARNING in the log) and falls back to its best pass with filler for the rest. Still seed based: the passes draw from the same seeded stream, so the same seed gives the same result.
+  dynamicTargetCoverage: 80            # percent (1-100) of a district's area that builds (not filler) must cover for dynamicIterations to stop. Too high a target makes districts that can never reach it burn dynamicMaxIterations passes each, and warn.
+  dynamicMaxIterations: 40             # hard cap on passes per district when dynamicIterations is on. Reaching it without hitting the target logs a warning and falls back to the best pass found.
+  buildChance: 90
+  fillerChance: 10
+  blockSize: 14
+  blockSizeMin: 7
+  blockSizeSlack: 3                    # flexible blocks: 0 = off (every block is exactly blockSizeMin..blockSize; what that cannot tile is closed as ground). N > 0 = a domain that would waste land is solved again with the limits relaxed by 1, 2, ... up to N chunks (blocks may be that much smaller than blockSizeMin or larger than blockSize); the smallest relaxation that wastes nothing is kept, and what is still left over is absorbed into the blocks and streets beside it, so the land is used to the last chunk.
+  districtMergeBackRatio: 0.2          # a split is skipped (both sides merge back into one unsplit district) if it would leave either side narrower than this fraction of the OTHER, untouched axis -- prevents long skinny strip districts that blockSizeMin alone doesn't catch. 0 disables.
+  sigmaCut: 3
+
+  extraCutMode: false                 #This was never correct, and i never fully tested it. try at your own risk.
+  extraCutFillerThreshold: 50
+  extraCutBlockSize: 14
+
+  cloneRadius: 23
+  cloneRadiusSoftLimit: 45
+  clonePenalty: 150                  # soft-discourages filler repeats out to cloneRadiusSoftLimit -- was left at the code default (20) before, too weak given fillerExemptFromCloneRadius below
+  fillerExemptFromCloneRadius: true
+
+  fillerLargestAreaTolerancePercent: 50   # placeLargestFiller() only let candidates EXACTLY tied for the single largest fitting footprint compete -- this widens that to "within X% of largest," so large open areas actually get variety instead of always the one biggest-footprint schematic
+  enableFillerTerrainFallback: false  # safety net for fillerTerrainFallback below -- see note
+
+  allowPureResidentialBuildAsFiller: false #Allow BUILD schematics tagged exclusively RESIDENTIAL to be fetched as filler in ordinary residential districts.
+
+  enableDenseResidential: false       #Denseresidential is an extra district that spams a family of builds based on buildnames and the contect type DENSERESIDENTIAL
+  denseResidentialCloneRadiusSoftLimit: 0
+  denseResidentialClonePenalty: 80
+  denseResidentialBlockSize: 8          # maximum DENSERESIDENTIAL district width/depth in chunks; 0 disables the cap
+  denseResidentialBlockSizeMin: 6       # minimum chunk width/depth nextRecPartition() will split DENSERESIDENTIAL down to before giving up and handing the rest to filler; separate from blockSizeMin above, which DENSERESIDENTIAL never reads
+
+  districtNeighborRules: true              # districts may only touch the same zone type or the one next to it on the ladder: highrise > midrise > lowrise/industrial > residential > forest/farm. contexts.json weights become roles (zone share, then which member of the zone). false = every district samples the plain noise lookup on its own, as before
+  districtNeighborRulesCrossTile: true     # also respect zones already recorded by neighbouring tiles generated earlier (read-only, never builds a tile). false = each tile is solved alone: same result in any generation order, but tile seams can break the ladder
+  districtNeighborRulesRoadGap: 2          # widest gap in chunks between two districts that still counts as touching (1-chunk road = 1, tile-to-tile seam = 2)
+
+  morphomos: true                          # forest and farm districts hold no schematics and no roads between districts of the same kind: each connected forest area / farm area becomes one region. farm never joins forest (that border keeps its road). forest also takes over the roads between itself and ocean, rivers and creeks (and no bridge is built onto a road it took). forest and farm regions are both generated (see generator.forest and generator.farm). needs districtNeighborRules. highways are never touched
+  forest:
+    generate: true                         # shape terrain, ground cover and trees in forest regions. false = flat placeholders
+    reliefAmplitude: 10.0                  # hill height in blocks at full strength (each forest type scales it)
+    reliefBias: 0.35                       # 0..1, 0 = hills and hollows equally likely, 1 = hills only
+    edgeBlend: 40                          # blocks over which ground eases from exactly the build height at the region edge to full relief
+    typeScale: 140                         # rough width in blocks of one forest-type patch
+    treeDensity: 1.0                       # multiplier on tree density for every forest type
+    surfaceOffset: -2                       # added to buildHeight for the forest surface, if your streets/lots sit above or below it
+    mountains:
+      kinds:
+        massif: 20       # rounded, weathered mountain country
+        peaks: 35        # sharp isolated peaks
+        range: 25        # connected mountain chains and high shoulders
+        plateau: 12      # flat tablelands with gullied escarpments
+        volcano: 8      # stratovolcanoes and cratered cones
+      enabled: true                    # true = a forest region big enough to sit between cities becomes a mountain range instead of rolling hills. smaller regions stay ordinary forest. the edge of every region still meets the build height exactly. a range stays inside one tile (it ends at the street along the tile edge, or at a highway, where the ground meets the build height)
+      minCells: 300                        # a region needs at least this many chunks of area...
+      minDepth: 8                          # ...and its deepest point at least this many chunks from every edge, so a long thin strip of forest never becomes a range
+      height: 90                           # peak height in blocks above the build height, reached in the largest regions (the smallest qualifying ones get half). max 170
+      rampBlocks: 112                      # blocks from the region edge over which the range rises to full height (shortened automatically for a region too small to need it)
+      treeLine: 45                         # blocks above the build height where trees stop and bare rock starts (steep slopes are rock lower down)
+      snowLine: 75                         # blocks above the build height where snow starts. 0 = no snow
+      lowlands: 30                         # roughly what percent of a range region's interior stays ordinary hilly forest (with its meadows and glades) instead of rising into mountains. likelier toward the edges, so the mountains gather in the core with foothills around them. 0 = mountains everywhere, max 90
+  wilderness:
+    biomes: true                           # true = the land between the cities (the forest webbing) is a mix of forest, mountain, desert and mesa biomes in big patches that never end and have no region limits. false = forest only, with mountain ranges per region as before (forest.mountains)
+    scaleChunks: 520                       # broad geographic provinces (chunks). Lower values make more, smaller biome regions; 360 was the earlier setting
+    zoomLevels: 4                          # 3..6: each zoom halves the biome cell size; fewer zooms = fewer tiny enclaves (default 4)
+    transitionPasses: 1                    # 0..2: how many times coarse transition bands are applied (0 disables, 2 original more fragmented)
+    borderWarpPercent: 35                  # 0..100: slow natural boundary displacement; 0 = straight grid-aligned borders
+    blend: 30                              # 0..100 how softly one biome grades into the next. 15 = a gentle gradient, 50 = very soft
+    mesaDesertMerge: 48                    # blocks the border between mesa and desert waves in and out by (0..512). the two meet along a smooth wave this far either side of the line, with no scattered columns of one in the other. 0 = a clean straight-ish line. larger = bigger, slower waves
+    mesaFoot: 60                           # 0..100: how far a mesa height carries on into the desert past its border as an eroded slope, so it does not end in a sandy cliff. 0 = off (the old behaviour), 100 = the longest, gentlest apron. only the relief changes, not where the sand starts
+    smoothBlocks: 192                      # blocks the biome weights are averaged over, so a spot or a sliver of one biome narrower than this (little islands inside another biome, thin bands of a third between two) never forms. 0 = off. raise it (64-96) to remove bigger spots; too high and small biome patches shrink or vanish
+    decorations: 100                       # percent of the default amount of set pieces left in the wilderness: crashed passenger jets and military helicopters, abandoned camps, open-cast mine pits in the low mesa, dead wind turbines, radio masts, and mesa rock spires. they gather in "forgotten places" with bare land between. 0 = none, 200 = twice as many
+    spacing:
+      all: 100            # percent of the default distance between wilderness pieces, applied to every kind. 100 = default, 200 = twice as far apart (a quarter as many), 50 = half the distance
+      planes: 100         # each kind multiplies with "all": planes: 200 and all: 100 puts crashed aircraft twice as far apart
+      helicopters: 100
+      camps: 100
+      mines: 100
+      windFarms: 100
+      masts: 100
+      boulders: 100
+      hoodoos: 100
+    chestOddsInPercent: 75                 # chance each planned loot chest at a crash site, camp or mine is really placed (needs chestRenaming, like every chest)
+    lootMinLevel: 1                        # loot level range (1..5) of those chests. crash sites use the military collection, camps residential, mines and masts industrial
+    lootMaxLevel: 4
+    hardBorders: true                      # true = EVERY biome border (forest/mountain, mountain/mesa, ...) is one waved line, as mesa/desert already was, instead of a speckle of single columns. the waviness is mesaDesertMerge blocks. false = the old speckled borders (mesa/desert stay waved either way)
+    share:                                 # BASE biome-seeding weights, normalized if they do not add up to 100. Habitat rules additionally restrict dunes to coasts and use existing geological suitability for karstlands; final post-filter shares therefore differ from these seeding weights.
+      forest: 56
+      mountains: 18                        # 0 here, or forest.mountains.enabled false, means no mountain biome. height, treeLine, snowLine and rampBlocks come from forest.mountains
+      desert: 20
+      mesa: 12
+      rainforest: 6
+      dryForest: 8
+      prairie: 10                         # broad lowland grasslands; sparse trees and rolling meadow relief
+      wetlands: 0                         # retired: old configs are also ignored during actual biome seeding
+      oldGrowth: 7                        # humid old conifer forest with mossy earth and mature canopy
+      deciduous: 9                        # broadleaf woodland with oak and birch; gentle slopes
+      coastalDunes: 4                     # coastal land only, within duneInlandBlocks of the actual ocean shore
+      karstlands: 3                       # Sunken Karstlands; uses the existing geological province selection
+      bloomlands: 2                       # rare giant-fungus and willow provinces, placed by the existing wilderness system
+    geography:
+      riverWetlandReachChunks: 12          # radius from ACTUAL river banks, not lattice water reservations (1..24 chunks)
+      duneInlandBlocks: 420                # coastal dunes taper out this far inland (32..1024 blocks)
+      minimumRegionBlocks: 480             # suppress isolated tiny habitat pockets (0 disables; 256-1024). Does not move actual coasts or rivers
+      wetlandCoreStrengthPercent: 86       # how strongly suitable river/coastal wetlands replace the background biome (0..92)
+      duneCoreStrengthPercent: 86          # higher = stronger dune cores on exposed sandy coasts (0..92)
+      volcanicCoreStrengthPercent: 88       # legacy key: strength of the existing geological suitability for karstlands (0..92)
+    keepAway:                              # chunks from the nearest farm or city block at which a biome reaches full strength. it grows in from nothing at 40% of that distance, so there is none closer: farm beside forest or mountains looks natural, farm beside desert or mesa does not. 0 = may touch the cities. the wilderness between two cities' farm bands is only about 46 chunks wide at the default city spacing, so keep these well under that or the biome hardly appears. the shares above are measured without this, so a kept-away biome ends up with a little less than its share
+      mountains: 0
+      desert: 14
+      mesa: 18
+      rainforest: 10
+      dryForest: 8
+      wetlands: 2
+      oldGrowth: 5
+      karstlands: 8
+      bloomlands: 12
+    transitions:
+      - "forest>desert=dryForest"
+      - "forest>mesa=dryForest"
+      - "dryForest>mesa=desert"
+      - "rainforest>desert=dryForest"
+      - "rainforest>mesa=dryForest"
+      - "prairie>desert=dryForest"
+      - "oldGrowth>desert=dryForest"
+      - "deciduous>mesa=dryForest"
+    keepAwayMerge: 8                    # chunks over which a kept-away biome grows in before its keepAway distance: it starts at nothing this far short of that distance and is full strength at it. bigger = a longer, softer gradient beside farms and cities (never more than the biome's own keepAway distance). 0 = 60% of that distance
+    keepAwayVariance: 6                    # chunks the keepAway distance wanders by, slowly, along the farm: the edge of desert / mesa / mountains drifts that far in and out instead of following the farm at one set distance. 0 = a set distance
+    duneScale: 230                         # how big the desert dunes are across, as a percent of the original size (25..1000). 100 = the original small dunes, 200 = twice as wide and long, 400 = very broad. only the width and length change, not the height
+    mesaTerraceHeight: 7                   # blocks per mesa terrace step (2..16)
+    mesaTerraces: 17                       # how many terraces a mesa can climb (1..8)
+    vanilla:
+      enabled: false                       # true = the wilderness (every forest region) is the server's OWN world generation: terrain, biomes, caves, ores, trees, lakes, whatever the Minecraft version has. it is read from a companion world with the same seed (see world below), so updating the server updates the wilderness too, and the biomes / mountains / forest settings above and in forest: are not used. only where it meets a street, farm, city, highway, river or the ocean is it touched, eased to the build height (blendChunks). false = the Metropolis wilderness above. only chunks generated AFTER switching it on get it (already-generated ones keep what they have). a missing key means false, and Bukkit never adds keys to an existing config.yml: copy this section into it
+      blendChunks: 2                       # 1..4 chunks from any such edge over which vanilla ground is eased to the build height, so it meets the street without a wall. each column keeps its vanilla layers and is moved up or down as a whole; the ground is exactly the build height at the edge and exactly vanilla from blendChunks in. raise it if tall vanilla terrain beside a city still looks too steep
+      verge: 0                            # 0..16 blocks from such an edge kept free of trees (a canopy there would be cut off by the street chunk beside it). 0 = trees right up to the edge
+      structures: true                    # true = vanilla may also place its structures (villages, temples, mineshafts, strongholds). off by default: one that straddles the eased edge of a region is sheared by it
+      allowOceans: false                   # false = no oceans in the wilderness: any sea-level pool of vanilla's that is not a river (oceans, swamp pools, shallow lakes) is drained into low grassland, a little higher where the water was deep, so it never ends in a straight cut at a region's edge. vanilla rivers are kept. true = copy vanilla's oceans as they are
+      world: ""                            # NOT the name of your Metropolis world: the name of a second, separate world the vanilla chunks are read from. leave it empty and "<world>_vanilla" is used (created on first use with the same seed, never saves its chunks, safe to delete). naming the Metropolis world itself is replaced by the same default. a world that already exists is only read, never changed
+  farm:
+    generate: true                         # lay out abandoned fields, pastures, derelict barns, silos and loot chests in farm regions. false = flat placeholders
+    surfaceOffset: -2                      # added to buildHeight for the farm surface. the paved road deck is fixed at y=63 (StreetParcel.ROAD_SURFACE_Y), so buildHeight 65 + -2 = 63 makes dirt roads meet the paved roads flush. forest.surfaceOffset is 0 (y=65), so farms sit 2 lower than forests; the two are always separated by a road. use 0 here only if you want the farm level with the forest and accept a 2 block drop where a dirt road meets a paved road
+    ruinPercent: 12                        # 0..100 how wrecked everything looks: broken fences, holes in barn roofs and walls, dead crops, weeds, cracked silos. each barn/field varies around this. 0 = barely touched, 100 = ruins
+    fenceCrops: true                       # crop and hay fields get a (broken) fence like pastures always do. false = only pastures are fenced
+    roadLinePercent: 70                    # percent of the farm grid lines (one every 256 blocks) that carry a 4-wide dirt road. a road is only built where it leads to an ordinary paved road in the same tile, and the paved road is cut open for it like it is for a building (the street surface itself is left alone). 0 = no dirt roads (barns then have no driveway)
+    farmsteadPercent: 80                   # percent of 256x256 farm cells that get a farmstead (derelict barn, silos, wrecked tractor, windbreak) in a corner by a road. the rest of the cell is large fields
+    pastureShare: 20                       # percent of fields that are fenced pasture; the rest are abandoned cropland, fallow weeds and hay meadow
+    modernBarnPercent: 22                   # percent of farmsteads that are a modern compound instead: one much bigger, newer, steel-framed barn (shallow metal roof, skylights, roll-up doors, cattle stalls, an office), abandoned but intact, with silos and sheds around it on a larger plot
+    greenhousePercent: 30                  # percent of farm cells that also get a nursery: glasshouses and polytunnels, overgrown, panes and sheeting torn
+    orchardShare: 16                       # percent of fields (that are not pasture) that are an overgrown orchard: ragged rows of fruit trees with gaps, dead trees, huge old ones hung with vines, ferns between the rows
+    roundBarnPercent: 21                   # percent of ordinary farmsteads whose main barn is a round barn instead of a gabled one
+    outbuildingPercent: 78                 # percent chance that an ordinary farmstead has each kind of extra: an open pole barn, sheds (chicken coop, corn crib, tool shed), a windmill, a rusted pickup. rolled separately for each, so a few have all of them and a few none
+    tunnelSkin: glass                      # what the polytunnels are covered with: glass = white stained-glass blocks on the arch (a continuous skin) and panes on the closed end wall (default); wool = white wool, like shade cloth; pane = panes everywhere, but a pane is a thin vertical plate that only joins its neighbours sideways, so on the curved arch it makes a lattice of ribs with the weather coming through
+    chestOddsInPercent: 90                 # chance each planned barn/silo chest is actually placed. chests are named for the residential loot collection (needs chestRenaming)
+    lootMinLevel: 1                        # loot level range (1..5) of farm chests
+    lootMaxLevel: 3
+
+  cityRings:
+    enabled: true                          # city-shaped district placement: cities on a jittered grid, rungs ring outward (highrise core -> midrise -> lowrise/industrial -> residential -> farm -> forest). needs districtNeighborRules. the city rung sizes come from the weights in contexts.json (highrise : midrise : lowrise+industrial : residential)
+    radius: 68                             # chunks from a city centre to its residential edge
+    spacing: 230                           # chunks between city sites
+    sizeVariation: 50                      # percent each city's radius varies from the base, either way
+    edgeWobble: 40                         # percent noise distortion on city outlines
+    farmBandWidth: 36                      # farm ring width beyond the residential edge, percent of the city radius. forest is everything beyond it. 0 = no farm
+    farmForestOverlap: 27                  # percent blur on the farm/forest edge so the two interleave
+
+  highwayNetwork:
+    enabled: true                          # highways follow the cities instead of wrapping every 64x64 tile: each city gets a square highway ring (the boundary between residential and farm) and two highways crossing it, and nearby cities are connected on up to four sides, with at least two exits preferred where valid. false = the old ring around every tile. needs cityRings. the tile edge of an ocean-reached tile is a street, not a highway.
+    boxScale: 100                          # percent of the city radius that the city box reaches out to (30..100). cities are also shrunk where needed to keep their boxes apart.
+    extraLinkPercent: 0                    # additional optional loops beyond the automatic two-exit preference where valid. 0 = keep only necessary links and minimum-exit connections
+    singleSeamStreet: true                 # true = one street along each tile seam, owned by the tile on its east/south side (the other tile hands its edge row back to its districts). false = every tile keeps its own edge street, which puts two streets side by side along every seam.
+
+  normalizeOddsOfAppearance: false    # stops one schematic's raw oddsOfAppearance from overpowering clonePenalty's soft discouragement below -- rescales competing candidates in each pool onto the same ~100pt scale first
+
+  variantRadius: 17
+  variantPenalty: 60
+  variantHardBlock: true
+  variantUniquePerDistrict: true
+
+  buildHeight: 65                    # street level / loot bias baseline
+  caveChance: 20                     # % chance a cave schematic gets placed
+
+  # --- vertical loot bias ---
+  enableVerticalLootBias: true
+  verticalLootMaxDistance: 140
+  verticalLootDelineation: 0.5
+
+  # --- decay / vine / leaf growth ---
+  decayOverride: true                # force masterDecayIntensity for all buildings
+  masterDecayIntensity: 10           # % multiplier, destructive decay (block -> air)
+  masterBlockDecayIntensity: 100     # % multiplier, block-transform decay
+  decayProtectOceanWaterline: true   # never apply DESTRUCTIVE decay (block -> air) at or below the ocean's water surface in any chunk the ocean reaches (ship hulls, quay walls, piers, submerged foundations). Block-transform decay and growth are unaffected. Has no effect while the ocean is disabled.
+  vanillaUnderworld: true            # generate everything below Y=0 the vanilla way (deepslate, noise caves, vanilla ores, bedrock at the world's true bottom). Everything from Y=0 up stays Metropolis's own. Off = empty void under a bedrock floor at Y=0..3, as in the original 1.8 layout. Only applies to NORMAL-environment worlds. Vanilla ore features cannot be limited by height, so ores also appear in the stone above Y=0, on top of the ones the ore populator adds.
+  masterGrowthIntensity: 200         # % multiplier, LEAF coverage only (see masterBranchIntensity below for branch/slime structural density)
+  masterBranchIntensity: 100         # % multiplier, branch/slime structural density (how many branches/slime trails get attempted) -- independent of masterGrowthIntensity above
+  masterVineIntensity: 100           # % multiplier, vine density
+  vineMaxLength: 5                   # max blocks a vine hangs down
+
+  # OLD pre-branch leaf methodology: a simple probabilistic flood-fill of
+  # leaves seeded from every supporting block that survives partial decay.
+  # Independent of branch/slime growth -- runs even if masterBranchIntensity
+  # is 0, and alongside it if both are on. Off by default. Leaves placed
+  # this way are undecayable (unlike the original).
+  legacyLeafDecayEnabled: true
+  legacyLeafDecayIntensity: 100       # % multiplier on top of each call's own leavesScale
+  legacyLeafDecayDepth: 2             # recursive spread hops from each supporting block (original's hardcoded value)
+
+  branchNeighbourDepth: 2            # rings of actual neighbouring buildings (streets don't count) that must be pasted, on every side, before a build's own cached growth flushes -- see PluginConfig.getBranchNeighbourDepth() javadoc.
+  branchFlushTimeoutTicks: 1200      # per-build watchdog: flush a build's cached growth anyway after this many ticks if its neighbourhood never fully places. 0 disables and waits forever.
+
+  branchMinCount: 4                  # floor: every building gets at least this many attempts
+  branchMaxCount: 40                 # ceiling: safety cap so one giant structure can't blow out generation cost
+  branchMinThickness: 1
+  branchMaxThickness: 4
+  branchMaxHeight: 50                # per-hop height cap for descents
+  branchMinSpan: 10
+  branchMaxHorizontalSpan: 50
+  branchMaxSpan: 60                  # combined-distance cap
+  branchSagRatio: 0.45
+  branchMaxVerticalToHorizontalRatio: 3.0   # how steep a hop can be vs how far it reaches sideways
+  branchGroundConnectDistance: 4     # how close to true ground before a chain stops
+  branchChainAttempts: 90             # retries per hop before giving up on that direction
+  branchConstrainToOwnLot: false
+  branchMaxChainLength: 10
+  branchHangChancePercent: 17
+  branchHangMinLength: 2
+  branchHangMaxLength: 5
+  branchNodeReseedAttempts: 8
+  branchBoundsMargin: 10
+
+  slimeMaxLength: 33
+  slimeContinueChancePercent: 98
+  slimeBranchChancePercent: 12
+  slimeVeerChancePercent: 18
+  slimeUpWeight: 15
+  slimeHorizontalWeight: 5
+  slimeMinThickness: 1
+  slimeMaxThicknessHorizontal: 2
+  slimeMaxThicknessVertical: 2
+  slimeThicknessChangeChancePercent: 40
+  slimeMaxClimbHeight: 12
+
+  exteriorCheckDistance: 6           # blocks checked for exterior exposure for vine placement (to unsure vines are not place inside).
+
+  # --- river / bridges ---
+  river:
+
+    enabled: true
+    convergeOnOcean: true     # when the ocean is enabled, anchor the river so it passes through the middle of the ocean (instead of being placed independently of it) and merge its channel into the sea at the mouth. Ignored when the ocean or river is off.
+    zRiverEnabled: true       # a second river running north-south, anchored on the ocean the same way. Only exists when convergeOnOcean is on. It runs through the ocean's tiles (painted by the ocean) and on outside them as a plain river strip (water + banks, bridged by roads; no reclaimed districts along it).
+    buildHeight: 63           # river/creek/bank street level -- independent of generator.buildHeight above. Defaults to the same value, override to raise/lower the river without moving buildings/roads (paintBank()'s elevation ramp absorbs the gap across the bank margin).
+    straight: false          # true = no meander noise, river runs perfectly straight at its usual baseZ placement
+    blockSize: 25             # cap on the river's cross-flow dimension when carving districts (see RiverConfig)
+    bankMargin: 2             # "chunks"????? of blended sand/gravel/grass on each side of open water
+    depth: 7                  # blocks below river.buildHeight (above) the water's surface sits
+    waterColumnDepth: 12        # blocks deep the water column itself is (surface down to riverbed) -- independent of "depth" above, which only controls how far below street level the surface sits
+    bridgeClearance: 4        # blocks of clearance between the water surface and the underside of a bridge deck
+    widthNarrow: 2             # open-water width in CHUNKS for the narrowest noise band (was hardcoded to 3/5/7 -- these three replace that)
+    widthMedium: 3             # open-water width in CHUNKS for the middle noise band
+    widthWide: 4               # open-water width in CHUNKS for the widest noise band
+    creekMaxTraceChunks: 320    # actual maximum creek-to-river trace (CHUNKS). No hidden cap. 192=old effective max; 320 allows more reach; 920 is valid but can be very expensive in tile planning
+    creekSiteChancePercent: 45 # 0..100 acceptance among valid origins. Higher = more creeks and closer nearest sites; preserves landmark, road, district and water checks
+    creekSiteAttempts: 36      # full checks among seed-shuffled, centre+perimeter-zoned, creek-aligned park proposals; zoning misses do not spend this budget
+    peelMaxDimension: 20       # rectangles wider/taller than this bisect first instead of peeling a road at the river's edge (prevents a staircase of many thin roads near a diagonal river)
+    bankMaxRunChunks: 2        # 0 = the bank's elevation ramp runs the whole way from the water to the reclaimed district's edge. Set a chunk count to finish the rise early and leave the rest flat (same height either way -- only the slope's length changes).
+
+    # --- meander shape (two stacked noise layers: a broad "slow" bend plus a subtler "fast" wobble on top) ---
+    # frequency is cycles per chunk -- roughly 1/frequency chunks is that layer's wavelength; amplitude is chunks of Z-deviation from baseline.
+    # defaults give the slow layer a ~400-chunk wavelength (several tiles wide), so a single 64-chunk tile only shows a small slice of the bend and can read as nearly straight.
+    # raise the frequencies (shorten the wavelength) if you want the curve visibly bending within one tile.
+    meander:
+      slowFrequency: 0.015
+      slowAmplitude: 34.0
+      fastFrequency: 0.0135
+      fastAmplitude: 7.0
+
+    # --- reclaiming corridor green space as buildable districts ---
+    reclaim:
+      enabled: true
+      buildHeight: 65          # street level for reclaimed-district BUILDINGS, independent of river.buildHeight above. Set to 61 (matching river.buildHeight) so this change doesn't move anything -- raise/lower freely now that it's its own knob, but note the ground under these districts is still painted at river.buildHeight, so a big gap between the two will show as a step.
+      berthChunks: 1           # WHOLE CHUNKS of clearance kept between open water and the nearest buildable chunk, ON TOP OF bankMargin above. Floored at 1 in code and cannot be set lower -- this is what keeps a build out of the river. Raise for a wider park-like buffer.
+      minDepth: 2              # chunks; shallower strips of bank are left as green space rather than built on
+      minWidth: 3              # chunks; narrower runs are left as green space
+      maxWidth: 13              # chunks; longer stretches of bank are split into several districts so each draws its own context
+    # Shore planting uses the FOREST's own trees, ground cover and biome tint (see generator.forest), so a
+    # bank blends into a forest that reaches it. chancePercent scales the forest's own density: 100 = as dense
+    # as a forest, 50 = half. Worlds that still have the old values (2 and 20) get almost nothing -- raise them.
+    trees:
+      enabled: true
+      chancePercent: 100
+    vegetation:
+      enabled: true
+      chancePercent: 100
+
+  # --- ocean ---
+  # A single, roughly-circular body of open water placed once per world at
+  # a seed-derived center point -- independent of the river above (no
+  # forced confluence/interaction between the two; see UrbanGrid.
+  # placeCityDistricts()'s own KNOWN v1 LIMITATION note on what that means
+  # for the vanishingly rare tile both happen to reach). No reclaim/
+  # buildable-district system yet -- the shore just blends into whatever
+  # ordinary terrain/city grid is already there.
+  ocean:
+    ports:
+      enabled: true             # enable functional trading/industrial/residential port sites
+      debug: false
+      chancePercent: 15        # 0..100; only eligible oceanfront positions are considered
+    enabled: true
+    buildHeight: 63              # dry-land/shore height the beach ramps up to -- independent of generator.buildHeight and river.buildHeight above, same reasoning as river.buildHeight's own note.
+    depth: 1                     # blocks below buildHeight (above) the water's surface sits at the shoreline -- same role as river.depth. IGNORED while a river converges on the ocean: the sea then uses the river's water level (river.buildHeight - river.depth).
+    sizeTiles: 3.3                # DIAMETER of the ocean, in TILES (1 tile = 64 chunks), before edge noise is applied. Radius in chunks = (sizeTiles * 64) / 2.
+    bankMargin: 3                 # chunks of blended sand/gravel/grass beyond the noise-perturbed open-water edge before it's treated as ordinary dry land.
+    bankRunBlocks: 0              # length in BLOCKS of the beach's rise from the water up to buildHeight; flat land beyond. 0 = automatic: the rise finishes where reclaimed districts start (river.reclaim.berthChunks * 16), the same steep, tight-to-shore run the river's bank has. Never longer than bankMargin. Raise for a longer, gentler beach.
+    envelopeMargin: 2             # extra chunks of slack folded into the carving bounding box on top of bankMargin -- pure safety margin, doesn't affect how the shore actually looks. Raise only if you also raise edgeNoiseAmplitudeFraction enough that the coastline could bulge further than the current margin covers.
+    maxDistanceFromSpawn: 30     # chunks from world origin (0,0) the ocean's CENTER point is allowed to land, +/- on both X and Z. This is the ONE placement range for the whole water system: both rivers are anchored on the ocean's center and follow it (a river not anchored on the ocean, i.e. convergeOnOcean off, draws from this same range). Keep the ocean's centre plus ~80 chunks of radius within whatever area you actually expect players/pregen to reach.
+    edgeNoiseAmplitudeFraction: 0.15  # fraction of the base radius the noise-perturbed coastline is allowed to bulge/pull in by, at any angle. 0 = a perfect circle.
+    edgeNoiseFrequency: 3.0       # bulges/inlets per full trip around the center -- higher = busier coastline, lower = broad gentle bulges.
+    edgeNoiseOctaves: 4            # octaves for the base coastline noise -- low values (the old default was effectively 2) read as a smooth, near-regular many-lobed blob since every bulge comes out roughly the same size. Higher layers in finer variation so bulges stop looking uniform.
+    coastJitterBlocks: 7.0         # +/- blocks of LOCAL, per-block roughness added directly onto the shoreline (sampled in world space, not angle) -- this is what actually breaks the coast out of looking like a smooth vector curve. 0 disables it (back to the old smooth-curve look).
+    coastJitterFrequency: 0.02     # spatial frequency (cycles/block) for coastJitterBlocks above -- roughly 1 cycle per 50 blocks by default; lower = lazier wiggles, higher = choppier.
+    # --- depth zones -------------------------------------------------------
+    # The sea floor has three concentric depth zones, measured in from the shoreline
+    # (boundaries wobble with noise so they read as banks and drop-offs, not rings):
+    #   SHALLOW  a wide shelf off the coast at shallowDepth -- for speedboats and small craft
+    #   MID      the ordinary open-sea depth, maxWaterColumnDepth (the sea's original depth)
+    #   DEEP     the trench in the middle at deepDepth -- for the big deep-ocean builds
+    shoreRampBlocks: 16           # blocks from the shoreline over which the water column ramps from 1 block up to shallowDepth.
+    shallowDepth: 8               # water column depth of the SHALLOW shelf.
+    maxWaterColumnDepth: 24       # water column depth of the MID zone -- the sea's original depth, and what OceanParcel tags each chunk's rough bed depth against.
+    deepDepth: 44                 # water column depth of the DEEP zone. The bed is kept a few blocks above the world floor (water surface Y - 4 at most), so with the default water level of 56 anything past ~52 just bottoms out.
+    shallowEndBlocks: 80          # distance in from the shore where the shallow shelf ends and the slope down to MID begins.
+    shallowToMidBlocks: 40        # width of the slope from the shallow shelf down to MID.
+    deepStartBlocks: 240          # distance in from the shore where MID ends and the slope into DEEP begins. The ocean's inland half-width is roughly 470 blocks at default size, so raise sizeTiles if you want a wider deep zone.
+    midToDeepBlocks: 60           # width of the slope from MID down to DEEP.
+    zoneBoundaryNoiseFraction: 0.3  # how far the zone boundaries wander, as a fraction of their distance from shore (0.3 = +/-30%). 0 = perfectly parallel bands.
+    shallowReliefScale: 0.2       # share of seabedReliefFraction applied on the shallow shelf (kept smooth for boats).
+    deepReliefScale: 0.4          # share of seabedReliefFraction applied in the DEEP zone (a predictable floor for big builds). MID always gets the full relief.
+    stretch: 5.0                  # longest the ocean may be stretched, long axis : short axis (1.0 = a round body). Each world draws its own ratio between half of this extra elongation and all of it, and its own direction. Area-preserving, so sizeTiles still means about the same amount of water.
+    warpFraction: 0.25            # how far the whole body is bent, as a fraction of the base radius -- makes the sea curve and kink instead of staying an oval. 0 = no bending.
+    bayFraction: 0.26             # how far bays and headlands push the coast in and out (fraction of the base radius). Unlike edgeNoiseAmplitudeFraction this can make real concave bays and peninsulas. 0 disables.
+    inletFraction: 0.14           # longest an inlet (a thin winding channel of water) can reach inland, as a fraction of the base radius. 0 = no inlets.
+    islandFraction: 0.42          # how much land can rise out of the water near the coast as islands (fraction of the base radius) -- bigger = more and larger islands, reaching further from shore. Never in the deep middle. 0 = no islands.
+    seabedReliefFraction: 0.7     # how uneven the sea floor is, as a fraction of the water depth (basins, banks, hollows). Fades to nothing at the shoreline so the shallows stay a smooth slope. 0 = the old perfectly flat bed.
+    seabed:                       # only ocean-owned water columns; does not move shoreline or overwrite ports
+      enabled: true               # underwater sediments, seagrass/kelp and sparse natural rock outcrops
+      patchSizeBlocks: 56         # 12..512: size of coherent sand/gravel/clay and plant habitat zones
+      rockPercent: 12             # 0..100: chance of small submerged boulder clusters inside rocky patches
+      seagrassPercent: 17         # 0..100: sparse growth on shallow sediment bottoms
+      kelpPercent: 9              # 0..100: growth in protected deeper water, with boat clearance
+      shelfVariationBlocks: 2.2   # 0..5: LOW, smooth rolling rises/hollows breaking the flat shelf; fades at shoreline
+      midVariationBlocks: 2.0     # 0..6: mid-depth hills/hollows; deep ocean keeps existing broad relief
+      bedformScaleBlocks: 110     # 24..512: width of the coherent low seabed rises; larger = broader, smoother shelves
+      minimumNavigableDepthBlocks: 7  # 1..24: min clear water in offshore shelf; fades to ONE block on shoreline ramp, so no artificial cliff. Depth gating still checks entire ship footprint and any seabed decoration.
+
+    mouthFlare: 1.8               # how much wider a river gets right at its mouth, as a multiple of its normal width (it opens into a funnel as it meets the sea). 1.0 = no flare.
+    mouthZoneBlocks: 80           # how far upstream of the shoreline, in blocks, the river and ocean are blended: the flare is full out to the end of the beach and fades to nothing by this distance (at least 16 blocks of fade). Short = the ocean only handles the actual mouth. (The water level and riverbed are not blended: the sea uses the river's water level and the channel keeps its full depth out to the sea floor.)
+    riverHandoffBlocks: 48        # blocks before the edge of an ocean tile (the highway ring) where the mouth flare is faded out, so a river reaches the tile edge at its own normal width and the ordinary river pipeline takes over from the highway on. Only edges facing a non-ocean tile count. 0 = no fade.
+    mouthFilletBlocks: 28         # rounding radius, in blocks, of the corner where a river channel meets the coast. 0 = sharp corners.
+
+    # Separate from river.trees/river.vegetation above -- same idea (independently
+    # toggleable trees vs. ground cover on the shore's own grass), own settings, same forest-backed planting.
+    trees:
+      enabled: true
+      chancePercent: 100
+    vegetation:
+      enabled: true
+      chancePercent: 100
+    # Depth-gated boats/ships (see OceanBoatPlacer) -- off by default, same
+    # reasoning as trees/vegetation above: existing worlds don't suddenly
+    # sprout boats just because this jar was updated.
+    boats:
+      enabled: true
+      # Which boats sit where is decided by the water's real depth under the whole hull:
+      # SHALLOW boats on the shelf, MID boats in mid-depth water, DEEP boats only where the
+      # whole footprint is in the DEEP zone. Every boat also has to clear its own draft.
+      # (The old shallowMaxDistanceBlocks / midMin/MaxDistanceBlocks / deepMinDistanceBlocks
+      # keys are gone -- depth replaced them.)
+      spacingBlocks: 64           # minimum open gap between any two hulls.
+      # BIG builds (footprint at least bigMinChunks chunks on either axis, or any DEEP-tier
+      # build) use a much larger clone radius than generator.cloneRadius / cloneRadiusSoftLimit:
+      # no exact repeat within bigCloneRadius chunks, and a rising chance of one out to the soft limit.
+      # A schematic can override both in its CONFIG.json with oceanCloneRadius / oceanCloneRadiusSoftLimit.
+      bigMinChunks: 3             # 0 = no size rule (deep tier and per-schematic overrides still count).
+      bigCloneRadius: 96          # chunks. Generator default cloneRadius is 20.
+      bigCloneRadiusSoftLimit: 160
+
+database:
+  driver: "org.sqlite.JDBC"
+  url: "jdbc:sqlite:{DIR}{NAME}.db"
+  username: "bukkit"
+  password: "walrus"
+  isolation: "SERIALIZABLE"

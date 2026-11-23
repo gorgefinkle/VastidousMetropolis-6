@@ -1,0 +1,53 @@
+name: Metropolis
+main: ch.k42.metropolis.plugin.MetropolisPlugin
+version: 0.1.6-R14.6-DiskBackpressure-DEV
+load: startup
+authors: [AthmosPrime, trichner, spaceribs]
+website: k42.ch
+description: Metropolis (1927)
+softdepend: [WorldEdit, LodServerSupport]
+loadbefore: [Multiverse-Core, dimension-door, multiworld]
+api-version: '26.2'
+prefix: Metropolis
+commands:
+  metropolis:
+    description: asks Maria kindly to travel to Metropolis
+    usage: /metropolis [worldname] [environment]
+    permission: metropolis.command
+  freder:
+    description: retrieves info about the location
+    usage: /freder
+    permission: metropolis.command
+  grot:
+    description: displays some statistics about this grid
+    usage: /grot
+    permission: metropolis.command
+  creek:
+    description: Finds the nearest creek-origin landmark
+    usage: /creek [tp]
+    permission: metropolis.command
+  windfarm:
+    description: Finds the nearest valid planned wind farm and its road connection
+    usage: /windfarm [tp] [radiusChunks] [minimumTurbines] | verify x y z
+    permission: metropolis.command
+  citynames:
+    description: Export named inner and outer city limits from pregenerated chunks without loading them
+    usage: /citynames export [world]
+    permission: metropolis.command
+  landmark:
+    description: List accepted generated landmarks and teleport to their road-wrapped locations
+    usage: /landmark list [filter] [page] | /landmark tp <number|name> [ordinal]
+    permission: metropolis.command
+  port:
+    description: Finds planned ocean ports by type
+    usage: /port [type] [count] [tp] [debug]
+    permission: metropolis.command
+  repopulate:
+    description: runs the Metropolis populate pass again on the chunks around you, to repair bare stone streets, missing buildings or boats
+    usage: /repopulate [radius in chunks, 1-64] [world chunkX chunkZ]
+    permission: metropolis.command
+permissions:
+  metropolis.*:
+    description: Gives access to all Metropolis commands
+    children:
+      metropolis.command: true

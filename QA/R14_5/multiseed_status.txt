@@ -1,0 +1,21 @@
+BEGIN seed=13 07:59:32
+END seed=13 status=0 08:00:09
+REGION_ADJACENCY legalLike=501 unlikeOrUnowned=0 adjacentLiveRoad=0
+ROAD_RULES seed=13 sample=[-128..128,96..352] rects=625 missingTotal=0 urbanBad=0 ruralNonLikeBad=0 urbanMissingCorners=0 missingPlan=0 erasedByMorphomos=0 plannedWetStreet=0 kept=4852 dissolved=5937 unshaped=0 degree1=0
+DRY_CORNER_ASSERT seed=13 x=80 z=239 plannedKind=2 retained=true
+BEGIN seed=42 08:00:09
+END seed=42 status=0 08:00:24
+REGION_ADJACENCY legalLike=49 unlikeOrUnowned=0 adjacentLiveRoad=0
+ROAD_RULES seed=42 sample=[-30..6,96..358] rects=54 missingTotal=0 urbanBad=0 ruralNonLikeBad=0 urbanMissingCorners=0 missingPlan=0 erasedByMorphomos=0 plannedWetStreet=0 kept=422 dissolved=675 unshaped=0 degree1=0
+BEGIN seed=1750414970189483479 08:00:24
+END seed=1750414970189483479 status=0 08:00:39
+REGION_ADJACENCY legalLike=37 unlikeOrUnowned=0 adjacentLiveRoad=0
+ROAD_RULES seed=1750414970189483479 sample=[-30..10,96..190] rects=34 missingTotal=0 urbanBad=0 ruralNonLikeBad=0 urbanMissingCorners=0 missingPlan=0 erasedByMorphomos=0 plannedWetStreet=0 kept=201 dissolved=350 unshaped=0 degree1=0
+BEGIN seed=123456789 08:00:39
+END seed=123456789 status=0 08:01:06
+REGION_ADJACENCY legalLike=468 unlikeOrUnowned=0 adjacentLiveRoad=0
+ROAD_RULES seed=123456789 sample=[-128..128,96..352] rects=640 missingTotal=0 urbanBad=0 ruralNonLikeBad=0 urbanMissingCorners=0 missingPlan=0 erasedByMorphomos=0 plannedWetStreet=0 kept=4763 dissolved=5754 unshaped=0 degree1=0
+BEGIN seed=987654321 08:01:06
+END seed=987654321 status=0 08:01:25
+REGION_ADJACENCY legalLike=623 unlikeOrUnowned=0 adjacentLiveRoad=0
+ROAD_RULES seed=987654321 sample=[-128..128,96..352] rects=565 missingTotal=0 urbanBad=0 ruralNonLikeBad=0 urbanMissingCorners=0 missingPlan=0 erasedByMorphomos=0 plannedWetStreet=0 kept=3248 dissolved=7290 unshaped=0 degree1=0

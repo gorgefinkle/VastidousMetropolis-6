@@ -1,0 +1,13 @@
+name: RoadPlacementQA
+main: qa.metropolis.RoadPlacementQA
+version: 0.1
+api-version: '26.2'
+depend: [Metropolis]
+load: POSTWORLD
+commands:
+  roadqa:
+    description: Seeded parcel and placed-block audit
+    permission: roadqa.run
+permissions:
+  roadqa.run:
+    default: op
