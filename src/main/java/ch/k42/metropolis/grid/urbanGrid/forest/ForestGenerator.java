@@ -259,6 +259,14 @@ public final class ForestGenerator {
          int cx = i * NODE;
          int cz = j * NODE;
          this.biomes.weights(cx, cz, w);
+         // Keep the unblurred center values for the two rare specialist
+         // habitats. Their own discrete region field already smooths and
+         // preserves coherent cores; averaging them over the broad 192-block
+         // habitat blur can shrink the last surviving cores below dominance.
+         double[] rareCore = {
+               w[WildBiome.VOLCANIC_BARRENS.ordinal()],
+               w[WildBiome.BLOOMLANDS.ordinal()]
+         };
          double total = 3.0;
          for (int k = 0; k < n; k++) {
             acc[k] = 3.0 * w[k];
@@ -277,6 +285,8 @@ public final class ForestGenerator {
          for (int k = 0; k < n; k++) {
             acc[k] /= total;
          }
+         acc[WildBiome.VOLCANIC_BARRENS.ordinal()] = rareCore[0];
+         acc[WildBiome.BLOOMLANDS.ordinal()] = rareCore[1];
          if (this.nodes.size() > 400000) {
             this.nodes.clear();      // a bound on memory; any node is simply recomputed when asked for again
          }
