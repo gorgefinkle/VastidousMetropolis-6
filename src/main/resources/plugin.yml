@@ -30,6 +30,10 @@ commands:
     description: Finds the nearest valid planned wind farm and its road connection
     usage: /windfarm [tp] [radiusChunks] [minimumTurbines] | verify x y z
     permission: metropolis.command
+  bloomlands:
+    description: Finds or teleports to a safe landing inside a planned Metropolis Bloomlands patch
+    usage: /bloomlands [radiusChunks] | /bloomlands tp [radiusChunks]
+    permission: metropolis.command
   citynames:
     description: Export named inner and outer city limits from pregenerated chunks without loading them
     usage: /citynames export [world]
