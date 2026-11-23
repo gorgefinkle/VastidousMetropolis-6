@@ -1,6 +1,9 @@
 name: R14.10 universal biome teleport, queue, backpressure and karst verification
 
 on:
+  pull_request:
+    branches:
+      - integration/morphomos-natural-family-bloomlands
   push:
     branches:
       - integration/morphomos-natural-family-bloomlands
