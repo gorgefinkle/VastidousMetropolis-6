@@ -221,7 +221,13 @@ public final class KarstLandforms {
     return naturalKarstRelief(seed,x,z);
   }
   public static double relief(long seed,int x,int z,boolean bloom){
-    return reliefInternal(seed,x,z,bloom,true);
+    return relief(seed,x,z,bloom,true);
+  }
+  /** The same karst mass field with its bridge remnant independently gated
+   * by the owning forest region. Shore and incomplete parcel footprints pass
+   * bridge=false while retaining the ordinary massif and drainage relief. */
+  public static double relief(long seed,int x,int z,boolean bloom,boolean bridge){
+    return reliefInternal(seed,x,z,bloom,bridge);
   }
   /** Original fractured-valley surface, with NO remnants of the rejected
    * raised-strip, haunch cuts or shoulder relief modifications. */
@@ -295,9 +301,26 @@ public final class KarstLandforms {
   /** Absolute pre-bridge ground height (including all ordinary limestone
    * noise), reconstructed by subtracting the exact local artificial uplift.
    * No artificial sill, detached lower gallery, or vegetation on the deck. */
+  public static int bridgeFloor(long seed,int x,int z,int topY,int baseY,int minimumFloorY){
+    if(archWeight(seed,x,z)<.10)return -1;
+
+    double natural=naturalKarstRelief(seed,x,z);
+    double raised=KarstSpanVolume.upperRelief(seed,x,z,natural);
+    int expectedTop=baseY+(int)Math.round(raised);
+
+    // The arch floor belongs at the ORIGINAL build-height datum plus the
+    // unbridged drainage relief. Never infer it from an arbitrarily faded or
+    // partially selected biome column: that was the source of cuts extending
+    // down to Y=4 in mixed/edge columns.
+    if(Math.abs(topY-expectedTop)>8)return -1;
+    int floor=baseY+(int)Math.round(natural);
+    if(floor<minimumFloorY || expectedTop-floor<40)return -1;
+    return floor;
+  }
+
+  /** Legacy diagnostic overload uses the historical default base datum. */
   public static int bridgeFloor(long seed,int x,int z,int topY){
-    if(archWeight(seed,x,z)<.008)return -1;
-    return KarstSpanVolume.floor(seed,x,z,topY,naturalKarstRelief(seed,x,z));
+    return bridgeFloor(seed,x,z,topY,65,57);
   }
   /** R30dl: ONE GENTLY CURVED 3-D VAULT, WITHOUT A WAVY UNDERSIDE.
    *
