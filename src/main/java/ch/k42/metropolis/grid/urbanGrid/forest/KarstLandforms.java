@@ -87,11 +87,20 @@ public final class KarstLandforms {
     return smooth((valley+patch-.23)/.66);
   }
   public static double habitat(long seed,int x,int z){return habitat(seed,x,z,valley(seed,x,z));}
+  /** Broad highland mass: long, low-gradient benches suitable for building,
+   * with progressively finer relief that never reduces the massif to narrow fins. */
+  static double massifUpland(long seed,int x,int z){
+    return 28*(noise(seed,x,z,1800,0x4d415353494631L)-.5)
+          +18*(noise(seed,x,z,700,0x4d415353494632L)-.5)
+           +8*(noise(seed,x,z,250,0x4d415353494633L)-.5)
+           +2.5*(noise(seed,x,z,80,0x4d415353494634L)-.5);
+  }
   public static double depth(long seed,int x,int z){
     double v=valley(seed,x,z);
-    // Deep inner drainage cuts descend from the elevated limestone uplands
-    // toward the surrounding build-height datum (roughly Y=63 by default).
-    return v*(62+6*noise(seed,x,z,220,0x4445505448L));
+    // Drainage channels cut roughly 90 blocks down through a broad mountain
+    // massif, returning to the ordinary build-height datum at their deepest
+    // inner floor instead of leaving shallow gullies atop isolated ridges.
+    return v*(90+8*noise(seed,x,z,220,0x4445505448L));
   }
   /** A bridge is a remnant of the SAME limestone upland on both banks.
    * Its top-view footprint is a constricted, gently crooked waist over the
@@ -218,9 +227,7 @@ public final class KarstLandforms {
    * raised-strip, haunch cuts or shoulder relief modifications. */
   private static double naturalKarstRelief(long seed,int x,int z){
     double r=distance(seed,x,z)/width(seed,x,z);
-    double upland=17*(noise(seed,x,z,240,0x55504c414e44L)-.5)
-                 +10*(noise(seed,x,z,102,0x5249444745L)-.5)
-                 +5*(noise(seed,x,z,36,0x42524f4bL)-.5);
+    double upland=massifUpland(seed,x,z);
     double ledge=5.2*(smooth((r-.52)/.08)-smooth((r-.67)/.11))
                  *(.6+noise(seed,x,z,63,0x4c454447L));
     double shoulder=5.1*(smooth((r-.84)/.07)-smooth((r-1.13)/.22));
@@ -242,13 +249,13 @@ public final class KarstLandforms {
     double ledges=1.9*(noise(seed,x,z,54,0x53484f554c4445L)-.5)
                  +2.5*(noise(seed,x,z,26,0x4c454447455aL)-.5);
     double grade=upland+ledge*.60+shoulder*.25+terrace*.5+talus*.55+rubble*.35
-                  -broad*(62+6*noise(seed,x,z,220,0x4445505448L))+ledges;
+                  -broad*(90+8*noise(seed,x,z,220,0x4445505448L))+ledges;
     // Karst is a mountain range, not a lowland pockmark field. Lift the
     // entire limestone massif first; the broad, deep dissolution channels
     // then cut back down toward the ordinary terrain datum. The upland noise
     // remains deliberately low-frequency so the crests read as broad,
     // gently rolling tablelands rather than isolated round hills.
-    return 65.0 + old+(grade-old)*envelope*bank*.87;
+    return 90.0 + old+(grade-old)*envelope*bank*.87;
   }
   /** Crucially, the underpass floor uses the terrain BEFORE the uplift,
    * rather than guessing its elevation from the current bridge thickness.
