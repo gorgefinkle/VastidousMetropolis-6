@@ -22,7 +22,8 @@ public final class KarstMountainProfileProbe {
             Random random = new Random(seed ^ 0x4b415253544d544eL);
             double[] uplands = new double[5000];
             double[] cuts = new double[5000];
-            int up = 0, cut = 0;
+            double[] shoulderDeltas = new double[5000];
+            int up = 0, cut = 0, shoulder = 0;
             int buildableUplands = 0;
             double minUpland = Double.POSITIVE_INFINITY;
             double maxUpland = Double.NEGATIVE_INFINITY;
@@ -48,6 +49,14 @@ public final class KarstMountainProfileProbe {
                     minCut = Math.min(minCut, relief);
                     maxCut = Math.max(maxCut, relief);
                 }
+                if (v > .18 && v < .82 && shoulder < shoulderDeltas.length) {
+                    double delta = Math.max(
+                            Math.max(Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x+16,z)),
+                                     Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x-16,z))),
+                            Math.max(Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x,z+16)),
+                                     Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x,z-16))));
+                    shoulderDeltas[shoulder++] = delta;
+                }
             }
             check(up == uplands.length && cut == cuts.length,
                     "insufficient upland/cut samples for seed " + seed + " up=" + up + " cuts=" + cut);
@@ -60,11 +69,16 @@ public final class KarstMountainProfileProbe {
             check(uplandMedian - cutMedian >= 75.0,
                     "karst lacks deep mountain-to-valley relief: " + (uplandMedian-cutMedian));
             double buildableShare = buildableUplands / (double) uplands.length;
+            check(shoulder >= shoulderDeltas.length, "insufficient shoulder samples for seed " + seed + ": " + shoulder);
+            Arrays.sort(shoulderDeltas);
+            double shoulderP95 = shoulderDeltas[(int)(shoulderDeltas.length * 0.95)];
+            check(shoulderP95 <= 38.0, "karst shoulder profile remains too cliff-like: p95 16-block height delta=" + shoulderP95);
             check(buildableShare >= 0.15,
                     "too little broad, low-gradient upland for construction: " + buildableShare);
             System.out.println("seed=" + seed + " uplandMedian=" + uplandMedian
                     + " innerCutMedian=" + cutMedian + " reliefSpan=" + (uplandMedian-cutMedian)
                     + " buildableUpland=" + String.format(java.util.Locale.ROOT,"%.1f%%",100.0*buildableShare)
+                    + " shoulderP95_16blockDelta=" + shoulderP95
                     + " uplandRange=" + minUpland + ".." + maxUpland
                     + " cutRange=" + minCut + ".." + maxCut);
         }
