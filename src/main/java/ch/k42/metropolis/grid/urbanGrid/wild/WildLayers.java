@@ -280,6 +280,11 @@ final class WildLayers {
 
    /** Vanilla's smoothing: a cell whose opposite neighbours agree with each other and not with it takes their value. */
    private int smooth(int level, int x, int z, int cur) {
+      // A rare biome cell is a coherent output of the zoom stack. Do not let
+      // the later cellular majority smoother erase its core; narrow margins
+      // still transition naturally in adjacent common-biome cells.
+      if (cur == WildBiome.VOLCANIC_BARRENS.ordinal()
+              || cur == WildBiome.BLOOMLANDS.ordinal()) return cur;
       int l = this.stage(level, 0, x - 1, z);
       int r = this.stage(level, 0, x + 1, z);
       int u = this.stage(level, 0, x, z - 1);
