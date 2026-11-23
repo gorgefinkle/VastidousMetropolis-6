@@ -149,6 +149,10 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       private boolean closed;
       private boolean resolving;
       private long scannedSamples;
+      private long destinationChunksChecked;
+      private long destinationGenerationFailures;
+      private long landingRejectedChunks;
+      private long safeLandingChunks;
       private long bestDistanceSquared = Long.MAX_VALUE;
       private int[] bestLanding;
       private long lastProgressMillis = System.currentTimeMillis();
@@ -279,7 +283,11 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
                  + String.format(Locale.ROOT, "%,d", candidateChunks.size() + plannerRejectedChunks.size())
                  + " chunks contain a biome match ("
                  + String.format(Locale.ROOT, "%,d", candidateChunks.size()) + " planner-owned, "
-                 + String.format(Locale.ROOT, "%,d", plannerRejectedChunks.size()) + " rejected by ownership).");
+                 + String.format(Locale.ROOT, "%,d", plannerRejectedChunks.size()) + " rejected by ownership); "
+                 + "destinations tested=" + String.format(Locale.ROOT, "%,d", destinationChunksChecked)
+                 + ", safe landings=" + String.format(Locale.ROOT, "%,d", safeLandingChunks)
+                 + ", no-safe-landing=" + String.format(Locale.ROOT, "%,d", landingRejectedChunks)
+                 + ", generation failures=" + String.format(Locale.ROOT, "%,d", destinationGenerationFailures) + ".");
       }
 
       private void processCandidates() {
@@ -291,6 +299,7 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             if (bestLanding != null && lowerBound * lowerBound >= bestDistanceSquared) continue;
             resolving = true;
             int chunkX = candidate.x >> 4, chunkZ = candidate.z >> 4;
+            destinationChunksChecked++;
             boolean generated = world.isChunkGenerated(chunkX, chunkZ);
             player.sendMessage(MetropolisBiomeTargets.displayName(biome) + " candidate found at "
                     + candidate.x + ", " + candidate.z + ". "
@@ -319,6 +328,7 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          if (!active()) { close(); return; }
          resolving = false;
          if (error != null || chunk == null) {
+            destinationGenerationFailures++;
             Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
             Minions.w("[METROBIOME] destination generation failed at %d,%d: %s", candidate.x, candidate.z,
                     cause == null ? "unknown error" : cause.toString());
@@ -334,11 +344,14 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             landing = null;
          }
          if (landing != null && insideBorder(landing[0], landing[2])) {
+            safeLandingChunks++;
             long distance = distanceSquared(landing[0], landing[2]);
             if (distance < bestDistanceSquared) {
                bestDistanceSquared = distance;
                bestLanding = landing;
             }
+         } else {
+            landingRejectedChunks++;
          }
          processCandidates();
       }
@@ -364,7 +377,15 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          close();
          if (landing == null) {
             player.sendMessage("No safe " + MetropolisBiomeTargets.displayName(biome)
-                    + " destination was found inside this world's border. The search did not use a fixed radius.");
+                    + " destination was found inside this world's border. Samples="
+                    + String.format(Locale.ROOT, "%,d", scannedSamples)
+                    + "; field-match chunks=" + String.format(Locale.ROOT, "%,d", candidateChunks.size() + plannerRejectedChunks.size())
+                    + " (planner-owned=" + String.format(Locale.ROOT, "%,d", candidateChunks.size())
+                    + ", ownership-rejected=" + String.format(Locale.ROOT, "%,d", plannerRejectedChunks.size()) + ")"
+                    + "; destination chunks tested=" + String.format(Locale.ROOT, "%,d", destinationChunksChecked)
+                    + " (safe=" + String.format(Locale.ROOT, "%,d", safeLandingChunks)
+                    + ", no-safe-landing=" + String.format(Locale.ROOT, "%,d", landingRejectedChunks)
+                    + ", generation-failed=" + String.format(Locale.ROOT, "%,d", destinationGenerationFailures) + ").");
             return;
          }
          Location destination = new Location(world, landing[0] + 0.5, landing[1], landing[2] + 0.5,
