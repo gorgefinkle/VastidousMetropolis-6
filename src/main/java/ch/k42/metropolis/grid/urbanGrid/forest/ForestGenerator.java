@@ -497,13 +497,19 @@ public final class ForestGenerator {
    /** Deterministic candidate probe using the exact production picker and planner ownership. */
    public static int wildBiomeCandidateScore(MetropolisGenerator generator, WildBiome biome, int x, int z) {
       if (!isWildBiomeSearchAvailable(generator, biome)) return -1;
-      WildBiomeOwner owner = wildBiomeOwner(generator, x >> 4, z >> 4);
-      if (owner == null) return -1;
+
+      // The wilderness field is a pure world-coordinate function. Probe it
+      // BEFORE asking GridProvider for a planner tile: a rare-biome search can
+      // visit hundreds of thousands of positions, but only actual target
+      // hits need an expensive 64x64-chunk UrbanGrid ownership lookup.
       WildField wild = wildFor(generator);
       if (wild == null) return -1;
       ForestTerrain terrain = terrainFor(generator);
       double roll = ForestTerrain.unit(ForestTerrain.hash(terrain.getSeed(), x, z, 41));
-      return wild.pick(x, z, roll) == biome ? 10000 : -1;
+      if (wild.pick(x, z, roll) != biome) return -1;
+
+      WildBiomeOwner owner = wildBiomeOwner(generator, x >> 4, z >> 4);
+      return owner == null ? -1 : 10000;
    }
 
    /** Verify the generated destination chunk and return its nearest safe column {x, feetY, z}. */
