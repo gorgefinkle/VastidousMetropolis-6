@@ -31,7 +31,9 @@ public final class MorphomosBoundaryFamilyProbe {
       check(!MorphomosBoundaryFamily.shouldDissolve(farm, 1, true), "FARM/natural exterior retains road");
       check(MorphomosBoundaryFamily.shouldDissolve(natural, 2, false), "natural/natural blocks dissolve");
       check(MorphomosBoundaryFamily.shouldDissolve(natural, 1, true), "natural block + natural exterior dissolves");
+      check(MorphomosBoundaryFamily.shouldDissolve(natural, 0, true), "natural exterior-to-exterior seam dissolves");
       check(!MorphomosBoundaryFamily.shouldDissolve(natural, 1, false), "single natural block without natural exterior");
+      check(!MorphomosBoundaryFamily.shouldDissolve(natural, 0, false), "empty natural frame does not dissolve");
       check(!MorphomosBoundaryFamily.shouldDissolve(MorphomosBoundaryFamily.NONE, 8, true), "non-family never dissolves");
       System.out.println("MorphomosBoundaryFamilyProbe: PASS (natural matrix, farm isolation, reciprocity, exterior seams)");
    }
