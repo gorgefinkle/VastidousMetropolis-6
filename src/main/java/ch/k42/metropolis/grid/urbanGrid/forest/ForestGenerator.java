@@ -497,13 +497,21 @@ public final class ForestGenerator {
    /** Deterministic candidate probe using the exact production picker and planner ownership. */
    public static int wildBiomeCandidateScore(MetropolisGenerator generator, WildBiome biome, int x, int z) {
       if (!isWildBiomeSearchAvailable(generator, biome)) return -1;
-      WildBiomeOwner owner = wildBiomeOwner(generator, x >> 4, z >> 4);
-      if (owner == null) return -1;
+
+      // The wilderness field is a pure world-coordinate function. Probe it
+      // BEFORE asking GridProvider for a planner tile: a rare-biome search can
+      // visit hundreds of thousands of positions, but only actual target
+      // hits need an expensive 64x64-chunk UrbanGrid ownership lookup.
       WildField wild = wildFor(generator);
       if (wild == null) return -1;
       ForestTerrain terrain = terrainFor(generator);
       double roll = ForestTerrain.unit(ForestTerrain.hash(terrain.getSeed(), x, z, 41));
-      return wild.pick(x, z, roll) == biome ? 10000 : -1;
+      if (wild.pick(x, z, roll) != biome) return -1;
+
+      WildBiomeOwner owner = wildBiomeOwner(generator, x >> 4, z >> 4);
+      // -2 means the biome field matched, but the planner does not expose a
+      // forest-owned destination chunk here. -1 means the field did not match.
+      return owner == null ? -2 : 10000;
    }
 
    /** Verify the generated destination chunk and return its nearest safe column {x, feetY, z}. */
@@ -992,7 +1000,8 @@ public final class ForestGenerator {
             if (biome == WildBiome.WETLANDS || biome == WildBiome.OLD_GROWTH ||
                     biome == WildBiome.COASTAL_DUNES || biome == WildBiome.VOLCANIC_BARRENS) {
                paintHabitat(chunk, lx, lz, x, z, topY, seed, biome,
-                       coverAllowed && ForestTerrain.unit(ForestTerrain.hash(seed,x,z,15))*100.0<effectiveCoverPercent);
+                       coverAllowed && ForestTerrain.unit(ForestTerrain.hash(seed,x,z,15))*100.0<effectiveCoverPercent,
+                       false, 0);
             } else if (coverAllowed && ForestTerrain.unit(ForestTerrain.hash(seed,x,z,15))*100.0<effectiveCoverPercent) {
                cover(chunk,lx,lz,x,z,topY,w,true,seed,biome.dryness());
             }
@@ -1338,7 +1347,7 @@ public final class ForestGenerator {
       }
       int surface = biome.is(WildBiome.MOUNTAINS) ? ground.mountainSurface(x, z, lift) : Ctx.SURFACE_GROUND;
       paintGround(chunk, lx, lz, x, z, h, w, surface, seed, false, biome.dryness());
-      if (surface == Ctx.SURFACE_GROUND) paintHabitat(chunk,lx,lz,x,z,h,seed,biome,false);
+      if (surface == Ctx.SURFACE_GROUND) paintHabitat(chunk,lx,lz,x,z,h,seed,biome,false,false,0);
       if (biome.is(WildBiome.MOUNTAINS)) {
          int snow = PluginConfig.getForestMountainSnowLine();
          setShoreBiome(world, x, z, snow > 0 && lift >= snow - 6 ? BiomeNames.snowyMountains() : BiomeNames.mountains());
@@ -1355,7 +1364,7 @@ public final class ForestGenerator {
       if (surface == Ctx.SURFACE_GROUND && cover && ForestTerrain.unit(ForestTerrain.hash(seed, x, z, 15)) * 100.0 < coverPercent) {
          if (biome != WildBiome.COASTAL_DUNES && biome != WildBiome.VOLCANIC_BARRENS && biome != WildBiome.WETLANDS && biome != WildBiome.OLD_GROWTH)
             cover(chunk, lx, lz, x, z, h, w, true, seed, biome.dryness());
-         else paintHabitat(chunk,lx,lz,x,z,h,seed,biome,true);
+         else paintHabitat(chunk,lx,lz,x,z,h,seed,biome,true,false,0);
       }
    }
 
@@ -1541,7 +1550,8 @@ public final class ForestGenerator {
     * as WildField.mesaOrDesert) they stay exactly as they are, plateaus and all, and from there into the desert they ease out
     * into dunes, so sand never carries plateau steps.
     */
-   private static double wildReliefAt(WildField wild, int x, int z, double[] n, double forestRelief) {
+   private static double wildReliefAt(WildField wild, int x, int z, double[] n, double forestRelief,
+                                        boolean allowKarstBridge) {
       double ordinary = WildBiome.weight(n, WildBiome.FOREST)
               - n[WildBiome.PRAIRIE.ordinal()] - n[WildBiome.WETLANDS.ordinal()]
               - n[WildBiome.COASTAL_DUNES.ordinal()] - n[WildBiome.VOLCANIC_BARRENS.ordinal()];
@@ -1582,7 +1592,7 @@ public final class ForestGenerator {
             r += WildBiome.weight(n, WildBiome.DESERT) * foot * Math.max(0.0, wild.relief.mesaSlope(x, z) - dunes);
          }
       }
-      return BiomeEcology.relief(r, n, x, z, wild.relief);
+      return BiomeEcology.relief(r, n, x, z, wild.relief, allowKarstBridge);
    }
 
    /** The shore's relief at a column: blocks to add to the bank's own height. */
@@ -1621,7 +1631,7 @@ public final class ForestGenerator {
          }
          double[] wt = new double[ForestType.ALL.length];
          this.terrain.typeWeights(x, z, wt);
-         double relief = wildReliefAt(this.wild, x, z, n, this.terrain.relief(x, z, wt));
+         double relief = wildReliefAt(this.wild, x, z, n, this.terrain.relief(x, z, wt), false);
          return (int) Math.round(fade * (relief + this.baseGap(x, z)));
       }
 
@@ -1653,7 +1663,7 @@ public final class ForestGenerator {
          double inlandFade = (out[1] > 0.0 && hardFade > 0.0) ? shoreFade : hardFade;
          double[] wt = new double[ForestType.ALL.length];
          this.terrain.typeWeights(x, z, wt);
-         double relief = wildReliefAt(this.wild, x, z, n, this.terrain.relief(x, z, wt));
+         double relief = wildReliefAt(this.wild, x, z, n, this.terrain.relief(x, z, wt), false);
          li[0] = lift(x, z);
          li[1] = (int) Math.round(inlandFade * (relief + baseGap(x, z)));
          return String.format("(%d,%d) lift=%d inland=%d relief=%.1f hardFade=%.2f waterFade=%.2f inlandFade=%.2f hardDist=%s waterDist=%.1f blend=%.0f nF/Mt/D/Ms=%.2f/%.2f/%.2f/%.2f",
@@ -1844,12 +1854,14 @@ public final class ForestGenerator {
       }
       int surface = ctx.surfaceKind(x, z, h, biome);
       paintGround(chunk, lx, lz, x, z, h, w, surface, ctx.terrain.getSeed(), true, biome.dryness());
-      if (surface == Ctx.SURFACE_GROUND) paintHabitat(chunk,lx,lz,x,z,h,ctx.terrain.getSeed(),biome,true);
+      if (surface == Ctx.SURFACE_GROUND) paintHabitat(chunk,lx,lz,x,z,h,ctx.terrain.getSeed(),biome,true,
+                  ctx.karstBridgeAllowed(x,z,ctx.sharpWeights(x,z)),ctx.baseline(x,z)+ctx.offset);
    }
 
    /** Biome-specific soil, rock, and supported ground cover shared by inland and shore painters.
     * No artificial water is inserted; river/ocean painters retain water and shoreline ownership. */
-   private static void paintHabitat(Chunk chunk, int lx, int lz, int x, int z, int h, long seed, WildBiome b, boolean plants) {
+   private static void paintHabitat(Chunk chunk, int lx, int lz, int x, int z, int h, long seed,
+                                    WildBiome b, boolean plants, boolean allowKarstBridge, int baseY) {
       // Ground was first painted generically; clear ONLY its temporary plant
       // before switching substrate. A fern on a new sand or basalt block would
       // otherwise appear suspended or unsupported after the material change.
@@ -1887,7 +1899,7 @@ public final class ForestGenerator {
          if (plants && ForestTerrain.unit(ForestTerrain.hash(seed,x,z,109))<.14)
             PAL.set(chunk,lx,h+1,lz,WildBlock.FERN);
       }
-      BiomeEcology.paintGround(chunk, lx, lz, x, z, h, seed, b, plants);
+      BiomeEcology.paintGround(chunk, lx, lz, x, z, h, seed, b, plants, allowKarstBridge, baseY);
    }
 
    /** The top of a column of ground: bare rock or snow, or soil with grass (or podzol, coarse dirt) and, if plants, its ground cover. */
@@ -2217,6 +2229,8 @@ public final class ForestGenerator {
       final double[] scratch = new double[ForestType.ALL.length];
       /** Whether a chunk cell counts as this wilderness (see sameKind), remembered for the life of this chunk's work. */
       private final Map<Long, Boolean> kindCache = new HashMap<Long, Boolean>();
+      /** Cache strict chunk-footprint ownership checks for natural arches. */
+      private final Map<Long, Boolean> karstBridgeOwnerCache = new HashMap<Long, Boolean>();
       /** The relief fade's view of the plan: wilderness, shore and hard cells (null without the wilderness biomes). */
       private ShoreCells cells;
 
@@ -2330,9 +2344,31 @@ public final class ForestGenerator {
          return this.wild.sharp(x, z);
       }
 
+      /**
+       * A bridge is allowed only well inside one continuous, planned forest
+       * Morphomos region. The full footprint excludes roads, cities, water,
+       * EmptyParcel, fallback and any other parcel owner.
+       */
+      boolean karstBridgeAllowed(int x, int z, double[] weights) {
+         if (this.wild == null || this.region == null
+                 || this.region.getContext() != ContextType.FOREST
+                 || weights == null
+                 || weights[WildBiome.VOLCANIC_BARRENS.ordinal()] < 0.82) return false;
+         long seed = this.generator.getWorldSeed();
+         if (KarstLandforms.archWeight(seed, x, z) < 0.10) return false;
+         int cx = x >> 4, cz = z >> 4;
+         long key = ((long) cx << 32) ^ (cz & 0xffffffffL);
+         Boolean allowed = this.karstBridgeOwnerCache.get(key);
+         if (allowed == null) {
+            allowed = this.grid.isKarstBridgeFootprintOwned(this.region, cx, cz, 6);
+            this.karstBridgeOwnerCache.put(key, allowed);
+         }
+         return allowed;
+      }
+
       /** The relief of the wilderness at a column: each biome's own relief, blended by how much of the column it holds. */
       private double wildRelief(int x, int z, double[] n, double forestRelief) {
-         return wildReliefAt(this.wild, x, z, n, forestRelief);
+         return wildReliefAt(this.wild, x, z, n, forestRelief, this.karstBridgeAllowed(x, z, n));
       }
 
       /**

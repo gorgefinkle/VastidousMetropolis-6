@@ -118,14 +118,12 @@ public final class WildGeography {
    public double suitability(WildBiome biome, int x, int z) {
       if (biome == WildBiome.COASTAL_DUNES) return coastalProximity(x, z);
       if (biome == WildBiome.VOLCANIC_BARRENS) {
-         // Karst is formed by the continuous fractured-limestone drainage
-         // field used by KarstLandforms itself, not by the unrelated volcano
-         // mountain-kind mask. Keep a modest upland floor so a requested
-         // karst patch is not erased where its valleys open into limestone.
-         // Karst is a mountain landform, not a coastline-excluded biome.
-         // Its raised massif and deep inner cuts now provide the correct
-         // coastal relationship without suppressing valid near-ocean regions.
-         return KarstLandforms.habitat(this.reliefSeed, x, z);
+         // Biome ownership describes the WHOLE limestone massif. Do not use
+         // the narrow valley/habitat mask here: doing so selected only the
+         // fracture channels and turned the surrounding mountain country into
+         // thin, disconnected fins. The valley field remains responsible for
+         // the internal deep cuts, ravine soils and sheltered ecology.
+         return 1.0;
       }
       double rain = .5 + .5 * rainfall.fbm(x / 1450.0, z / 1450.0, 3, .55);
       double temp = .5 + .5 * temperature.fbm(x / 2100.0, z / 2100.0, 3, .5);

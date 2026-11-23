@@ -31,7 +31,9 @@ import java.util.concurrent.ConcurrentMap;
  * column. There is no arbitrary user radius or small fixed search cap.
  */
 public final class CommandMetropolisBiome implements CommandExecutor, TabCompleter {
-   private static final int SAMPLE_STEP = 4;
+   // Four field samples per 16x16 chunk; the field is smoothed at much
+   // larger scales and every candidate chunk is verified column-by-column.
+   private static final int SAMPLE_STEP = 8;
    private static final int SAMPLES_PER_TICK = 96;
    /** Conservative bound from a lattice sample to a safe landing in its chunk. */
    private static final double LANDING_COVER_RADIUS = 23.0;
@@ -139,6 +141,7 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       private final double borderMinX, borderMaxX, borderMinZ, borderMaxZ;
       private final int maxRing;
       private final java.util.Set<Long> candidateChunks = ConcurrentHashMap.newKeySet();
+      private final java.util.Set<Long> plannerRejectedChunks = ConcurrentHashMap.newKeySet();
       private final List<Candidate> candidates = new ArrayList<>();
       private int ring;
       private long pointIndex;
@@ -240,10 +243,15 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             scannedSamples++;
             int chunkX = point[0] >> 4, chunkZ = point[1] >> 4;
             long chunkKey = ((long) chunkX << 32) ^ (chunkZ & 0xffffffffL);
-            if (candidateChunks.contains(chunkKey)) continue;
+            if (candidateChunks.contains(chunkKey) || plannerRejectedChunks.contains(chunkKey)) continue;
             try {
-               if (ForestGenerator.wildBiomeCandidateScore(generator, biome, point[0], point[1]) >= 0) {
-                  if (candidateChunks.add(chunkKey)) candidates.add(new Candidate(point[0], point[1], distanceSquared(point[0], point[1])));
+               int score = ForestGenerator.wildBiomeCandidateScore(generator, biome, point[0], point[1]);
+               if (score == -2) {
+                  plannerRejectedChunks.add(chunkKey);
+               } else if (score >= 0) {
+                  if (candidateChunks.add(chunkKey)) {
+                     candidates.add(new Candidate(point[0], point[1], distanceSquared(point[0], point[1])));
+                  }
                }
             } catch (RuntimeException ex) {
                Minions.w("[METROBIOME] planner lookup failed for %s at %d,%d: %s",
@@ -266,8 +274,12 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          long now = System.currentTimeMillis();
          if (now - lastProgressMillis < 10000L) return;
          lastProgressMillis = now;
-         player.sendMessage("Still searching for " + MetropolisBiomeTargets.displayName(biome) + "... checked "
-                 + String.format(Locale.ROOT, "%,d", scannedSamples) + " planner positions so far.");
+         player.sendMessage("Still searching for " + MetropolisBiomeTargets.displayName(biome)
+                 + "... sampled " + String.format(Locale.ROOT, "%,d", scannedSamples) + " biome-field positions; "
+                 + String.format(Locale.ROOT, "%,d", candidateChunks.size() + plannerRejectedChunks.size())
+                 + " chunks contain a biome match ("
+                 + String.format(Locale.ROOT, "%,d", candidateChunks.size()) + " planner-owned, "
+                 + String.format(Locale.ROOT, "%,d", plannerRejectedChunks.size()) + " rejected by ownership).");
       }
 
       private void processCandidates() {
