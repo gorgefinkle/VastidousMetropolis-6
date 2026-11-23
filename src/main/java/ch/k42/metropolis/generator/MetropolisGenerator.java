@@ -611,41 +611,86 @@ public class MetropolisGenerator extends ChunkGenerator {
        * hold the main thread for over a minute under a Chunky pregeneration.
        */
       private void scheduleDrain() {
+         this.scheduleDrain(1L);
+      }
+
+      /**
+       * One in-flight scheduler token per world. The token is held until the
+       * drain callback exits, so nested enqueue/retry signals cannot create
+       * competing drain loops. Submission failure always releases the token;
+       * the plugin's periodic queue watchdog will try again.
+       */
+      private void scheduleDrain(long delayTicks) {
          if (!MetropolisGenerator.this.plugin.isEnabled()) return;
          if (!this.drainScheduled.compareAndSet(false, true)) return;
-         Bukkit.getScheduler().runTask(MetropolisGenerator.this.plugin, () -> {
-            this.drainScheduled.set(false);
-            long deadline = System.nanoTime() + DRAIN_BUDGET_NANOS;
-            do {
-               DiskDeferredChunkQueue.Chunk job;
+         try {
+            Bukkit.getScheduler().runTaskLater(MetropolisGenerator.this.plugin, () -> {
+               long followUpDelayTicks = 1L;
                try {
-                  job = this.deferred.poll(System.nanoTime());
-               } catch (IOException ex) {
-                  Minions.w("Could not read deferred Metropolis population spool: %s", ex);
-                  // No record is acknowledged: operator can repair the filesystem.
-                  break;
-               }
-               if (job == null) break;
-               try {
-                  boolean finished = this.populateComplete(this.owner, new Random(),
-                          this.owner.getChunkAt(job.x(), job.z()));
-                  if (finished) {
-                     this.deferred.complete();
-                  } else {
-                     this.deferred.retry(System.nanoTime());
+                  long deadline = System.nanoTime() + DRAIN_BUDGET_NANOS;
+                  do {
+                     DiskDeferredChunkQueue.Chunk job;
+                     try {
+                        job = this.deferred.poll(System.nanoTime());
+                     } catch (IOException ex) {
+                        Minions.w("Could not read deferred Metropolis population spool; durable jobs retained: %s", ex);
+                        followUpDelayTicks = 20L;
+                        break;
+                     }
+                     if (job == null) {
+                        long retryDelay = this.deferred.nextRetryDelayMillis();
+                        followUpDelayTicks = retryDelay <= 0L ? 1L
+                                : Math.max(1L, Math.min(1200L, (retryDelay + 49L) / 50L));
+                        break;
+                     }
+
+                     boolean acknowledged = false;
+                     try {
+                        boolean finished = this.populateComplete(this.owner, new Random(),
+                                this.owner.getChunkAt(job.x(), job.z()));
+                        if (finished) {
+                           this.deferred.complete();
+                           acknowledged = true;
+                        } else {
+                           this.deferred.retry(System.nanoTime());
+                        }
+                     } catch (IOException | RuntimeException failure) {
+                        if (!acknowledged) {
+                           try {
+                              this.deferred.retry(System.nanoTime());
+                           } catch (RuntimeException retryFailure) {
+                              failure.addSuppressed(retryFailure);
+                           }
+                        }
+                        Minions.w("Deferred populate of chunk [%d,%d] failed; job retained on disk: %s",
+                                job.x(), job.z(), failure);
+                        Minions.e(failure);
+                     }
+                     this.reportPending();
+                  } while (System.nanoTime() < deadline);
+
+                  if (this.deferred.hasPending()) {
+                     long retryDelay = this.deferred.nextRetryDelayMillis();
+                     if (retryDelay > 0L) {
+                        followUpDelayTicks = Math.max(1L, Math.min(1200L, (retryDelay + 49L) / 50L));
+                     }
                   }
-               } catch (IOException | RuntimeException failure) {
-                  // A failed job remains on disk and is retried later, rather
-                  // than disappearing from a transient in-memory queue.
-                  this.deferred.retry(System.nanoTime());
-                  Minions.w("Deferred populate of chunk [%d,%d] failed; job retained on disk: %s",
-                          job.x(), job.z(), failure);
-                  Minions.e(failure);
+               } catch (RuntimeException unexpected) {
+                  Minions.w("Deferred Metropolis drain aborted unexpectedly; durable jobs remain queued: %s", unexpected);
+                  Minions.e(unexpected);
+                  followUpDelayTicks = 20L;
+               } finally {
+                  this.drainScheduled.set(false);
+                  // Do not rely on a future player action or new Chunky callback:
+                  // pending work always schedules its own next wakeup.
+                  if (this.deferred.hasPending()) this.scheduleDrain(followUpDelayTicks);
                }
-               this.reportPending();
-            } while (System.nanoTime() < deadline);
-            if (this.deferred.hasPending()) this.scheduleDrain();
-         });
+            }, Math.max(1L, delayTicks));
+         } catch (RuntimeException submissionFailure) {
+            this.drainScheduled.set(false);
+            Minions.w("Could not schedule deferred Metropolis drain; jobs remain on disk and watchdog will retry: %s",
+                    submissionFailure);
+         }
       }
 
       /**
