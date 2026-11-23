@@ -31,7 +31,9 @@ import java.util.concurrent.ConcurrentMap;
  * column. There is no arbitrary user radius or small fixed search cap.
  */
 public final class CommandMetropolisBiome implements CommandExecutor, TabCompleter {
-   private static final int SAMPLE_STEP = 4;
+   // Four field samples per 16x16 chunk; the field is smoothed at much
+   // larger scales and every candidate chunk is verified column-by-column.
+   private static final int SAMPLE_STEP = 8;
    private static final int SAMPLES_PER_TICK = 96;
    /** Conservative bound from a lattice sample to a safe landing in its chunk. */
    private static final double LANDING_COVER_RADIUS = 23.0;
