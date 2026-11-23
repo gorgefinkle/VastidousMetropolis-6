@@ -465,107 +465,92 @@ public final class ForestGenerator {
    }
 
 
-   /** Interior probes used by the Bloomlands locator. They measure the same
-    * sharpened wilderness field that populateChunk paints. */
-   private static final int[][] BLOOMLANDS_CORE_PROBES = {
-      {48,0},{-48,0},{0,48},{0,-48},
-      {34,34},{34,-34},{-34,34},{-34,-34},
-      {96,0},{-96,0},{0,96},{0,-96},
-      {68,68},{68,-68},{-68,68},{-68,-68}
-   };
+   /** Planner owner for a natural-forest chunk, including creek interfluves. */
+   private record WildBiomeOwner(UrbanGrid grid, MorphomosRegion region) {}
 
-   /** Returns a quality score only when the canonical wilderness picker paints
-    * this coordinate as Bloomlands and the owning parcel is a FOREST region. */
-   public static int bloomlandsCandidateScore(MetropolisGenerator generator, int x, int z) {
-      if (generator == null || generator.getWorld() == null
-              || !PluginConfig.isForestGenerationEnabled()
-              || !PluginConfig.isWildBiomesEnabled()
-              || PluginConfig.isWildVanillaEnabled()) return -1;
-      double[] shares = PluginConfig.getWildBiomeShares();
-      int bloom = WildBiome.BLOOMLANDS.ordinal();
-      if (bloom >= shares.length || shares[bloom] <= 0.0) return -1;
-      WildField wild = wildFor(generator);
-      if (wild == null) return -1;
-      ForestTerrain terrain = terrainFor(generator);
-      if (wild.pick(x, z, ForestTerrain.unit(ForestTerrain.hash(terrain.getSeed(), x, z, 41)))
-              != WildBiome.BLOOMLANDS) return -1;
-      int chunkX = x >> 4, chunkZ = z >> 4;
-      ch.k42.metropolis.grid.common.Grid tile = generator.getGridProvider().getGrid(chunkX, chunkZ);
-      if (!(tile instanceof UrbanGrid grid)) return -1;
-      MorphomosRegion region = grid.getMorphomosRegionAt(chunkX, chunkZ);
-      // World-planned creek/interfluve wilderness uses a synthetic FOREST
-      // owner local to the tile, not a PlanRegions union-find region.
-      if (region == null) region = grid.localCreekNaturalForestAt(chunkX, chunkZ);
-      if (region == null || region.getContext() != ContextType.FOREST) return -1;
-
-      boolean hard = PluginConfig.isWildHardBorders();
-      double strength = 0.0;
-      double[] weights = hard ? wild.warpedSharp(x,z) : wild.sharp(x,z);
-      strength += weights[bloom];
-      for (int[] probe : BLOOMLANDS_CORE_PROBES) {
-         weights = hard ? wild.warpedSharp(x + probe[0], z + probe[1])
-                        : wild.sharp(x + probe[0], z + probe[1]);
-         strength += weights[bloom];
-      }
-      strength /= BLOOMLANDS_CORE_PROBES.length + 1.0;
-      if (strength < (hard ? 0.30 : 0.004)) return -1;
-      return (int)Math.round(Math.max(0.0, Math.min(1.0, strength)) * 10000.0);
-   }
-
-   /** Verifies generated terrain against the same picker and height function
-    * as worldgen. Returns {x, feetY, z}, or null when no safe column exists. */
-   public static int[] safeBloomlandsLanding(MetropolisGenerator generator, Chunk chunk,
-                                             int preferredX, int preferredZ) {
-      if (generator == null || chunk == null || generator.getWorld() == null
-              || (preferredX >> 4) != chunk.getX() || (preferredZ >> 4) != chunk.getZ()
-              || !PluginConfig.isForestGenerationEnabled()
-              || !PluginConfig.isWildBiomesEnabled()
-              || PluginConfig.isWildVanillaEnabled()) return null;
-      int chunkX = chunk.getX(), chunkZ = chunk.getZ();
+   private static WildBiomeOwner wildBiomeOwner(MetropolisGenerator generator, int chunkX, int chunkZ) {
+      if (generator == null || generator.getGridProvider() == null) return null;
       ch.k42.metropolis.grid.common.Grid tile = generator.getGridProvider().getGrid(chunkX, chunkZ);
       if (!(tile instanceof UrbanGrid grid)) return null;
       MorphomosRegion region = grid.getMorphomosRegionAt(chunkX, chunkZ);
       if (region == null) region = grid.localCreekNaturalForestAt(chunkX, chunkZ);
       if (region == null || region.getContext() != ContextType.FOREST) return null;
-      Ctx ctx = new Ctx(generator, grid, region, terrainFor(generator));
-      if (ctx.wild == null) return null;
+      return new WildBiomeOwner(grid, region);
+   }
 
+   /** True when this named biome can be selected by the world's canonical field. */
+   public static boolean isWildBiomeSearchAvailable(MetropolisGenerator generator, WildBiome biome) {
+      if (generator == null || generator.getWorld() == null || biome == null
+              || biome == WildBiome.WETLANDS
+              || !PluginConfig.isForestGenerationEnabled()
+              || !PluginConfig.isWildBiomesEnabled()
+              || PluginConfig.isWildVanillaEnabled()) return false;
+      double[] shares = PluginConfig.getWildBiomeShares();
+      if (shares == null || biome.ordinal() >= shares.length) return false;
+      double share = shares[biome.ordinal()];
+      if (biome == WildBiome.FOREST && WildBiome.WETLANDS.ordinal() < shares.length) {
+         share += Math.max(0.0, shares[WildBiome.WETLANDS.ordinal()]);
+      }
+      return share > 0.0;
+   }
+
+   /** Deterministic candidate probe using the exact production picker and planner ownership. */
+   public static int wildBiomeCandidateScore(MetropolisGenerator generator, WildBiome biome, int x, int z) {
+      if (!isWildBiomeSearchAvailable(generator, biome)) return -1;
+      WildBiomeOwner owner = wildBiomeOwner(generator, x >> 4, z >> 4);
+      if (owner == null) return -1;
+      WildField wild = wildFor(generator);
+      if (wild == null) return -1;
+      ForestTerrain terrain = terrainFor(generator);
+      double roll = ForestTerrain.unit(ForestTerrain.hash(terrain.getSeed(), x, z, 41));
+      return wild.pick(x, z, roll) == biome ? 10000 : -1;
+   }
+
+   /** Verify the generated destination chunk and return its nearest safe column {x, feetY, z}. */
+   public static int[] safeWildBiomeLanding(MetropolisGenerator generator, Chunk chunk, WildBiome biome,
+                                             int originX, int originZ) {
+      if (!isWildBiomeSearchAvailable(generator, biome) || chunk == null) return null;
+      WildBiomeOwner owner = wildBiomeOwner(generator, chunk.getX(), chunk.getZ());
+      if (owner == null) return null;
+      Ctx ctx = new Ctx(generator, owner.grid(), owner.region(), terrainFor(generator));
+      if (ctx.wild == null) return null;
       World world = generator.getWorld();
-      int minY = world.getMinHeight() + 1, maxY = world.getMaxHeight() - 3;
-      int baseX = chunkX << 4, baseZ = chunkZ << 4;
+      int minY = world.getMinHeight() + 1;
+      int maxY = world.getMaxHeight() - 3;
+      int baseX = chunk.getX() << 4, baseZ = chunk.getZ() << 4;
       long bestDistance = Long.MAX_VALUE;
       int[] best = null;
       for (int lx = 0; lx < 16; lx++) for (int lz = 0; lz < 16; lz++) {
          int x = baseX + lx, z = baseZ + lz;
          double roll = ForestTerrain.unit(ForestTerrain.hash(ctx.terrain.getSeed(), x, z, 41));
-         if (ctx.wild.pick(x, z, roll) != WildBiome.BLOOMLANDS) continue;
+         if (ctx.wild.pick(x, z, roll) != biome) continue;
          int groundY = ctx.height(x, z);
          if (groundY < minY || groundY > maxY) continue;
          Material ground = chunk.getBlock(lx, groundY, lz).getType();
-         if (!isSafeBloomlandsGround(ground)) continue;
+         if (!isSafeWildBiomeGround(ground)) continue;
          Block feet = chunk.getBlock(lx, groundY + 1, lz);
          Block head = chunk.getBlock(lx, groundY + 2, lz);
-         if (!isSafeBloomlandsAir(feet) || !isSafeBloomlandsAir(head)) continue;
-         long dx = (long)x - preferredX, dz = (long)z - preferredZ;
-         long distance = dx*dx + dz*dz;
+         if (!isSafeWildBiomeAir(feet) || !isSafeWildBiomeAir(head)) continue;
+         long dx = (long)x - originX, dz = (long)z - originZ;
+         long distance = dx * dx + dz * dz;
          if (distance < bestDistance) {
             bestDistance = distance;
-            best = new int[]{x, groundY + 1, z};
+            best = new int[] {x, groundY + 1, z};
          }
       }
       return best;
    }
 
-   private static boolean isSafeBloomlandsGround(Material material) {
+   private static boolean isSafeWildBiomeGround(Material material) {
+      if (material == null || !material.isSolid() || material.isAir()) return false;
       return switch (material) {
-         case GRASS_BLOCK, MOSS_BLOCK, MYCELIUM, PODZOL, ROOTED_DIRT,
-              DIRT, COARSE_DIRT, MUD, STONE, TUFF, CALCITE, ANDESITE,
-              DIORITE, GRAVEL, SAND, CLAY -> true;
-         default -> false;
+         case CACTUS, MAGMA_BLOCK, CAMPFIRE, SOUL_CAMPFIRE, FIRE, SOUL_FIRE, POWDER_SNOW -> false;
+         default -> true;
       };
    }
 
-   private static boolean isSafeBloomlandsAir(Block block) {
+   private static boolean isSafeWildBiomeAir(Block block) {
+      if (block == null) return false;
       Material material = block.getType();
       if (material == Material.POWDER_SNOW || material == Material.COBWEB
               || material == Material.SWEET_BERRY_BUSH || material == Material.FIRE
