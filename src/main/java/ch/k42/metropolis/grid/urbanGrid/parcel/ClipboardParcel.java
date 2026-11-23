@@ -342,6 +342,7 @@ public class ClipboardParcel extends Parcel {
       }
 
       if (this.clipboard != null) {
+         boolean decayComplete = true;
          // Note: cutouts toward roads are NOT applied here, other than for a road that was already finished (above). The road's
          // postPopulate() calls notifyNeighboursToRecut() as its final
          // step, which triggers makeCutoutsToward() on this building after
@@ -351,6 +352,7 @@ public class ClipboardParcel extends Parcel {
          try {
             generator.getDecayProvider().destroyChunks(this.chunkX, this.chunkZ, this.chunkSizeX, this.chunkSizeZ, this.clipboard.getBottom(this.effectiveBuildHeight()), this.clipboard.getSize().Y, this.clipboard.getConfig().getDecayOption(), this.grid, this.getDistrict());
          } catch (Exception e) {
+            decayComplete = false;
             Minions.d("CLIPBOARD PARCEL DECAY DIDNT WORK HERES SOME INFO");
             Minions.d("Generator null? : " + (generator == null));
             Minions.d("Generator decay provider null? : " + (generator.getDecayProvider() == null));
@@ -372,8 +374,10 @@ public class ClipboardParcel extends Parcel {
          // neighbour for anyone next to it once its populate() runs.
 
          PlacedParcels.of(generator).buildingFinished(this, generator);   // after the decay pass: cuts toward roads that finished first
-         collectLoadedFootprintInteriors(generator);
-         this.exportCompletedBuild(generator);
+         if (decayComplete) {
+            collectLoadedFootprintInteriors(generator);
+            this.exportCompletedBuild(generator);
+         }
 
          if (generator.getWorld() != null) {
             generator.getWorld().refreshChunk(chunk.getX(), chunk.getZ());
