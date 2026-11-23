@@ -58,7 +58,6 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
     public record Chunk(int x, int z) {}
     private static final class Entry {
         final long key;
-        long retryAfterNanos;
         Entry(long key) { this.key = key; }
     }
 
@@ -263,12 +262,6 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         int trials = window.size();
         for (int i = 0; i < trials; i++) {
             Entry entry = window.removeFirst();
-            if (entry.retryAfterNanos > nowNanos) {
-                window.addLast(entry);
-                if (fallbackRetryAtNanos == 0L || entry.retryAfterNanos < fallbackRetryAtNanos)
-                    fallbackRetryAtNanos = entry.retryAfterNanos;
-                continue;
-            }
             windowKeys.remove(entry.key);
             if (!Files.exists(marker(entry.key)))
                 throw new IOException("Pending population disappeared from disk: " + entry.key);
