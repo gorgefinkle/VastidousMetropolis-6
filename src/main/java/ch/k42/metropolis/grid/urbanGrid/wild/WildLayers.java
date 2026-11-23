@@ -139,9 +139,9 @@ final class WildLayers {
       // old intermediate-level estimate could report the requested rare-biome
       // share even when the final zoom, domain warp and 3x3 region protection
       // produced a materially different distribution.
-      final int samples = 24000;
+      final int samples = 4096;
       double[] real = new double[this.n];
-      for (int it = 0; it < 24; it++) {
+      for (int it = 0; it < 16; it++) {
          this.memo.clear();
          this.regionMemo.clear();
          java.util.Arrays.fill(real, 0.0);
@@ -161,7 +161,7 @@ final class WildLayers {
             this.realised[b] = real[b];
          }
          this.calibrationError = err;
-         if (err < 0.004) {
+         if (err < 0.006) {
             break;
          }
          double sum = 0.0;
