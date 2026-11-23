@@ -2386,7 +2386,7 @@ public final class ForestGenerator {
          long key = ((long) cx << 32) ^ (cz & 0xffffffffL);
          Boolean allowed = this.karstBridgeOwnerCache.get(key);
          if (allowed == null) {
-            allowed = this.grid.isKarstBridgeFootprintOwned(this.region, cx, cz, 6);
+            allowed = this.grid.isKarstBridgeFootprintOwned(this.region, cx, cz, 3);
             this.karstBridgeOwnerCache.put(key, allowed);
          }
          return allowed;
