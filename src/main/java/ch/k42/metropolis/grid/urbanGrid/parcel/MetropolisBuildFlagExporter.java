@@ -21,6 +21,8 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import ch.k42.metropolis.grid.urbanGrid.enums.ContextType;
+import ch.k42.metropolis.grid.urbanGrid.enums.SchematicType;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,6 +42,21 @@ public final class MetropolisBuildFlagExporter implements AutoCloseable {
    public static final int SCHEMA_VERSION = 1;
    private static final String EXPORT_DIRECTORY = "deadstreets-build-flags-v1";
    private static final int MAX_CANDIDATES_PER_RECORD = 128;
+
+   /**
+    * Only ordinary BUILD parcels represent population-bearing buildings.
+    * Forced landmark districts are excluded even when their selected clip
+    * falls back to an ordinary context; PARK and LANDMARK contexts are also
+    * excluded as a final guard against config-tagged BUILD assets.
+    */
+   public static boolean isEligibleBuild(SchematicType schematicType,
+                                         ContextType districtContext,
+                                         boolean forcedDistrict) {
+      return schematicType == SchematicType.BUILD && !forcedDistrict
+              && districtContext != null
+              && districtContext != ContextType.PARK
+              && districtContext != ContextType.LANDMARK;
+   }
 
    public record Footprint(int minX, int maxX, int minY, int maxY, int minZ, int maxZ) { }
    public record Reference(int centerX, int centerZ) { }
