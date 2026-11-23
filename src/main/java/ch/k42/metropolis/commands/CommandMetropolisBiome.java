@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentMap;
  * column. There is no arbitrary user radius or small fixed search cap.
  */
 public final class CommandMetropolisBiome implements CommandExecutor, TabCompleter {
-   private static final int SAMPLE_STEP = 8;
+   private static final int SAMPLE_STEP = 4;
    private static final int SAMPLES_PER_TICK = 96;
    /** Conservative bound from a lattice sample to a safe landing in its chunk. */
    private static final double LANDING_COVER_RADIUS = 23.0;
@@ -135,14 +135,13 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       private final World world;
       private final int originX;
       private final int originZ;
-      private final WorldBorder border;
+      private final double borderMinX, borderMaxX, borderMinZ, borderMaxZ;
       private final int maxRing;
       private final java.util.Set<Long> candidateChunks = ConcurrentHashMap.newKeySet();
       private final List<Candidate> candidates = new ArrayList<>();
       private int ring;
       private long pointIndex;
       private long pointsInRing;
-      private boolean ringHadPointInsideBorder;
       private boolean closed;
       private boolean resolving;
       private long scannedSamples;
@@ -157,11 +156,15 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          this.world = player.getWorld();
          this.originX = origin.getBlockX();
          this.originZ = origin.getBlockZ();
-         this.border = world.getWorldBorder();
+         WorldBorder border = world.getWorldBorder();
          Location center = border.getCenter();
          double half = border.getSize() / 2.0;
-         double reachX = Math.max(Math.abs(originX - (center.getX() - half)), Math.abs(originX - (center.getX() + half)));
-         double reachZ = Math.max(Math.abs(originZ - (center.getZ() - half)), Math.abs(originZ - (center.getZ() + half)));
+         this.borderMinX = center.getX() - half;
+         this.borderMaxX = center.getX() + half;
+         this.borderMinZ = center.getZ() - half;
+         this.borderMaxZ = center.getZ() + half;
+         double reachX = Math.max(Math.abs(originX - borderMinX), Math.abs(originX - borderMaxX));
+         double reachZ = Math.max(Math.abs(originZ - borderMinZ), Math.abs(originZ - borderMaxZ));
          this.maxRing = (int) Math.min(Integer.MAX_VALUE - 1L,
                  (long) Math.ceil(Math.max(reachX, reachZ) / SAMPLE_STEP) + 1L);
       }
@@ -191,7 +194,6 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          if (ring > maxRing) { finishSearch(); return; }
          pointsInRing = ring == 0 ? 1L : 8L * ring;
          pointIndex = 0L;
-         ringHadPointInsideBorder = false;
          candidates.clear();
          Bukkit.getScheduler().runTask(plugin, this::scanBatch);
       }
@@ -224,7 +226,8 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       }
 
       private boolean insideBorder(int x, int z) {
-         return border.isInside(new Location(world, x + 0.5, world.getMinHeight() + 1.0, z + 0.5));
+         double px = x + 0.5, pz = z + 0.5;
+         return px >= borderMinX && px < borderMaxX && pz >= borderMinZ && pz < borderMaxZ;
       }
 
       private void scanBatch() {
@@ -233,7 +236,6 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          while (pointIndex < pointsInRing && budget-- > 0) {
             int[] point = pointAt(pointIndex++);
             if (point == null || !insideBorder(point[0], point[1])) continue;
-            ringHadPointInsideBorder = true;
             scannedSamples++;
             int chunkX = point[0] >> 4, chunkZ = point[1] >> 4;
             long chunkKey = ((long) chunkX << 32) ^ (chunkZ & 0xffffffffL);
@@ -329,7 +331,7 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             finishSearch();
             return;
          }
-         if (ring >= maxRing || !ringHadPointInsideBorder) {
+         if (ring >= maxRing) {
             finishSearch();
             return;
          }
