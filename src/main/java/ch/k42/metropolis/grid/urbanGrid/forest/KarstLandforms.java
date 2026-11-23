@@ -60,15 +60,25 @@ public final class KarstLandforms {
         // Anisotropic distance converts the curved channel into a natural
         // tributary with tapering width toward its dead head.
         double duDv=sign*(153*1.27*Math.cos(t*1.27)+82.8*Math.cos(t*4.6+bend))/length;
-        double d=Math.abs(u-channelU)/Math.sqrt(1+duDv*duDv)+15*(1-weight);
+        // Fade finite tributaries into the main fracture field at BOTH
+        // endpoints. Dropping a branch with a hard p cutoff created a
+        // discontinuous distance jump: one neighboring column could be at
+        // the ravine floor while the next snapped back to upland height.
+        double branchDistance=Math.abs(u-channelU)/Math.sqrt(1+duDv*duDv);
+        double d=major+(branchDistance-major)*weight;
         if(d<tributary)tributary=d;
       }
     }
     // Minor, non-periodic shear cracks fringe the main sides but do not
     // themselves create broad circular depressions or crater rings.
     double small= Math.abs(u+warp-laneN*340-94*(noise(seed,x,z,165,0x4c494d45L)-.5));
-    if(noise(seed,x,z,230,0x5348454152L)>.69)tributary=Math.min(tributary,small+26);
-    return Math.min(major,tributary);
+    // Minor shear cracks are also a smooth field contribution, not a binary
+    // noise threshold. The former >.69 switch could change the nearest
+    // fracture distance by dozens of blocks across adjacent columns.
+    double combined=Math.min(major,tributary);
+    double shearWeight=smooth((noise(seed,x,z,230,0x5348454152L)-.60)/.16);
+    double withShear=Math.min(combined,small+26);
+    return combined+(withShear-combined)*shearWeight;
   }
   /** Canyon cross-sections are broad on the floor and broken at the shoulder. */
   public static double width(long seed,int x,int z){
