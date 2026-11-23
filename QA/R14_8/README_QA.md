@@ -8,7 +8,7 @@ sh QA/R14_8/run_wild_biome_appearance_probe.sh
 sh QA/R14_8/run_build_flag_exporter_probe.sh
 ```
 
-The wilderness probe samples three known development seeds over large negative and positive coordinate ranges and asserts that Bloomlands and karst both survive the discrete biome field, with Bloomlands remaining rarer.
+The wilderness probe samples 60,000 deterministic random world coordinates per seed across a 600,000-block square for three development seeds. It checks both final region labels and the hard-border dominant-biome selection and asserts that Bloomlands and karst both appear, with Bloomlands remaining rarer.
 
 The build-flag probe checks the JSONL schema, deterministic building identity, duplicate suppression, restart indexing and interrupted final-line recovery.
 
