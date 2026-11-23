@@ -146,6 +146,9 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       private boolean closed;
       private boolean resolving;
       private long scannedSamples;
+      private long targetBiomeSamples;
+      private long plannerRejectedSamples;
+      private long plannerOwnedSamples;
       private long bestDistanceSquared = Long.MAX_VALUE;
       private int[] bestLanding;
       private long lastProgressMillis = System.currentTimeMillis();
@@ -242,8 +245,16 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             long chunkKey = ((long) chunkX << 32) ^ (chunkZ & 0xffffffffL);
             if (candidateChunks.contains(chunkKey)) continue;
             try {
-               if (ForestGenerator.wildBiomeCandidateScore(generator, biome, point[0], point[1]) >= 0) {
-                  if (candidateChunks.add(chunkKey)) candidates.add(new Candidate(point[0], point[1], distanceSquared(point[0], point[1])));
+               int score = ForestGenerator.wildBiomeCandidateScore(generator, biome, point[0], point[1]);
+               if (score == -2) {
+                  targetBiomeSamples++;
+                  plannerRejectedSamples++;
+               } else if (score >= 0) {
+                  targetBiomeSamples++;
+                  plannerOwnedSamples++;
+                  if (candidateChunks.add(chunkKey)) {
+                     candidates.add(new Candidate(point[0], point[1], distanceSquared(point[0], point[1])));
+                  }
                }
             } catch (RuntimeException ex) {
                Minions.w("[METROBIOME] planner lookup failed for %s at %d,%d: %s",
@@ -266,8 +277,12 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          long now = System.currentTimeMillis();
          if (now - lastProgressMillis < 10000L) return;
          lastProgressMillis = now;
-         player.sendMessage("Still searching for " + MetropolisBiomeTargets.displayName(biome) + "... checked "
-                 + String.format(Locale.ROOT, "%,d", scannedSamples) + " planner positions so far.");
+         player.sendMessage("Still searching for " + MetropolisBiomeTargets.displayName(biome)
+                 + "... sampled " + String.format(Locale.ROOT, "%,d", scannedSamples) + " biome-field positions; "
+                 + String.format(Locale.ROOT, "%,d", targetBiomeSamples) + " matched the biome, "
+                 + String.format(Locale.ROOT, "%,d", plannerOwnedSamples) + " passed planner ownership across "
+                 + String.format(Locale.ROOT, "%,d", candidateChunks.size()) + " chunks, "
+                 + String.format(Locale.ROOT, "%,d", plannerRejectedSamples) + " were rejected by planner ownership.");
       }
 
       private void processCandidates() {
