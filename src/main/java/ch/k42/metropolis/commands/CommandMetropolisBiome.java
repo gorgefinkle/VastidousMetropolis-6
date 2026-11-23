@@ -14,6 +14,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.IllegalPluginAccessException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -283,8 +284,14 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
                     + candidate.x + ", " + candidate.z + ". "
                     + (generated ? "Verifying the existing terrain..." : "Generating and verifying this destination chunk..."));
             try {
-               world.getChunkAtAsync(chunkX, chunkZ, true).whenComplete((chunk, error) ->
-                       Bukkit.getScheduler().runTask(plugin, () -> finishCandidate(candidate, chunk, error)));
+               world.getChunkAtAsync(chunkX, chunkZ, true).whenComplete((chunk, error) -> {
+                  if (!plugin.isEnabled()) return;
+                  try {
+                     Bukkit.getScheduler().runTask(plugin, () -> finishCandidate(candidate, chunk, error));
+                  } catch (IllegalPluginAccessException ignored) {
+                     // Plugin shutdown cancels the search; no callback should outlive it.
+                  }
+               });
             } catch (RuntimeException ex) {
                resolving = false;
                Minions.w("[METROBIOME] async chunk request failed at %d,%d: %s", candidate.x, candidate.z, ex.toString());
