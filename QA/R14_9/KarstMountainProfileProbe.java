@@ -23,6 +23,7 @@ public final class KarstMountainProfileProbe {
             double[] uplands = new double[5000];
             double[] cuts = new double[5000];
             double[] shoulderDeltas = new double[5000];
+            int[] shoulderX = new int[5000], shoulderZ = new int[5000];
             int up = 0, cut = 0, shoulder = 0;
             int buildableUplands = 0;
             double minUpland = Double.POSITIVE_INFINITY;
@@ -55,7 +56,10 @@ public final class KarstMountainProfileProbe {
                                      Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x-16,z))),
                             Math.max(Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x,z+16)),
                                      Math.abs(relief-KarstLandforms.unbridgedRelief(seed,x,z-16))));
-                    shoulderDeltas[shoulder++] = delta;
+                    shoulderDeltas[shoulder] = delta;
+                    shoulderX[shoulder] = x;
+                    shoulderZ[shoulder] = z;
+                    shoulder++;
                 }
             }
             check(up == uplands.length && cut == cuts.length,
@@ -72,6 +76,26 @@ public final class KarstMountainProfileProbe {
             check(shoulder >= shoulderDeltas.length, "insufficient shoulder samples for seed " + seed + ": " + shoulder);
             Arrays.sort(shoulderDeltas);
             double shoulderP95 = shoulderDeltas[(int)(shoulderDeltas.length * 0.95)];
+            if (shoulderP95 > 38.0) {
+                boolean[] emitted = new boolean[shoulderDeltas.length];
+                for (int rank = 0; rank < 8; rank++) {
+                    int best = -1;
+                    for (int k = 0; k < shoulderDeltas.length; k++)
+                        if (!emitted[k] && (best < 0 || shoulderDeltas[k] > shoulderDeltas[best])) best = k;
+                    emitted[best] = true;
+                    int px = shoulderX[best], pz = shoulderZ[best];
+                    double center = KarstLandforms.unbridgedRelief(seed,px,pz);
+                    double east = KarstLandforms.unbridgedRelief(seed,px+16,pz);
+                    double west = KarstLandforms.unbridgedRelief(seed,px-16,pz);
+                    double south = KarstLandforms.unbridgedRelief(seed,px,pz+16);
+                    double north = KarstLandforms.unbridgedRelief(seed,px,pz-16);
+                    System.out.println("KARST_STEEP_SAMPLE seed="+seed+" x="+px+" z="+pz
+                            +" valley="+KarstLandforms.valley(seed,px,pz)
+                            +" r="+(KarstLandforms.distance(seed,px,pz)/KarstLandforms.width(seed,px,pz))
+                            +" center="+center+" E/W/S/N="+east+"/"+west+"/"+south+"/"+north
+                            +" deltas="+Math.abs(center-east)+"/"+Math.abs(center-west)+"/"+Math.abs(center-south)+"/"+Math.abs(center-north));
+                }
+            }
             check(shoulderP95 <= 38.0, "karst shoulder profile remains too cliff-like: p95 16-block height delta=" + shoulderP95);
             check(buildableShare >= 0.15,
                     "too little broad, low-gradient upland for construction: " + buildableShare);
