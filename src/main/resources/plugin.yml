@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.6-R14.6-DiskBackpressure-DEV
+version: 0.1.7-R14.7-Morphomos-Bloomlands-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
