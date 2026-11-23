@@ -665,6 +665,15 @@ public class MetropolisGenerator extends ChunkGenerator {
                         Minions.w("Deferred populate of chunk [%d,%d] failed; job retained on disk: %s",
                                 job.x(), job.z(), failure);
                         Minions.e(failure);
+                     } catch (Error fatal) {
+                        if (!acknowledged) {
+                           try {
+                              this.deferred.retry(System.nanoTime());
+                           } catch (RuntimeException retryFailure) {
+                              fatal.addSuppressed(retryFailure);
+                           }
+                        }
+                        throw fatal;
                      }
                      this.reportPending();
                   } while (System.nanoTime() < deadline);
