@@ -91,7 +91,7 @@ public final class KarstLandforms {
     double v=valley(seed,x,z);
     // Deep inner drainage cuts descend from the elevated limestone uplands
     // toward the surrounding build-height datum (roughly Y=63 by default).
-    return v*(60+15*noise(seed,x,z,220,0x4445505448L));
+    return v*(62+6*noise(seed,x,z,220,0x4445505448L));
   }
   /** A bridge is a remnant of the SAME limestone upland on both banks.
    * Its top-view footprint is a constricted, gently crooked waist over the
@@ -242,7 +242,7 @@ public final class KarstLandforms {
     double ledges=1.9*(noise(seed,x,z,54,0x53484f554c4445L)-.5)
                  +2.5*(noise(seed,x,z,26,0x4c454447455aL)-.5);
     double grade=upland+ledge*.60+shoulder*.25+terrace*.5+talus*.55+rubble*.35
-                  -broad*(60+15*noise(seed,x,z,220,0x4445505448L))+ledges;
+                  -broad*(62+6*noise(seed,x,z,220,0x4445505448L))+ledges;
     // Karst is a mountain range, not a lowland pockmark field. Lift the
     // entire limestone massif first; the broad, deep dissolution channels
     // then cut back down toward the ordinary terrain datum. The upland noise
