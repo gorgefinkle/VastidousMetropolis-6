@@ -88,7 +88,10 @@ public final class KarstSpanVolume {
                      +10*(KarstLandforms.noise(seed,x,z,102,0x5249444745L)-.5)
                       +5*(KarstLandforms.noise(seed,x,z,36,0x42524f4bL)-.5);
         double broad=.8*n(seed,x,z,91,0x4445434b46414345L);
-        return upland+2.0+broad;
+        // Keep the bridge deck at the elevated karst massif datum. The
+        // natural valley floor is independently cut back down near build
+        // height; never use that floor as the deck reference.
+        return 65.0+upland+2.0+broad;
     }
     private static double centerHeight(long seed,int x,int z,double natural,double r){
         return crownDatum(seed,x,z,natural)-verticalRadius(seed,x,z,r);
