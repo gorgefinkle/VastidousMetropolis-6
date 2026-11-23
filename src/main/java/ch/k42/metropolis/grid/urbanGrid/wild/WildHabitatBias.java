@@ -29,8 +29,13 @@ public final class WildHabitatBias {
             int at = favored[i];
             if (at >= additions.length || additions[at] <= 0 || percentages[i] <= 0) continue;
             double suitability = geography.regionSuitability(WildBiome.ALL[at], x, z);
-            double share = Math.max(0, Math.min(0.92, percentages[i] / 100.0))
-                * smooth(0.32, 0.78, suitability);
+            // Karst valleys are elongated fracture networks, not compact
+            // habitat blobs. Start their core bias earlier than coastal dunes
+            // so an otherwise-valid rare karst patch is not zeroed at its
+            // edges by a volcanic-cone suitability threshold.
+            double core = i == 1 ? smooth(0.12, 0.58, suitability)
+                    : smooth(0.32, 0.78, suitability);
+            double share = Math.max(0, Math.min(0.92, percentages[i] / 100.0)) * core;
             if (share <= 0) continue;
             for (int index = 0; index < weights.length; index++) weights[index] *= 1.0 - share;
             weights[at] += share;
