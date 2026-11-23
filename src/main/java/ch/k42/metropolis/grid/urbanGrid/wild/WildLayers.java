@@ -135,15 +135,21 @@ final class WildLayers {
          goal[i] /= total;
          this.prior[i] = goal[i];
       }
-      final int level = 2;
+      // Calibrate the exact final map, not level 2 of the zoom stack. The
+      // old intermediate-level estimate could report the requested rare-biome
+      // share even when the final zoom, domain warp and 3x3 region protection
+      // produced a materially different distribution.
       final int window = 256;
       double[] real = new double[this.n];
       for (int it = 0; it < 30; it++) {
          this.memo.clear();
+         this.regionMemo.clear();
          java.util.Arrays.fill(real, 0.0);
          for (int i = 0; i < window; i++) {
             for (int j = 0; j < window; j++) {
-               real[this.value(level, i - window / 2 + 311, j - window / 2 - 187)] += 1.0;
+               int x = (int) Math.round((i - window / 2 + 311) * this.cellFinal);
+               int z = (int) Math.round((j - window / 2 - 187) * this.cellFinal);
+               real[this.label(x, z)] += 1.0;
             }
          }
          double err = 0.0;
