@@ -131,7 +131,8 @@ public final class PlanRegions {
          if (neighbourFamily == 0 || (family != 0 && family != neighbourFamily)) return false;
          family = neighbourFamily;
       }
-      if (family == 0) return false;
+      // A street can meet its natural blocks only diagonally at a planned
+      // corner; ruleDissolves() still evaluates the full eight-cell frame.
       Boolean known = this.dissolved.get(k);
       if (known != null) {
          return known;
