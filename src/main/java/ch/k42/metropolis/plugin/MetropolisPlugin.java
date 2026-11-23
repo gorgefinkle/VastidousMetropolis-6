@@ -227,8 +227,12 @@ public class MetropolisPlugin extends JavaPlugin {
       if (cmd != null) cmd.setExecutor(new ch.k42.metropolis.commands.CommandMetropolisCreek(this));
       cmd = this.getCommand("windfarm");
       if (cmd != null) cmd.setExecutor(new ch.k42.metropolis.commands.CommandMetropolisWindFarm());
-      cmd = this.getCommand("bloomlands");
-      if (cmd != null) cmd.setExecutor(new ch.k42.metropolis.commands.CommandMetropolisBloomlands());
+      cmd = this.getCommand("metrobiome");
+      if (cmd != null) {
+         CommandMetropolisBiome biome = new CommandMetropolisBiome(this);
+         cmd.setExecutor(biome);
+         cmd.setTabCompleter(biome);
+      }
       cmd = this.getCommand("citynames");
       if (cmd != null) cmd.setExecutor((sender, command, label, args) -> {
          if (args.length < 1 || args.length > 2 || !"export".equalsIgnoreCase(args[0])) {
