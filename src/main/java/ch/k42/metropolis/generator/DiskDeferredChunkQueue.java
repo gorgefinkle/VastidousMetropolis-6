@@ -2,12 +2,15 @@ package ch.k42.metropolis.generator;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -15,19 +18,17 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Disk-first, bounded-RAM pending population queue. Each pending chunk is a
- * durable, uniquely named marker in one of 256 directories. No historical
- * coordinate set or full queue snapshot is retained in memory; the only live
- * work window contains at most 128 chunk keys. The marker is removed ONLY
- * after the caller reports a successful population.
+ * Disk-first, bounded-RAM pending population queue. Each outstanding chunk is
+ * a durable uniquely named marker in one of 256 directories. At most 128
+ * chunk keys are retained in the ready window. A marker is removed only after
+ * the caller reports complete population.
  *
- * This is deliberately independent of Bukkit, parcel ownership and the
- * generation plan; a pending coordinate is not a cached Parcel or a new
- * planning owner. Its single responsibility is at-least-once scheduling.
+ * The retry deadline is stored in a separate sidecar and atomically replaced;
+ * the job marker itself is never truncated or rewritten. A corrupt/missing
+ * retry hint therefore cannot destroy the durable work record.
  *
- * At-least-once recovery means an interrupted population may be attempted
- * again after a crash. Exactly-once block placement still requires the normal
- * parcel lifecycle to be idempotent; this class must not claim that guarantee.
+ * Scheduling is at-least-once. Exactly-once block placement still depends on
+ * the normal parcel lifecycle being idempotent after a process interruption.
  */
 public final class DiskDeferredChunkQueue implements AutoCloseable {
     public static final int MAX_IN_MEMORY = 128;
@@ -44,10 +45,16 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
     private Long active;
     private boolean closed;
 
+    // A completed sweep lets us sleep until a known retry deadline rather than
+    // rescanning an arbitrarily large disk backlog every server tick.
+    private long lastCompleteScanAtMillis;
+    private long earliestRetryAtMillis;
+    private long fallbackRetryAtNanos;
+
     public record Chunk(int x, int z) {}
     private static final class Entry {
         final long key;
-        long retryAfter;
+        long retryAfterNanos;
         Entry(long key) { this.key = key; }
     }
 
@@ -61,22 +68,22 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
                 if (!Files.isDirectory(folder)) continue;
                 try (DirectoryStream<Path> files = Files.newDirectoryStream(folder, "*.job")) {
                     for (Path file : files) {
-                        // Invalid names are kept on disk and cause a loud failure.
                         parseName(file);
                         pending++;
                     }
                 }
             }
         }
-        // Migration is idempotent: a partially imported TSV is still present
-        // on restart; unique marker names prevent duplicates.
+        // Migration is idempotent: unique markers prevent duplicate imports.
+        // Keep the legacy TSV until every line has been imported successfully.
         if (legacyTsv != null && Files.isRegularFile(legacyTsv)) {
             try (BufferedReader lines = Files.newBufferedReader(legacyTsv, StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = lines.readLine()) != null) {
                     if (line.isBlank()) continue;
                     String[] coords = line.trim().split("\\t", -1);
-                    if (coords.length != 2) throw new IOException("Invalid legacy deferred-populates line: " + line);
+                    if (coords.length != 2)
+                        throw new IOException("Invalid legacy deferred-populates line: " + line);
                     try {
                         enqueue(Integer.parseInt(coords[0]), Integer.parseInt(coords[1]));
                     } catch (NumberFormatException ex) {
@@ -84,7 +91,6 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
                     }
                 }
             }
-            // Do not delete the legacy queue until ALL its jobs have markers.
             Files.delete(legacyTsv);
         }
     }
@@ -101,10 +107,15 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         value *= 0xc4ceb9fe1a85ec53L;
         return value ^ (value >>> 33);
     }
-    private int shard(long key) { return (int)(mix(key) >>> 56); }
-    private Path shardDir(int shard) { return base.resolve(String.format(Locale.ROOT, "%02x", shard)); }
+    private int shard(long key) { return (int) (mix(key) >>> 56); }
+    private Path shardDir(int shard) {
+        return base.resolve(String.format(Locale.ROOT, "%02x", shard));
+    }
     private Path marker(long key) {
         return shardDir(shard(key)).resolve(String.format(Locale.ROOT, "%016x.job", key));
+    }
+    private static Path retryMarker(Path job) {
+        return job.resolveSibling(job.getFileName().toString() + ".retry");
     }
     private long parseName(Path path) throws IOException {
         String name = path.getFileName().toString();
@@ -123,16 +134,17 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         Path record = marker(key);
         if (Files.exists(record)) return false;
         Files.createDirectories(record.getParent());
+        // Remove an orphan retry sidecar left by a previous acknowledged job.
+        Files.deleteIfExists(retryMarker(record));
         try {
-            Files.createFile(record); // atomic CREATE_NEW: filename is the full record
+            Files.createFile(record);
         } catch (java.nio.file.FileAlreadyExistsException duplicate) {
             return false;
         }
-        // On Linux a directory fsync makes the new marker durable even after
-        // a sudden host failure; unsupported filesystems keep the regular
-        // filesystem durability model rather than silently dropping jobs.
         forceDirectory(record.getParent());
         pending++;
+        lastCompleteScanAtMillis = 0L; // invalidate an earlier disk sweep
+        earliestRetryAtMillis = 0L;
         addToWindow(key);
         return true;
     }
@@ -141,7 +153,8 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
             dir.force(true);
         } catch (IOException | UnsupportedOperationException ignored) {
-            // Not all filesystems allow opening directory handles.
+            // Some filesystems do not permit directory handles. The job marker
+            // itself remains present; the platform filesystem durability model applies.
         }
     }
 
@@ -150,25 +163,71 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         window.addLast(new Entry(key));
     }
 
-    /** Refill at most MAX_IN_MEMORY markers. All directory iteration is streaming. */
+    /** Read an optional retry hint. Invalid hints fail open: the job remains ready. */
+    private static long retryAfterMillis(Path job) {
+        Path hint = retryMarker(job);
+        if (!Files.isRegularFile(hint)) return 0L;
+        try {
+            return Long.parseLong(Files.readString(hint, StandardCharsets.UTF_8).trim());
+        } catch (IOException | NumberFormatException ignored) {
+            return 0L;
+        }
+    }
+
+    /** Atomically replace a retry hint without ever truncating the job marker. */
+    private static boolean writeRetryAfter(Path job, long deadlineMillis) {
+        Path hint = retryMarker(job);
+        Path temporary = null;
+        try {
+            temporary = Files.createTempFile(job.getParent(), hint.getFileName().toString(), ".tmp");
+            byte[] bytes = Long.toString(deadlineMillis).getBytes(StandardCharsets.UTF_8);
+            try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING)) {
+                ByteBuffer buffer = ByteBuffer.wrap(bytes);
+                while (buffer.hasRemaining()) channel.write(buffer);
+                channel.force(true);
+            }
+            try {
+                Files.move(temporary, hint, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, hint, StandardCopyOption.REPLACE_EXISTING);
+            }
+            forceDirectory(job.getParent());
+            return true;
+        } catch (IOException ex) {
+            if (temporary != null) {
+                try { Files.deleteIfExists(temporary); } catch (IOException ignored) {}
+            }
+            return false;
+        }
+    }
+
+    /** Fill the ready window from disk, skipping jobs whose durable retry hint is not due. */
     private void refill() throws IOException {
         if (pending <= window.size() + (active == null ? 0 : 1)) return;
-        // Only one directory sweep per refill. Resetting this counter when
-        // any shard contains files would loop forever with fewer than 128
-        // pending records (or when those records are already in the window).
+        long nowMillis = System.currentTimeMillis();
+        if (lastCompleteScanAtMillis != 0L && earliestRetryAtMillis > nowMillis) return;
+        if (lastCompleteScanAtMillis != 0L && earliestRetryAtMillis <= nowMillis) {
+            lastCompleteScanAtMillis = 0L;
+            earliestRetryAtMillis = 0L;
+        }
+
         int visitedShards = 0;
         while (window.size() < MAX_IN_MEMORY && visitedShards < SHARDS) {
             if (iterator != null && iterator.hasNext()) {
                 Path candidate = iterator.next();
                 long found = parseName(candidate);
-                // A failed job is cooled down on disk, not left occupying one
-                // of the 128 ready-work slots. Otherwise one poison chunk (or
-                // 128 simultaneous failures) can starve every later marker.
-                if ((active == null || active != found) && !windowKeys.contains(found)
-                        && retryAfter(candidate) <= System.currentTimeMillis())
-                    addToWindow(found);
+                if ((active == null || active != found) && !windowKeys.contains(found)) {
+                    long retryAt = retryAfterMillis(candidate);
+                    if (retryAt <= nowMillis) {
+                        addToWindow(found);
+                    } else if (earliestRetryAtMillis == 0L || retryAt < earliestRetryAtMillis) {
+                        earliestRetryAtMillis = retryAt;
+                    }
+                }
                 continue;
             }
+
             closeListing();
             int n = scanShard;
             scanShard = (scanShard + 1) % SHARDS;
@@ -179,28 +238,27 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
                 iterator = listing.iterator();
             }
         }
+        if (visitedShards == SHARDS) lastCompleteScanAtMillis = nowMillis;
     }
 
     /** Returns null when pending work is temporarily cooling down or absent. */
     public synchronized Chunk poll(long nowNanos) throws IOException {
         checkOpen();
         if (active != null) throw new IllegalStateException("A pending population is still in flight");
-        // Refill whenever there is room, not only when the window is empty.
-        // Delayed retries are skipped by refill, so they cannot head-of-line
-        // block ready work elsewhere in the disk spool.
         if (window.size() < MAX_IN_MEMORY) refill();
+
         int trials = window.size();
         for (int i = 0; i < trials; i++) {
             Entry entry = window.removeFirst();
-            if (entry.retryAfter > nowNanos) {
+            if (entry.retryAfterNanos > nowNanos) {
                 window.addLast(entry);
+                if (fallbackRetryAtNanos == 0L || entry.retryAfterNanos < fallbackRetryAtNanos)
+                    fallbackRetryAtNanos = entry.retryAfterNanos;
                 continue;
             }
             windowKeys.remove(entry.key);
-            if (!Files.exists(marker(entry.key))) {
-                // External deletion is a data integrity failure, not success.
+            if (!Files.exists(marker(entry.key)))
                 throw new IOException("Pending population disappeared from disk: " + entry.key);
-            }
             active = entry.key;
             return new Chunk(x(entry.key), z(entry.key));
         }
@@ -212,6 +270,9 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         checkOpen();
         if (active == null) throw new IllegalStateException("No population in flight");
         Path record = marker(active);
+        // Delete the hint first. If job deletion fails, the still-durable job
+        // becomes immediately eligible rather than being hidden by stale metadata.
+        Files.deleteIfExists(retryMarker(record));
         if (!Files.deleteIfExists(record))
             throw new IOException("Cannot acknowledge missing pending population: " + record);
         forceDirectory(record.getParent());
@@ -225,37 +286,37 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         if (active == null) throw new IllegalStateException("No population in flight");
         long key = active;
         Path record = marker(key);
-        // Persist a wall-clock retry deadline in the marker. On restart the
-        // cooldown survives, while the failed job does not occupy a RAM slot.
-        // If writing the hint fails, retain a bounded in-memory cooldown; the
-        // durable empty marker still guarantees recovery after restart.
-        long retryAt = System.currentTimeMillis() + Math.max(1L, RETRY_NS / 1_000_000L);
-        boolean persisted = false;
-        try (FileChannel channel = FileChannel.open(record, StandardOpenOption.WRITE,
-                StandardOpenOption.TRUNCATE_EXISTING)) {
-            java.nio.ByteBuffer bytes = StandardCharsets.UTF_8.encode(Long.toString(retryAt));
-            while (bytes.hasRemaining()) channel.write(bytes);
-            channel.force(true);
-            persisted = true;
-        } catch (IOException ignored) {
-            // Keep the original durable marker. Do not drop or acknowledge it.
-        }
+        long retryAtMillis = System.currentTimeMillis() + Math.max(1L, RETRY_NS / 1_000_000L);
         active = null;
-        if (!persisted && windowKeys.add(key) && window.size() < MAX_IN_MEMORY) {
-            Entry retry = new Entry(key);
-            retry.retryAfter = nowNanos + RETRY_NS;
-            window.addLast(retry);
+        if (writeRetryAfter(record, retryAtMillis)) {
+            if (earliestRetryAtMillis == 0L || retryAtMillis < earliestRetryAtMillis)
+                earliestRetryAtMillis = retryAtMillis;
+        } else {
+            // Filesystem trouble writing the optional hint must not lose the job.
+            // Keep a bounded in-memory cooldown; after restart the unchanged job
+            // marker is eligible immediately, preserving at-least-once recovery.
+            if (windowKeys.add(key) && window.size() < MAX_IN_MEMORY) {
+                Entry entry = new Entry(key);
+                entry.retryAfterNanos = nowNanos + RETRY_NS;
+                window.addLast(entry);
+                fallbackRetryAtNanos = entry.retryAfterNanos;
+            }
         }
     }
 
-    private static long retryAfter(Path marker) throws IOException {
-        if (Files.size(marker) == 0L) return 0L; // never failed
-        String value = Files.readString(marker, StandardCharsets.UTF_8).trim();
-        try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException ex) {
-            throw new IOException("Invalid deferred-populate retry deadline: " + marker, ex);
+    /** Delay the next empty-queue wakeup to the earliest known retry deadline. */
+    public synchronized long nextRetryDelayMillis() {
+        if (pending <= 0L) return 0L;
+        long nowMillis = System.currentTimeMillis();
+        long delay = earliestRetryAtMillis > nowMillis ? earliestRetryAtMillis - nowMillis : 0L;
+        long nowNanos = System.nanoTime();
+        if (fallbackRetryAtNanos > nowNanos) {
+            long fallbackMillis = Math.max(1L, (fallbackRetryAtNanos - nowNanos + 999_999L) / 1_000_000L);
+            delay = delay == 0L ? fallbackMillis : Math.min(delay, fallbackMillis);
         }
+        // Ready work or an unfinished shard sweep should be polled next tick.
+        if (!window.isEmpty() || lastCompleteScanAtMillis == 0L) return 0L;
+        return delay;
     }
 
     public synchronized long pending() { return pending; }
