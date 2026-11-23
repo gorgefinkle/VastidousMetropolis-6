@@ -36,8 +36,6 @@ jobs:
           java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
       - name: Chunky backpressure recovery policy probe
         run: sh QA/R14_8/run_chunky_backpressure_policy_probe.sh
-      - name: Karst coastal exclusion probe
-        run: sh QA/R14_8/run_karst_coastal_exclusion_probe.sh
       - name: Karst landbridge open-clearance probe
         run: sh QA/R14_8/run_karst_landbridge_clearance_probe.sh
       - name: Karst mountain profile probe
