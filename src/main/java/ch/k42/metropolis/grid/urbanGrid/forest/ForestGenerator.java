@@ -1876,7 +1876,8 @@ public final class ForestGenerator {
          }
       }
       for (int y = h - 4; y >= 65; y--) {
-         PAL.set(chunk, lx, y, lz, WildBlock.STONE);
+         Material existing = chunk.getBlock(lx, y, lz).getType();
+         if (!existing.name().endsWith("_ORE")) PAL.set(chunk, lx, y, lz, WildBlock.STONE);
       }
       int surface = ctx.surfaceKind(x, z, h, biome);
       paintGround(chunk, lx, lz, x, z, h, w, surface, ctx.terrain.getSeed(), true, biome.dryness());
@@ -2379,7 +2380,7 @@ public final class ForestGenerator {
          if (this.wild == null || this.region == null
                  || this.region.getContext() != ContextType.FOREST
                  || weights == null
-                 || weights[WildBiome.VOLCANIC_BARRENS.ordinal()] < 0.82) return false;
+                 || weights[WildBiome.VOLCANIC_BARRENS.ordinal()] < 0.65) return false;
          long seed = this.generator.getWorldSeed();
          if (KarstLandforms.archWeight(seed, x, z) < 0.10) return false;
          int cx = x >> 4, cz = z >> 4;
