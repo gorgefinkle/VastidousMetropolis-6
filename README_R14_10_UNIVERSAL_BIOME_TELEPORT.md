@@ -17,3 +17,6 @@ The R14.9 durable deferred queue, Chunky memory backpressure, Morphomos natural-
 CI runs the Java 25 Maven clean verify build, previous R14.8/R14.9 regression probes, and `QA/R14_10/run_metropolis_biome_target_probe.sh` to check catalog coverage, command aliases and retired wetlands handling.
 
 This is a DEV build. CI compilation and deterministic probes do not replace a live Paper 26.2 test. The new command needs an in-server test in a world with wilderness biomes enabled, including a far-away Bloomlands and Karst search.
+
+
+Build validation note: the universal biome target catalog and alias probe is also run on pull requests targeting the R14.10 integration branch.
