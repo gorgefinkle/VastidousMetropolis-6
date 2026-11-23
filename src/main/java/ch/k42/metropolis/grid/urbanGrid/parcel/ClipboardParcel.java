@@ -13,7 +13,10 @@ import ch.k42.metropolis.minions.Minions;
 import ch.k42.metropolis.plugin.PluginConfig;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -26,6 +29,9 @@ public class ClipboardParcel extends Parcel {
    private int outstandingOverflow;
    private final BitSet pastedSlices = new BitSet();
    private final BitSet finishedSlices = new BitSet();
+   private final Set<Long> interiorScannedChunks = new HashSet<>();
+   private final List<MetropolisBuildFlagExporter.InteriorCandidate> interiorCandidates = new ArrayList<>();
+   private boolean completionExported;
    private static final int cutoutDepth = 8;
    private static final int cutoutHeight = 11;
 
@@ -97,18 +103,26 @@ public class ClipboardParcel extends Parcel {
       return (chunkZ - this.chunkZ) * this.chunkSizeX + (chunkX - this.chunkX);
    }
 
-   private void reportSliceFinished() {
-      if (this.finishedSlices.cardinality() >= this.chunkSizeX * this.chunkSizeZ &&
-          this.outstandingOverflow == 0 && !this.isPopulated()) this.markPopulated();
+   private synchronized void reportSliceFinished(MetropolisGenerator generator) {
+      if (this.finishedSlices.cardinality() >= this.chunkSizeX * this.chunkSizeZ
+              && this.outstandingOverflow == 0) {
+         if (!this.isPopulated()) this.markPopulated();
+         this.exportCompletedBuild(generator);
+      }
    }
 
    /** Overflow is a separate set of slices; the building is complete only after both finish. */
-   void overflowCompleted(int chunkX, int chunkZ, MetropolisGenerator generator) {
+   synchronized void overflowCompleted(int chunkX, int chunkZ, MetropolisGenerator generator) {
       if (outstandingOverflow <= 0) throw new IllegalStateException(
               "Unexpected overflow completion at " + chunkX + "," + chunkZ);
+      // SchematicOverflowDrain holds a plugin chunk ticket until this callback
+      // returns, so inspect this overflow slice without requesting a chunk load.
+      if (generator.getWorld() != null && generator.getWorld().isChunkLoaded(chunkX, chunkZ)) {
+         collectInteriorCandidates(generator, generator.getWorld().getChunkAt(chunkX, chunkZ));
+      }
       --outstandingOverflow;
       PlacedParcels.of(generator).afterOverflow(this, chunkX, chunkZ, generator);
-      reportSliceFinished();
+      reportSliceFinished(generator);
    }
 
    @Override
@@ -133,6 +147,158 @@ public class ClipboardParcel extends Parcel {
       }
    }
 
+   /**
+    * Inspect only the already-loaded slice that has just completed. Four
+    * deterministic sample columns per chunk (two by two) keep generation
+    * overhead bounded while still finding interiors on multiple floors.
+    */
+   private synchronized void collectInteriorCandidates(MetropolisGenerator generator, Chunk chunk) {
+      if (this.getSchematicType() != SchematicType.BUILD || this.clipboard == null
+              || generator == null || generator.getWorld() == null || chunk == null) return;
+      long key = ((long)chunk.getX() << 32) ^ (chunk.getZ() & 0xffffffffL);
+      if (!this.interiorScannedChunks.add(key)) return;
+
+      Cartesian3D dimensions = this.clipboard.getSize();
+      int minX = this.chunkX << 4, minZ = this.chunkZ << 4;
+      int maxX = minX + dimensions.X - 1, maxZ = minZ + dimensions.Z - 1;
+      int chunkMinX = chunk.getX() << 4, chunkMinZ = chunk.getZ() << 4;
+      if (chunkMinX > maxX || chunkMinX + 15 < minX
+              || chunkMinZ > maxZ || chunkMinZ + 15 < minZ) return;
+
+      World world = generator.getWorld();
+      int bottomY = this.clipboard.getBottom(this.effectiveBuildHeight());
+      int firstFloor = Math.max(world.getMinHeight() + 1, bottomY);
+      int lastFloor = Math.min(world.getMaxHeight() - 5, bottomY + dimensions.Y - 4);
+      int localMinX = Math.max(1, minX - chunkMinX);
+      int localMaxX = Math.min(14, maxX - chunkMinX);
+      int localMinZ = Math.max(1, minZ - chunkMinZ);
+      int localMaxZ = Math.min(14, maxZ - chunkMinZ);
+      if (localMinX > localMaxX || localMinZ > localMaxZ) return;
+
+      int x1 = localMinX + Math.max(0, (localMaxX - localMinX) / 3);
+      int x2 = localMinX + Math.max(0, (2 * (localMaxX - localMinX)) / 3);
+      int z1 = localMinZ + Math.max(0, (localMaxZ - localMinZ) / 3);
+      int z2 = localMinZ + Math.max(0, (2 * (localMaxZ - localMinZ)) / 3);
+      int[][] samples = {{x1,z1},{x2,z1},{x1,z2},{x2,z2}};
+      int added = 0;
+      for (int[] sample : samples) {
+         if (added >= 8) break;
+         int lx = sample[0], lz = sample[1];
+         for (int floorY = firstFloor; floorY <= lastFloor && added < 8; floorY++) {
+            if (isVerifiedInteriorColumn(chunk, lx, floorY, lz)) {
+               this.interiorCandidates.add(new MetropolisBuildFlagExporter.InteriorCandidate(
+                       chunkMinX + lx, floorY, chunkMinZ + lz, true, true));
+               added++;
+               // Do not record adjacent blocks in the same room as separate
+               // candidate floors; the next floor is still searched.
+               floorY += 2;
+            }
+         }
+      }
+   }
+
+   /** Non-sliced legacy clips are inspected only in chunks already loaded by worldgen. */
+   private void collectLoadedFootprintInteriors(MetropolisGenerator generator) {
+      if (this.getSchematicType() != SchematicType.BUILD || this.clipboard == null
+              || generator == null || generator.getWorld() == null) return;
+      if (this.isChunkSliced()) {
+         World world = generator.getWorld();
+         if (world.isChunkLoaded(this.chunkX, this.chunkZ))
+            collectInteriorCandidates(generator, world.getChunkAt(this.chunkX, this.chunkZ));
+         return;
+      }
+      Cartesian3D size = this.clipboard.getSize();
+      int chunksX = Math.floorDiv(size.X + 15, 16);
+      int chunksZ = Math.floorDiv(size.Z + 15, 16);
+      World world = generator.getWorld();
+      for (int dx = 0; dx < chunksX; dx++) for (int dz = 0; dz < chunksZ; dz++) {
+         int cx = this.chunkX + dx, cz = this.chunkZ + dz;
+         if (world.isChunkLoaded(cx, cz)) collectInteriorCandidates(generator, world.getChunkAt(cx, cz));
+      }
+   }
+
+   private static boolean isVerifiedInteriorColumn(Chunk chunk, int x, int floorY, int z) {
+      org.bukkit.block.Block floor = chunk.getBlock(x, floorY, z);
+      Material floorType = floor.getType();
+      if (!floorType.isSolid() || isUnsafeStandingMaterial(floorType)) return false;
+
+      org.bukkit.block.Block feet = chunk.getBlock(x, floorY + 1, z);
+      org.bukkit.block.Block head = chunk.getBlock(x, floorY + 2, z);
+      if (!isClearStandingBlock(feet) || !isClearStandingBlock(head)) return false;
+
+      Material ceiling3 = chunk.getBlock(x, floorY + 3, z).getType();
+      Material ceiling4 = chunk.getBlock(x, floorY + 4, z).getType();
+      if (!ceiling3.isSolid() && !ceiling4.isSolid()) return false;
+
+      int walls = 0;
+      int[][] directions = {{1,0},{-1,0},{0,1},{0,-1}};
+      for (int[] direction : directions) {
+         Material atFeet = chunk.getBlock(x + direction[0], floorY + 1, z + direction[1]).getType();
+         Material atHead = chunk.getBlock(x + direction[0], floorY + 2, z + direction[1]).getType();
+         if ((atFeet.isSolid() && !isUnsafeStandingMaterial(atFeet))
+                 || (atHead.isSolid() && !isUnsafeStandingMaterial(atHead))) walls++;
+      }
+      // Three enclosing sides plus a ceiling distinguishes rooms from
+      // exposed courtyards, rooftops and ordinary balconies.
+      return walls >= 3;
+   }
+
+   private static boolean isClearStandingBlock(org.bukkit.block.Block block) {
+      Material type = block.getType();
+      return block.isPassable() && !block.isLiquid() && !isUnsafeStandingMaterial(type);
+   }
+
+   private static boolean isUnsafeStandingMaterial(Material type) {
+      return type == Material.MAGMA_BLOCK || type == Material.CACTUS || type == Material.FIRE
+              || type == Material.SOUL_FIRE || type == Material.CAMPFIRE
+              || type == Material.SOUL_CAMPFIRE || type == Material.POWDER_SNOW
+              || type == Material.COBWEB || type == Material.SWEET_BERRY_BUSH
+              || type == Material.WITHER_ROSE || type == Material.POINTED_DRIPSTONE;
+   }
+
+   private synchronized void exportCompletedBuild(MetropolisGenerator generator) {
+      if (this.completionExported || this.getSchematicType() != SchematicType.BUILD
+              || this.clipboard == null || generator == null || generator.getWorld() == null
+              || generator.getPlugin() == null) return;
+      ch.k42.metropolis.plugin.MetropolisPlugin plugin = generator.getPlugin();
+      MetropolisBuildFlagExporter exporter = plugin.getBuildFlagExporter();
+      if (exporter == null) return;
+
+      // The parcel's actual assigned district is authoritative. Schematic
+      // names, filenames and group IDs are never used to infer context.
+      ch.k42.metropolis.grid.urbanGrid.districts.District district = this.getDistrict();
+      ch.k42.metropolis.grid.urbanGrid.enums.ContextType context =
+              district == null ? this.getContextType() : district.getContext();
+      if (context == null) return;
+
+      Cartesian3D dimensions = this.clipboard.getSize();
+      int minX = this.chunkX << 4, minZ = this.chunkZ << 4;
+      int minY = this.clipboard.getBottom(this.effectiveBuildHeight());
+      int maxX = minX + dimensions.X - 1;
+      int maxY = minY + dimensions.Y - 1;
+      int maxZ = minZ + dimensions.Z - 1;
+      MetropolisBuildFlagExporter.Footprint footprint = new MetropolisBuildFlagExporter.Footprint(
+              minX, maxX, minY, maxY, minZ, maxZ);
+      int centerX = minX + (dimensions.X - 1) / 2;
+      int centerZ = minZ + (dimensions.Z - 1) / 2;
+      String schematicId = this.clipboard.getGroupId() == null
+              ? this.clipboard.getClass().getName() : this.clipboard.getGroupId();
+      String id = MetropolisBuildFlagExporter.buildingId(generator.getWorld().getUID(),
+              context.name(), schematicId, footprint);
+
+      List<MetropolisBuildFlagExporter.InteriorCandidate> candidates =
+              new ArrayList<>(this.interiorCandidates);
+      candidates.sort(Comparator
+              .comparingInt(MetropolisBuildFlagExporter.InteriorCandidate::z)
+              .thenComparingInt(MetropolisBuildFlagExporter.InteriorCandidate::x)
+              .thenComparingInt(MetropolisBuildFlagExporter.InteriorCandidate::floorY));
+      this.completionExported = true;
+      exporter.export(generator.getWorld().getUID(), id, context.name(), footprint,
+              new MetropolisBuildFlagExporter.Reference(centerX, centerZ), candidates);
+      Minions.dDistrict("[BUILD-FLAGS] queued completed BUILD id=%s context=%s footprint=(%d..%d,%d..%d,%d..%d) interiorCandidates=%d",
+              id, context.name(), minX, maxX, minY, maxY, minZ, maxZ, candidates.size());
+   }
+
    public Clipboard getClipboard() {
       return this.clipboard;
    }
@@ -152,11 +318,12 @@ public class ClipboardParcel extends Parcel {
                return;  // Do not acknowledge a failed decay completion.
             }
          }
-         finishedSlices.set(i);
          PlacedParcels.of(generator).buildingChunkFinished(this,chunk.getX(),chunk.getZ(),generator);
+         collectInteriorCandidates(generator, chunk);
+         finishedSlices.set(i);
          if (generator.getWorld() != null && generator.getWorld().isChunkLoaded(chunk.getX(),chunk.getZ()))
              generator.getWorld().refreshChunk(chunk.getX(),chunk.getZ());
-         reportSliceFinished();
+         reportSliceFinished(generator);
          return;
       }
       if (chunk.getX() != this.chunkX || chunk.getZ() != this.chunkZ) {
@@ -194,6 +361,8 @@ public class ClipboardParcel extends Parcel {
          // neighbour for anyone next to it once its populate() runs.
 
          PlacedParcels.of(generator).buildingFinished(this, generator);   // after the decay pass: cuts toward roads that finished first
+         collectLoadedFootprintInteriors(generator);
+         this.exportCompletedBuild(generator);
 
          if (generator.getWorld() != null) {
             generator.getWorld().refreshChunk(chunk.getX(), chunk.getZ());
