@@ -26,10 +26,11 @@ R14.9 is a development build on the isolated `integration/morphomos-natural-fami
 
 ## Karst geography and landbridge geometry
 
-- Karst habitat is excluded from the ocean and the first 512 inland blocks. Suitability fades smoothly from 512 to 1,024 blocks inland and is fully restored beyond that.
-- Karst landbridges now use a thin central keystone underside that thickens toward the span ends and natural abutments. The previous underside was derived from twice an ellipsoid half-height, making the rock mass too thick and allowing the bridge to fill much of its gorge.
-- The untouched pre-bridge ravine floor is preserved. The lower gorge remains open beneath the deck and retains its normal floor bedding and plant ecology.
-- Bridge and exclusion behavior are deterministic from world seed and block coordinates.
+- Karst is an elevated limestone mountain massif, not a lowland pockmark field. The entire landform is raised approximately 65 blocks above the ordinary terrain datum, with broad, gently rolling upland crests.
+- Major dendritic dissolution channels are cut roughly 62–68 blocks down from the uplands, returning their inner floors to around the normal build-height datum (about Y=63 with the default build height). This is the intended elevation relationship whether karst appears inland or near the ocean.
+- There is no ocean-adjacency exclusion. The raised massif and datum-level inner cuts define its natural coastal relationship.
+- Karst landbridge decks share the elevated upland datum, while their underside preserves a genuine open gorge beneath. The untouched pre-bridge ravine floor remains continuous through the span.
+- Mountain, valley and bridge geometry are deterministic from world seed and block coordinates.
 
 ## QA run in CI
 
@@ -40,8 +41,8 @@ The R14.9 workflow runs:
 - Completed-BUILD exporter durability and eligibility probe.
 - Disk deferred queue probe (1,200 jobs, restart, retry, dedupe, TSV migration, negative coordinates, bounded working set, and fail-closed corrupt migration).
 - Chunky backpressure policy probe (stable 80% recovery, queue/hard limits, and low-heap headroom).
-- Karst coastal exclusion probe.
 - Karst landbridge clearance probe (natural floor preserved and a genuine open gap beneath sampled bridge cores).
+- Karst mountain profile probe (upland median elevation, inner-cut floor elevation, and mountain-to-valley relief span across three seeds).
 
 ## Runtime test still required
 
