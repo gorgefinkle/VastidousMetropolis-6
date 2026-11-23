@@ -77,8 +77,8 @@ public final class KarstLandforms {
   }
   public static double valley(long seed,int x,int z){
     double d=distance(seed,x,z),w=width(seed,x,z);
-    // Wide, nearly flat fertile toe, then steep, asymmetrical escarpments.
-    double interior=1-smooth((d-w*.29)/(w*.70));
+    // Broad, nearly flat valley floor, then long graded limestone shoulders. The ramp is deliberately wider than the old narrow escarpment band.
+    double interior=1-smooth((d-w*.34)/(w*1.45));
     double ledge=.075*(smooth((d/w-.48)/.035)-smooth((d/w-.59)/.06));
     return clamp(interior-ledge);
   }
@@ -97,10 +97,9 @@ public final class KarstLandforms {
   }
   public static double depth(long seed,int x,int z){
     double v=valley(seed,x,z);
-    // Drainage channels cut roughly 90 blocks down through a broad mountain
-    // massif, returning to the ordinary build-height datum at their deepest
-    // inner floor instead of leaving shallow gullies atop isolated ridges.
-    return v*(90+8*noise(seed,x,z,220,0x4445505448L));
+    // Deep dissolution remains mountain-scale, but the lowered floor now grades
+    // across broad shoulders rather than dropping through a narrow cliff band.
+    return v*(78+7*noise(seed,x,z,220,0x4445505448L));
   }
   /** A bridge is a remnant of the SAME limestone upland on both banks.
    * Its top-view footprint is a constricted, gently crooked waist over the
@@ -251,11 +250,11 @@ public final class KarstLandforms {
     double offset=nearest(tt,319);
     double envelope=1-smooth((offset-25)/83.0);
     double bank=smooth((r-.30)/.19)*(1-smooth((r-1.52)/.27));
-    double broad=1-smooth((r-.26)/1.10);
+    double broad=1-smooth((r-.22)/1.62);
     double ledges=1.9*(noise(seed,x,z,54,0x53484f554c4445L)-.5)
                  +2.5*(noise(seed,x,z,26,0x4c454447455aL)-.5);
     double grade=upland+ledge*.60+shoulder*.25+terrace*.5+talus*.55+rubble*.35
-                  -broad*(90+8*noise(seed,x,z,220,0x4445505448L))+ledges;
+                  -broad*(78+7*noise(seed,x,z,220,0x4445505448L))+ledges;
     // Karst is a mountain range, not a lowland pockmark field. Lift the
     // entire limestone massif first; the broad, deep dissolution channels
     // then cut back down toward the ordinary terrain datum. The upland noise
