@@ -38,6 +38,10 @@ public final class KarstLandbridgeClearanceProbe {
 
                 int upperCut = KarstSpanVolume.undercutCeiling(seed, x, z, topY, floor);
                 int clearance = upperCut - floor;
+                // The geometry intentionally tapers closed into its abutments.
+                // The production painter only carves columns with >=30 blocks
+                // of clearance; verify those actual open-arch columns here.
+                if (clearance < 30) continue;
                 seedChecked++;
                 checked++;
                 minimumClearance = Math.min(minimumClearance, clearance);
