@@ -117,58 +117,92 @@ public final class MetropolisBuildFlagExporter implements AutoCloseable {
    }
 
    private void append(BuildingRecord record) {
+      UUID worldId = UUID.fromString(record.worldId());
+      Path directory = dataFolder.resolve(EXPORT_DIRECTORY).resolve(worldId.toString());
+      Path file = directory.resolve("buildings.jsonl");
+      WorldState state = worlds.computeIfAbsent(worldId, ignored -> new WorldState(file));
       try {
-         UUID worldId = UUID.fromString(record.worldId());
-         Path directory = dataFolder.resolve(EXPORT_DIRECTORY).resolve(worldId.toString());
-         Path file = directory.resolve("buildings.jsonl");
-         WorldState state = worlds.computeIfAbsent(worldId, ignored -> new WorldState(file));
          if (!state.loaded) loadState(state);
          if (state.writtenIds.contains(record.buildingId())) return;
 
-         Files.createDirectories(directory);
          byte[] line = (gson.toJson(record) + "\n").getBytes(StandardCharsets.UTF_8);
-         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.CREATE,
-                 StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
-            ByteBuffer buffer = ByteBuffer.wrap(line);
-            while (buffer.hasRemaining()) channel.write(buffer);
-            // A completed record survives a normal process crash/power loss as
-            // far as the filesystem's force semantics permit.
-            channel.force(true);
+         for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+               Files.createDirectories(directory);
+               // If a prior write failed halfway through, discard just its
+               // unterminated tail before retrying this complete record.
+               if (Files.exists(file)) {
+                  try (FileChannel repair = FileChannel.open(file, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+                     truncateIncompleteTail(repair);
+                  }
+               }
+               try (FileChannel channel = FileChannel.open(file, StandardOpenOption.CREATE,
+                       StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
+                  ByteBuffer buffer = ByteBuffer.wrap(line);
+                  while (buffer.hasRemaining()) channel.write(buffer);
+                  channel.force(true);
+               }
+               state.writtenIds.add(record.buildingId());
+               return;
+            } catch (Exception failure) {
+               // force() can fail after bytes reached the file. Re-read the
+               // durable index before retrying so that case cannot duplicate.
+               try {
+                  refreshWrittenIds(state);
+                  if (state.writtenIds.contains(record.buildingId())) return;
+               } catch (IOException indexFailure) {
+                  failure.addSuppressed(indexFailure);
+               }
+               if (attempt == 3) {
+                  logger.log(Level.SEVERE, "[BUILD-FLAGS] Could not export completed building "
+                          + record.buildingId() + " after " + attempt + " attempts", failure);
+               } else {
+                  try { Thread.sleep(150L * attempt); }
+                  catch (InterruptedException interrupted) {
+                     Thread.currentThread().interrupt();
+                     logger.log(Level.WARNING, "[BUILD-FLAGS] Export retry interrupted for " + record.buildingId(), interrupted);
+                     return;
+                  }
+               }
+            }
          }
-         state.writtenIds.add(record.buildingId());
       } catch (Exception failure) {
-         logger.log(Level.SEVERE, "[BUILD-FLAGS] Could not export completed building "
+         logger.log(Level.SEVERE, "[BUILD-FLAGS] Could not initialize export for completed building "
                  + record.buildingId(), failure);
       }
    }
 
    private void loadState(WorldState state) throws IOException {
       Files.createDirectories(state.file.getParent());
-      if (Files.exists(state.file)) {
-         try (FileChannel channel = FileChannel.open(state.file, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
-            truncateIncompleteTail(channel);
-         }
-         try (BufferedReader reader = Files.newBufferedReader(state.file, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-               if (line.isBlank()) continue;
-               try {
-                  JsonElement parsed = JsonParser.parseString(line);
-                  if (!parsed.isJsonObject()) continue;
-                  JsonObject object = parsed.getAsJsonObject();
-                  JsonElement id = object.get("buildingId");
-                  JsonElement version = object.get("schemaVersion");
-                  if (id != null && version != null && version.getAsInt() == SCHEMA_VERSION
-                          && !id.getAsString().isBlank()) {
-                     state.writtenIds.add(id.getAsString());
-                  }
-               } catch (RuntimeException malformed) {
-                  logger.warning("[BUILD-FLAGS] Ignoring malformed completed-building line in " + state.file);
+      refreshWrittenIds(state);
+      state.loaded = true;
+   }
+
+   private void refreshWrittenIds(WorldState state) throws IOException {
+      state.writtenIds.clear();
+      if (!Files.exists(state.file)) return;
+      try (FileChannel channel = FileChannel.open(state.file, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+         truncateIncompleteTail(channel);
+      }
+      try (BufferedReader reader = Files.newBufferedReader(state.file, StandardCharsets.UTF_8)) {
+         String line;
+         while ((line = reader.readLine()) != null) {
+            if (line.isBlank()) continue;
+            try {
+               JsonElement parsed = JsonParser.parseString(line);
+               if (!parsed.isJsonObject()) continue;
+               JsonObject object = parsed.getAsJsonObject();
+               JsonElement id = object.get("buildingId");
+               JsonElement version = object.get("schemaVersion");
+               if (id != null && version != null && version.getAsInt() == SCHEMA_VERSION
+                       && !id.getAsString().isBlank()) {
+                  state.writtenIds.add(id.getAsString());
                }
+            } catch (RuntimeException malformed) {
+               logger.warning("[BUILD-FLAGS] Ignoring malformed completed-building line in " + state.file);
             }
          }
       }
-      state.loaded = true;
    }
 
    /** Drop only an unterminated final JSONL row left by an interrupted append. */
@@ -179,7 +213,7 @@ public final class MetropolisBuildFlagExporter implements AutoCloseable {
       channel.position(size - 1);
       channel.read(one);
       one.flip();
-      if (one.get() == (byte)'\\n') return;
+      if (one.get() == (byte)'\n') return;
 
       ByteBuffer window = ByteBuffer.allocate(4096);
       long cursor = size;
@@ -195,7 +229,7 @@ public final class MetropolisBuildFlagExporter implements AutoCloseable {
          }
          byte[] bytes = window.array();
          for (int i = length - 1; i >= 0; i--) {
-            if (bytes[i] == (byte)'\\n') {
+            if (bytes[i] == (byte)'\n') {
                channel.truncate(start + i + 1);
                return;
             }
