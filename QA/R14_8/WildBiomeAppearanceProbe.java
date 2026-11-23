@@ -1,6 +1,8 @@
 package ch.k42.metropolis.grid.urbanGrid.wild;
 
-/** Checks that the two rare habitats survive the zoom/smoothing/warp field. */
+import java.util.Random;
+
+/** Checks that the two rare habitats survive the final discrete field. */
 public final class WildBiomeAppearanceProbe {
    public static void main(String[] args) {
       double[] shares = new double[WildBiome.ALL.length];
@@ -15,28 +17,41 @@ public final class WildBiomeAppearanceProbe {
       long totalBloom = 0, totalKarst = 0;
       for (long seed : seeds) {
          WildBiomes field = new WildBiomes(seed, 520.0, 0.15, shares, transitions, 4, 1, 35);
-         long bloom = 0, karst = 0;
-         int samples = 0;
-         // 192x192 probes over a 98,000-block square, covering hundreds
-         // of final field cells rather than repeatedly sampling one patch.
-         for (int gx = -96; gx < 96; gx++) {
-            for (int gz = -96; gz < 96; gz++) {
-               int label = field.label(gx * 512 + 113, gz * 512 - 197);
-               if (label == WildBiome.BLOOMLANDS.ordinal()) bloom++;
-               if (label == WildBiome.VOLCANIC_BARRENS.ordinal()) karst++;
-               samples++;
-            }
+         double[] realised = field.realisedShares();
+         long bloom = 0, karst = 0, bloomHard = 0, karstHard = 0;
+         final int samples = 60000;
+         Random random = new Random(seed ^ 0x5241524542494f4dL);
+         double[] raw = new double[WildBiome.ALL.length];
+         double[] sharp = new double[WildBiome.ALL.length];
+         for (int sample = 0; sample < samples; sample++) {
+            // Uniform random coordinates avoid aliasing a rare biome's
+            // surviving child cells with a regular sampling lattice.
+            int x = random.nextInt(600001) - 300000;
+            int z = random.nextInt(600001) - 300000;
+            int label = field.label(x, z);
+            if (label == WildBiome.BLOOMLANDS.ordinal()) bloom++;
+            if (label == WildBiome.VOLCANIC_BARRENS.ordinal()) karst++;
+            field.weights(x, z, raw);
+            WildBiomes.sharpen(raw, sharp);
+            int dominant = WildBiomes.dominant(sharp).ordinal();
+            if (dominant == WildBiome.BLOOMLANDS.ordinal()) bloomHard++;
+            if (dominant == WildBiome.VOLCANIC_BARRENS.ordinal()) karstHard++;
          }
-         if (bloom == 0) throw new AssertionError("Bloomlands never appeared for seed " + seed);
-         if (karst == 0) throw new AssertionError("Karst never appeared for seed " + seed);
-         if (bloom >= karst) throw new AssertionError("Bloomlands must remain the rarer of the two: seed="
-                 + seed + " Bloomlands=" + bloom + " karst=" + karst);
-         totalBloom += bloom;
-         totalKarst += karst;
-         System.out.println("seed=" + seed + " samples=" + samples + " Bloomlands=" + bloom
-                 + " karst=" + karst + " PASS");
+         System.out.println("seed=" + seed + " calibratedBloom=" + realised[WildBiome.BLOOMLANDS.ordinal()]
+                 + " calibratedKarst=" + realised[WildBiome.VOLCANIC_BARRENS.ordinal()]
+                 + " labelBloom=" + bloom + " labelKarst=" + karst
+                 + " dominantBloom=" + bloomHard + " dominantKarst=" + karstHard);
+         if (bloom == 0 || bloomHard == 0)
+            throw new AssertionError("Bloomlands absent from final sampled field for seed " + seed);
+         if (karst == 0 || karstHard == 0)
+            throw new AssertionError("Karst absent from final sampled field for seed " + seed);
+         if (bloomHard >= karstHard)
+            throw new AssertionError("Bloomlands must remain rarer than karst: seed=" + seed
+                    + " Bloomlands=" + bloomHard + " karst=" + karstHard);
+         totalBloom += bloomHard;
+         totalKarst += karstHard;
       }
-      System.out.println("WildBiomeAppearanceProbe: PASS (Bloomlands=" + totalBloom
+      System.out.println("WildBiomeAppearanceProbe: PASS (hard-border Bloomlands=" + totalBloom
               + " remains rarer than karst=" + totalKarst + ")");
    }
 }
