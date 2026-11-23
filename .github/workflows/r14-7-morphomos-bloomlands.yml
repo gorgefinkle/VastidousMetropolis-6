@@ -40,6 +40,8 @@ jobs:
         run: sh QA/R14_8/run_karst_coastal_exclusion_probe.sh
       - name: Karst landbridge open-clearance probe
         run: sh QA/R14_8/run_karst_landbridge_clearance_probe.sh
+      - name: Karst mountain profile probe
+        run: sh QA/R14_9/run_karst_mountain_profile_probe.sh
       - name: Assemble complete source archive
         run: |
           zip -r Metropolis_R14_9_Queue_Backpressure_Karst_SOURCE.zip \
