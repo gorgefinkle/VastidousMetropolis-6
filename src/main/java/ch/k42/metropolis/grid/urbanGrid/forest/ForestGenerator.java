@@ -2380,14 +2380,19 @@ public final class ForestGenerator {
          if (this.wild == null || this.region == null
                  || this.region.getContext() != ContextType.FOREST
                  || weights == null
-                 || weights[WildBiome.VOLCANIC_BARRENS.ordinal()] < 0.65) return false;
+                 || weights[WildBiome.VOLCANIC_BARRENS.ordinal()] < 0.96) return false;
+         // A natural arch must be seated on the un-faded interior massif.
+         // At parcel edges the height field is intentionally eased to the
+         // street/water datum, so carving an arch there would have no matching
+         // upper rock volume and could only produce a filled or broken span.
+         if (this.reliefFade(x,z,wildBlend(this.blend,weights)) < 0.995) return false;
          long seed = this.generator.getWorldSeed();
          if (KarstLandforms.archWeight(seed, x, z) < 0.10) return false;
          int cx = x >> 4, cz = z >> 4;
          long key = ((long) cx << 32) ^ (cz & 0xffffffffL);
          Boolean allowed = this.karstBridgeOwnerCache.get(key);
          if (allowed == null) {
-            allowed = this.grid.isKarstBridgeFootprintOwned(this.region, cx, cz, 3);
+            allowed = this.grid.isKarstBridgeFootprintOwned(this.region, cx, cz, 2);
             this.karstBridgeOwnerCache.put(key, allowed);
          }
          return allowed;
