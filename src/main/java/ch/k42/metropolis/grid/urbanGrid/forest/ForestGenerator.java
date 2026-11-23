@@ -454,6 +454,113 @@ public final class ForestGenerator {
       return best;
    }
 
+
+   /** Interior probes used by the Bloomlands locator. They measure the same
+    * sharpened wilderness field that populateChunk paints. */
+   private static final int[][] BLOOMLANDS_CORE_PROBES = {
+      {48,0},{-48,0},{0,48},{0,-48},
+      {34,34},{34,-34},{-34,34},{-34,-34},
+      {96,0},{-96,0},{0,96},{0,-96},
+      {68,68},{68,-68},{-68,68},{-68,-68}
+   };
+
+   /** Returns a quality score only when the canonical wilderness picker paints
+    * this coordinate as Bloomlands and the owning parcel is a FOREST region. */
+   public static int bloomlandsCandidateScore(MetropolisGenerator generator, int x, int z) {
+      if (generator == null || generator.getWorld() == null
+              || !PluginConfig.isForestGenerationEnabled()
+              || !PluginConfig.isWildBiomesEnabled()
+              || PluginConfig.isWildVanillaEnabled()) return -1;
+      double[] shares = PluginConfig.getWildBiomeShares();
+      int bloom = WildBiome.BLOOMLANDS.ordinal();
+      if (bloom >= shares.length || shares[bloom] <= 0.0) return -1;
+      WildField wild = wildFor(generator);
+      if (wild == null) return -1;
+      ForestTerrain terrain = terrainFor(generator);
+      if (wild.pick(x, z, ForestTerrain.unit(ForestTerrain.hash(terrain.getSeed(), x, z, 41)))
+              != WildBiome.BLOOMLANDS) return -1;
+      int chunkX = x >> 4, chunkZ = z >> 4;
+      ch.k42.metropolis.grid.common.Grid tile = generator.getGridProvider().getGrid(chunkX, chunkZ);
+      if (!(tile instanceof UrbanGrid grid)) return -1;
+      MorphomosRegion region = grid.getMorphomosRegionAt(chunkX, chunkZ);
+      if (region == null || region.getContext() != ContextType.FOREST) return -1;
+
+      boolean hard = PluginConfig.isWildHardBorders();
+      double strength = 0.0;
+      double[] weights = hard ? wild.warpedSharp(x,z) : wild.sharp(x,z);
+      strength += weights[bloom];
+      for (int[] probe : BLOOMLANDS_CORE_PROBES) {
+         weights = hard ? wild.warpedSharp(x + probe[0], z + probe[1])
+                        : wild.sharp(x + probe[0], z + probe[1]);
+         strength += weights[bloom];
+      }
+      strength /= BLOOMLANDS_CORE_PROBES.length + 1.0;
+      if (strength < (hard ? 0.30 : 0.004)) return -1;
+      return (int)Math.round(Math.max(0.0, Math.min(1.0, strength)) * 10000.0);
+   }
+
+   /** Verifies generated terrain against the same picker and height function
+    * as worldgen. Returns {x, feetY, z}, or null when no safe column exists. */
+   public static int[] safeBloomlandsLanding(MetropolisGenerator generator, Chunk chunk,
+                                             int preferredX, int preferredZ) {
+      if (generator == null || chunk == null || generator.getWorld() == null
+              || (preferredX >> 4) != chunk.getX() || (preferredZ >> 4) != chunk.getZ()
+              || !PluginConfig.isForestGenerationEnabled()
+              || !PluginConfig.isWildBiomesEnabled()
+              || PluginConfig.isWildVanillaEnabled()) return null;
+      int chunkX = chunk.getX(), chunkZ = chunk.getZ();
+      ch.k42.metropolis.grid.common.Grid tile = generator.getGridProvider().getGrid(chunkX, chunkZ);
+      if (!(tile instanceof UrbanGrid grid)) return null;
+      MorphomosRegion region = grid.getMorphomosRegionAt(chunkX, chunkZ);
+      if (region == null || region.getContext() != ContextType.FOREST) return null;
+      Ctx ctx = new Ctx(generator, grid, region, terrainFor(generator));
+      if (ctx.wild == null) return null;
+
+      World world = generator.getWorld();
+      int minY = world.getMinHeight() + 1, maxY = world.getMaxHeight() - 3;
+      int baseX = chunkX << 4, baseZ = chunkZ << 4;
+      long bestDistance = Long.MAX_VALUE;
+      int[] best = null;
+      for (int lx = 0; lx < 16; lx++) for (int lz = 0; lz < 16; lz++) {
+         int x = baseX + lx, z = baseZ + lz;
+         double roll = ForestTerrain.unit(ForestTerrain.hash(ctx.terrain.getSeed(), x, z, 41));
+         if (ctx.wild.pick(x, z, roll) != WildBiome.BLOOMLANDS) continue;
+         int groundY = ctx.height(x, z);
+         if (groundY < minY || groundY > maxY) continue;
+         Material ground = chunk.getBlock(lx, groundY, lz).getType();
+         if (!isSafeBloomlandsGround(ground)) continue;
+         Block feet = chunk.getBlock(lx, groundY + 1, lz);
+         Block head = chunk.getBlock(lx, groundY + 2, lz);
+         if (!isSafeBloomlandsAir(feet) || !isSafeBloomlandsAir(head)) continue;
+         long dx = (long)x - preferredX, dz = (long)z - preferredZ;
+         long distance = dx*dx + dz*dz;
+         if (distance < bestDistance) {
+            bestDistance = distance;
+            best = new int[]{x, groundY + 1, z};
+         }
+      }
+      return best;
+   }
+
+   private static boolean isSafeBloomlandsGround(Material material) {
+      return switch (material) {
+         case GRASS_BLOCK, MOSS_BLOCK, MYCELIUM, PODZOL, ROOTED_DIRT,
+              DIRT, COARSE_DIRT, MUD, STONE, TUFF, CALCITE, ANDESITE,
+              DIORITE, GRAVEL, SAND, CLAY -> true;
+         default -> false;
+      };
+   }
+
+   private static boolean isSafeBloomlandsAir(Block block) {
+      Material material = block.getType();
+      if (material == Material.POWDER_SNOW || material == Material.COBWEB
+              || material == Material.SWEET_BERRY_BUSH || material == Material.FIRE
+              || material == Material.SOUL_FIRE || material == Material.CACTUS
+              || material == Material.MAGMA_BLOCK || material == Material.CAMPFIRE
+              || material == Material.SOUL_CAMPFIRE) return false;
+      return block.isPassable() && !block.isLiquid();
+   }
+
    public static void populateChunk(MetropolisGenerator generator, Chunk chunk, UrbanGrid grid, MorphomosRegion region) {
       if (!PluginConfig.isForestGenerationEnabled() || region == null || generator.getWorld() == null) {
          return;
