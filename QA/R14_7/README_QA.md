@@ -11,7 +11,7 @@ The probe compiles only the pure policy classes and needs a JDK. It checks:
 - FARM remains a separate family.
 - Every natural-context pairing is reciprocal.
 - FARM/FARM qualifies while FARM/natural does not.
-- A natural block may dissolve against a natural ZONE/NATURAL exterior.
+- A natural block may dissolve against a natural ZONE/NATURAL exterior.\n- Natural-exterior-to-natural-exterior seams dissolve even when no natural BLOCK is adjacent.
 - Unknown/urban contexts never qualify.
 
 The GitHub Actions workflow additionally performs a full Java 25 Maven clean verify and packages the complete source tree with the resulting plugin JAR.
