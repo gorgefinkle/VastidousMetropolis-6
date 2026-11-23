@@ -77,9 +77,14 @@ public final class BiomeEcology {
         long seed=reliefSeed(prior);
         if (karstW>0) {
             double old=.55*prior.mountains(x,z)+.45*prior.profile(ch.k42.metropolis.grid.urbanGrid.wild.MountainKind.VOLCANO,x,z);
-            boolean bridge = allowKarstBridge && karstW >= 0.65;
-            // Long fractured valleys and their rock-ridge remnants are one terrain field.
-            original+=karstW*(KarstLandforms.relief(seed,x,z,false,bridge)-old);
+            boolean bridge = allowKarstBridge && karstW >= 0.96;
+            // A bridge top and its undercut must use the SAME absolute surface.
+            // Blending the full arch height by a partial biome weight made the
+            // painter's reconstructed floor disagree with the actual top, so
+            // the clearance gate rejected every cut and left a solid block mass.
+            if (bridge) return KarstLandforms.relief(seed,x,z,false,true);
+            // Ordinary Karst relief remains softly blended at biome margins.
+            original+=karstW*(KarstLandforms.relief(seed,x,z,false,false)-old);
         }
         if (bloomW>0) {
             // The bloom has modest ridges and occasional deep, moss-filled crevasses.
@@ -165,7 +170,7 @@ public final class BiomeEcology {
             // Here rare fractured lenses form short, offset, discontinuous
             // patches controlled by 3-D noise and warped elevation.
             boolean bridgeCliff=allowKarstBridge && KarstLandforms.bridgeApproachActive(terrainSeed,x,z);
-            int textureDepth=bridgeCliff?72:(valley>.40?48:32);
+            int textureDepth=bridgeCliff?144:(valley>.40?128:104);
             for(int y=Math.max(2,h-textureDepth);y<h;y++){
                 double warped=y/9.6
                     +1.7*(field(terrainSeed,x,z,44,0x535452415441L)-.5)
