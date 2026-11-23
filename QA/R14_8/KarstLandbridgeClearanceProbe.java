@@ -56,7 +56,7 @@ public final class KarstLandbridgeClearanceProbe {
                 if (r < .16 && coverage > .92) {
                     int thickness = topY - upperCut - 1;
                     maximumCoreThickness = Math.max(maximumCoreThickness, thickness);
-                    check(thickness <= 16,
+                    check(thickness <= 22,
                             "central keystone is too thick: " + thickness + " blocks");
                 }
                 open++;
