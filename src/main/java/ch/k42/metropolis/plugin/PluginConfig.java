@@ -1983,7 +1983,14 @@ public class PluginConfig {
       wildLootMin = Math.max(1, Math.min(5, cfg.getInt(pathWildLootMin, wildLootMin)));
       wildLootMax = Math.max(wildLootMin, Math.min(5, cfg.getInt(pathWildLootMax, wildLootMax)));
       for (WildBiome biome : WildBiome.ALL) {
-         wildShares[biome.ordinal()] = Math.max(0, cfg.getInt(pathWildSharePrefix + biome.key(), biome.defaultShare()));
+         int configuredShare = Math.max(0, cfg.getInt(pathWildSharePrefix + biome.key(), biome.defaultShare()));
+         // Keep old configs from silently retaining shares too small for the
+         // rare-habitat pipeline. A configured zero remains an explicit disable.
+         if (configuredShare > 0 && biome == WildBiome.VOLCANIC_BARRENS)
+            configuredShare = Math.max(4, configuredShare);
+         if (configuredShare > 0 && biome == WildBiome.BLOOMLANDS)
+            configuredShare = Math.max(2, configuredShare);
+         wildShares[biome.ordinal()] = configuredShare;
          wildAways[biome.ordinal()] = Math.max(0, cfg.getInt(pathWildAwayPrefix + biome.key(), biome.defaultAway()));
       }
       wildWetlandReach = Math.max(1, Math.min(24, cfg.getInt("generator.wilderness.geography.riverWetlandReachChunks", 12)));
