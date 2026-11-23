@@ -85,6 +85,14 @@ public final class MarineHabitatModel {
             return KELP_FOREST;
         }
 
+        // Hydrothermal fields are deliberately rare and restricted to deep,
+        // far-offshore water.
+        if (depth >= 30 && depth <= 48 && shoreDistance >= 90.0
+                && macro > 0.66 && meso < 0.58 && micro > 0.35
+                && roll < 0.18) {
+            return HYDROTHERMAL_VENTS;
+        }
+
         // Deeper sponge fields add a different silhouette without turning the
         // whole abyss into vegetation.
         if (depth >= 16 && depth <= 42 && shoreDistance >= 42.0
@@ -92,14 +100,6 @@ public final class MarineHabitatModel {
                 && meso < 0.77 && micro > 0.36
                 && roll < 0.78) {
             return SPONGE_GARDEN;
-        }
-
-        // Hydrothermal fields are deliberately rare and restricted to deep,
-        // far-offshore water.
-        if (depth >= 30 && depth <= 48 && shoreDistance >= 90.0
-                && macro > 0.66 && meso < 0.58 && micro > 0.35
-                && roll < 0.18) {
-            return HYDROTHERMAL_VENTS;
         }
 
         // Broad meadows fill some of the nearshore and shelf gaps.
