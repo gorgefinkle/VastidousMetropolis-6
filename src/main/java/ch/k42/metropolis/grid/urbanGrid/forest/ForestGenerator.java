@@ -188,6 +188,32 @@ public final class ForestGenerator {
          }
          WorldLayout layout = cap > 0 ? WorldLayouts.forSeed(seed) : null;
          this.civil = layout != null ? new CityDistance(layout, cap) : null;
+
+         // Report the distribution after blur, habitat bias, keep-away,
+         // sharpening and the production picker. The old WildLayers
+         // calibration only measured an intermediate zoom level and could
+         // conceal a rare-biome collapse later in the actual field pipeline.
+         final int sampleSide = 96;
+         final int sampleStep = 128;
+         int[] picked = new int[WildBiome.ALL.length];
+         for (int sx = 0; sx < sampleSide; sx++) {
+            for (int sz = 0; sz < sampleSide; sz++) {
+               int x = (sx - sampleSide / 2) * sampleStep;
+               int z = (sz - sampleSide / 2) * sampleStep;
+               double roll = ForestTerrain.unit(ForestTerrain.hash(seed, x, z, 41));
+               picked[this.pick(x, z, roll).ordinal()]++;
+            }
+         }
+         StringBuilder finalField = new StringBuilder();
+         for (WildBiome biome : WildBiome.ALL) {
+            int count = picked[biome.ordinal()];
+            if (count == 0 && biome != WildBiome.BLOOMLANDS) continue;
+            finalField.append(finalField.length() == 0 ? "" : ", ")
+                    .append(biome.key()).append(' ')
+                    .append(String.format(java.util.Locale.ROOT, "%.2f%%", 100.0 * count / (sampleSide * sampleSide)));
+         }
+         Minions.i("Wilderness final picker sample (" + (sampleSide * sampleSide)
+                 + " points): " + finalField);
       }
 
       /**
