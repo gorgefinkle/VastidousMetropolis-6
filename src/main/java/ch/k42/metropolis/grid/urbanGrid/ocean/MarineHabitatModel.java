@@ -66,7 +66,7 @@ public final class MarineHabitatModel {
         double macro = patch(seed, x, z, 224.0, SALT_MACRO);
         double meso = patch(seed, x, z, 88.0, SALT_MESO);
         double micro = patch(seed, x, z, 34.0, SALT_MICRO);
-        double roll = unit(seed, x, z, SALT_ROLL);
+        double roll = patch(seed, x, z, 18.0, SALT_ROLL);
 
         // Patchy reefs live on the brighter, shallower shelf and outer shelf.
         if (depth >= 5 && depth <= 18 && shoreDistance >= 20.0
