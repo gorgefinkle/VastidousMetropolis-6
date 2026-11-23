@@ -297,7 +297,7 @@ public final class PlanRegions {
       return false;
    }
 
-   private boolean countrysideAt(int x,z) {
+   private boolean countrysideAt(int x, int z) {
       return this.layout.kindAt(x,z)==WorldLayout.BLOCK && this.boundaryFamilyAt(x,z)!=0;
    }
 
