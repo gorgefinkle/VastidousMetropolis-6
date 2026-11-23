@@ -28,8 +28,8 @@ jobs:
       - name: Assemble complete source archive
         run: |
           zip -r Metropolis_R14_7_Morphomos_Bloomlands_SOURCE.zip \
-            pom.xml README_MAVEN.md README_R14_6_BUFFER_DEV.md \
-            README_R14_7_MORPHOMOS_BLOOMLANDS.md QA src
+            .gitattributes .gitignore .github pom.xml compile_summary.txt \
+            README*.md QA src
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
