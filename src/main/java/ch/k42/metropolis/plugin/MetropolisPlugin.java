@@ -189,6 +189,14 @@ public class MetropolisPlugin extends JavaPlugin {
       this.registerCommands();
       ChunkyMemoryValve.startFromPluginEnable();
       for (MetropolisGenerator generator : generators) generator.resumeDeferredQueue();
+
+      // Independent watchdog: re-request both services every second. Drain
+      // scheduling is idempotent per world, so this does not create duplicate
+      // flush tasks; it only recovers from a rejected/lost scheduler submission.
+      this.getServer().getScheduler().runTaskTimer(this, () -> {
+         ChunkyMemoryValve.startFromPluginEnable();
+         for (MetropolisGenerator generator : generators) generator.resumeDeferredQueue();
+      }, 20L, 20L);
    }
 
    private void schedulePendingGrowth(MetropolisGenerator generator, World world, int x, int z) {
