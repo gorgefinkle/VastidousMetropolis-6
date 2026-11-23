@@ -291,6 +291,35 @@ public final class BoundedRiverSites {
         return s!=null&&x>=s.lotBaseX-1&&x<=s.lotBaseX+s.lotSizeX
                 &&z>=s.lotBaseZ-1&&z<=s.lotBaseZ+s.lotSizeZ&&!s.ownsRiverCell(x,z);
     }
+    /**
+     * Exact nearest distance to the accepted creek banks near a world-block
+     * point. Sites are enumerated by the tiles their actual bounded river and
+     * origin park touch; no generated-chunk state or coarse water sampling is
+     * involved. NaN means no accepted creek bank within the requested radius.
+     */
+    public synchronized double nearestBankDistanceBlocks(double blockX,double blockZ,double maxDistanceBlocks) {
+        if(!Double.isFinite(blockX)||!Double.isFinite(blockZ)||!Double.isFinite(maxDistanceBlocks)||maxDistanceBlocks<0)
+            return Double.NaN;
+        int chunkX=(int)Math.floor(blockX/16.0), chunkZ=(int)Math.floor(blockZ/16.0);
+        int tileX=Math.floorDiv(chunkX,TILE), tileZ=Math.floorDiv(chunkZ,TILE);
+        int rings=Math.max(1,Math.min(8,(int)Math.ceil(maxDistanceBlocks/(TILE*16.0))+1));
+        Set<Site> seen=new HashSet<>();
+        double best=Double.POSITIVE_INFINITY;
+        for(int dx=-rings;dx<=rings;dx++) for(int dz=-rings;dz<=rings;dz++) {
+            for(Site site:sitesCovering(tileX+dx,tileZ+dz)) {
+                if(!seen.add(site)) continue;
+                double along=site.river.isZBound()?blockZ:blockX;
+                double across=site.river.distanceFromCenterBlock(blockX,blockZ);
+                double width=site.river.widthAtBlock(along);
+                if(!Double.isFinite(across)||!Double.isFinite(width)) continue;
+                double bankHalf=width*.5+site.river.getFallbackBankMarginBlocks();
+                double distance=Math.max(0.0,Math.abs(across)-bankHalf);
+                if(distance<best) best=distance;
+            }
+        }
+        return best<=maxDistanceBlocks?best:Double.NaN;
+    }
+
     public synchronized List<Site> parksIn(int minX,int minZ,int maxX,int maxZ){
         List<Site> parks=new ArrayList<>();
         for(int tx=Math.floorDiv(minX,64);tx<=Math.floorDiv(maxX,64);tx++)
