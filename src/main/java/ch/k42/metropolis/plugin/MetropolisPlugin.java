@@ -1,6 +1,7 @@
 package ch.k42.metropolis.plugin;
 
 import ch.k42.metropolis.commands.CommandMetropolisLandmark;
+import ch.k42.metropolis.commands.CommandMetropolisBiome;
 import ch.k42.metropolis.commands.CommandMetropolisFreder;
 import ch.k42.metropolis.commands.CommandMetropolisGrot;
 import ch.k42.metropolis.commands.CommandMetropolisMaria;
