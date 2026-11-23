@@ -58,14 +58,14 @@ jobs:
         run: |
           mkdir -p r14-12-package
           cp target/Metropolis_R14_12_Bloomlands_Field_Calibration_DEV.jar r14-12-package/
-          cp Metropolis_R14_11_Karst_Massif_Ocean_Ecology_SOURCE.zip r14-11-package/
-          (cd r14-11-package && zip -q ../Metropolis_R14_12_Bloomlands_Field_Calibration_DEV_PACKAGE.zip ./*)
+          cp Metropolis_R14_12_Bloomlands_Field_Calibration_SOURCE.zip r14-12-package/
+          (cd r14-12-package && zip -q ../Metropolis_R14_12_Bloomlands_Field_Calibration_DEV_PACKAGE.zip ./*)
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Metropolis_R14_12_Bloomlands_Field_Calibration_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_11_Karst_Massif_Ocean_Ecology_DEV.jar
-            Metropolis_R14_11_Karst_Massif_Ocean_Ecology_SOURCE.zip
-            Metropolis_R14_11_Karst_Massif_Ocean_Ecology_DEV_PACKAGE.zip
+            target/Metropolis_R14_12_Bloomlands_Field_Calibration_DEV.jar
+            Metropolis_R14_12_Bloomlands_Field_Calibration_SOURCE.zip
+            Metropolis_R14_12_Bloomlands_Field_Calibration_DEV_PACKAGE.zip
