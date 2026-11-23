@@ -48,9 +48,7 @@ public final class PlanRegions {
    // and NATURAL (wilderness) are one natural family. Only FOREST/FARM still
    // create MorphomosRegions and retain their existing terrain painters.
    private static int boundaryFamily(ContextType context) {
-      if (context == ContextType.FARM) return 1;
-      if (context != null && context.isNaturalBoundaryFamily()) return 2;
-      return 0;
+      return MorphomosBoundaryFamily.of(context);
    }
 
    private int boundaryFamilyAt(int x, int z) {
@@ -128,7 +126,7 @@ public final class PlanRegions {
          int kind = this.layout.kindAt(nx, nz);
          if (kind == WorldLayout.STREET || kind == WorldLayout.LANE) continue;
          int neighbourFamily = this.boundaryFamilyAt(nx, nz);
-         if (neighbourFamily == 0 || (family != 0 && family != neighbourFamily)) return false;
+         if (!MorphomosBoundaryFamily.compatible(family, neighbourFamily)) return false;
          family = neighbourFamily;
       }
       // A street can meet its natural blocks only diagonally at a planned
@@ -582,8 +580,7 @@ public final class PlanRegions {
       // FARM remains separate: only two or more FARM rectangles dissolve
       // their shared road. Natural land/water/creek seams dissolve when at
       // least one natural block owns the seam; no painter ownership is merged.
-      if (family == 1) return seen.size() >= 2;
-      return family == 2 && (seen.size() >= 2 || (naturalExterior && !seen.isEmpty()));
+      return MorphomosBoundaryFamily.shouldDissolve(family, seen.size(), naturalExterior);
    }
 
    /**
