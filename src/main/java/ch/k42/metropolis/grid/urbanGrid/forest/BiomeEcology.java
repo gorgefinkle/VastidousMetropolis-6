@@ -63,14 +63,23 @@ public final class BiomeEcology {
     }
     /** Replaces the old volcanic HEIGHT contribution, not the existing placement. */
     public static double relief(double original, double[] weight, int x, int z, WildRelief prior) {
+        return relief(original,weight,x,z,prior,false);
+    }
+
+    /** Karst arches are permitted only when the owning forest region has
+     * confirmed the entire span footprint. Ordinary karst relief remains
+     * continuous when that ownership test refuses a bridge. */
+    public static double relief(double original, double[] weight, int x, int z,
+                                WildRelief prior, boolean allowKarstBridge) {
         double karstW=weight[WildBiome.VOLCANIC_BARRENS.ordinal()];
         double bloomW=weight[WildBiome.BLOOMLANDS.ordinal()];
         if(karstW==0 && bloomW==0)return original;
         long seed=reliefSeed(prior);
         if (karstW>0) {
             double old=.55*prior.mountains(x,z)+.45*prior.profile(ch.k42.metropolis.grid.urbanGrid.wild.MountainKind.VOLCANO,x,z);
+            boolean bridge = allowKarstBridge && karstW >= 0.82;
             // Long fractured valleys and their rock-ridge remnants are one terrain field.
-            original+=karstW*(KarstLandforms.relief(seed,x,z,false)-old);
+            original+=karstW*(KarstLandforms.relief(seed,x,z,false,bridge)-old);
         }
         if (bloomW>0) {
             // The bloom has modest ridges and occasional deep, moss-filled crevasses.
@@ -111,7 +120,8 @@ public final class BiomeEcology {
     }
     /** Topsoil and rock face palette depend on true fracture depth, not decorative circles.
      *  Growth is deterministic and uses vanilla survival blocks with valid supports. */
-    public static void paintGround(Chunk chunk,int lx,int lz,int x,int z,int h,long seed,WildBiome b,boolean plants) {
+    public static void paintGround(Chunk chunk,int lx,int lz,int x,int z,int h,long seed,
+                                   WildBiome b,boolean plants,boolean allowKarstBridge,int baseY) {
         if(b!=WildBiome.VOLCANIC_BARRENS && b!=WildBiome.BLOOMLANDS) return;
         if (h<=3 || h>=chunk.getWorld().getMaxHeight()-4) return;
         boolean karst=b==WildBiome.VOLCANIC_BARRENS;
@@ -123,7 +133,7 @@ public final class BiomeEcology {
         double naturalHabitat=karst?KarstLandforms.habitat(terrainSeed,x,z,valley):0;
         // Only the exposed rock crest has an upland palette. The ravine
         // beneath retains naturalHabitat WITHOUT a bridge-shaped dry shadow.
-        boolean bridgeCrown=karst && KarstLandforms.archWeight(terrainSeed,x,z)>.10;
+        boolean bridgeCrown=karst && allowKarstBridge && KarstLandforms.archWeight(terrainSeed,x,z)>.10;
         double habitat=bridgeCrown?0:naturalHabitat;
         double nearby=field(seed,x,z,19,0x535542535452L);
         double broad=field(seed,x,z,97,0x47524153534cL);
@@ -154,7 +164,7 @@ public final class BiomeEcology {
             // horizontal strata and made canyon walls look manufactured.
             // Here rare fractured lenses form short, offset, discontinuous
             // patches controlled by 3-D noise and warped elevation.
-            boolean bridgeCliff=KarstLandforms.bridgeApproachActive(terrainSeed,x,z);
+            boolean bridgeCliff=allowKarstBridge && KarstLandforms.bridgeApproachActive(terrainSeed,x,z);
             int textureDepth=bridgeCliff?36:(valley>.40?13:8);
             for(int y=Math.max(2,h-textureDepth);y<h;y++){
                 double warped=y/9.6
@@ -225,11 +235,16 @@ public final class BiomeEcology {
                     }
                 }
             }
-            if(karst){
-                int floor=KarstLandforms.bridgeFloor(terrainSeed,x,z,h);
-                if(floor>=0 && h-floor>2){
+            if(karst && allowKarstBridge){
+                int minimumFloor=Math.max(chunk.getWorld().getMinHeight()+16,baseY-8);
+                int floor=KarstLandforms.bridgeFloor(terrainSeed,x,z,h,baseY,minimumFloor);
+                if(floor>=minimumFloor && h-floor>=48){
                     int upperCut=KarstSpanVolume.undercutCeiling(terrainSeed,x,z,h,floor);
-                    for(int cy=Math.max(4,floor+1);cy<=upperCut;cy++){
+                    // Do not turn the mountain into a cavern: a legitimate
+                    // span has a load-bearing rock keystone and a clearly
+                    // open arch, while its abutments remain solid.
+                    if(upperCut-floor>=30 && upperCut<h-8){
+                    for(int cy=floor+1;cy<=upperCut;cy++){
                         Block rock=chunk.getBlock(lx,cy,lz);
                         Material m=rock.getType();
                         if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE
@@ -293,6 +308,7 @@ public final class BiomeEcology {
                             }
                         }
                     }
+                    }
                 }
             } else {
             int ceiling=KarstLandforms.ceiling(terrainSeed,x,z,h);
@@ -333,20 +349,22 @@ public final class BiomeEcology {
             }
             }
         }
-        if(karst && h>chunk.getWorld().getSeaLevel()+17
+        if(karst && allowKarstBridge && h>chunk.getWorld().getSeaLevel()+17
            && KarstSpanVolume.bankInRange(terrainSeed,x,z)){
             // The new span body and adjoining natural gorge are weathered by
             // one XYZ field. Unlike the rejected haunch cuts, this never acts
             // on Bloomlands or on the agreed Willow geometry.
-            int natural=KarstSpanVolume.floor(terrainSeed,x,z,h,
-                                  KarstLandforms.unbridgedRelief(terrainSeed,x,z));
-            for(int cy=Math.max(chunk.getWorld().getSeaLevel()+6,Math.max(4,natural+6));cy<h-6;cy++){
+            int natural=baseY+(int)Math.round(KarstLandforms.unbridgedRelief(terrainSeed,x,z));
+            int minimumFloor=Math.max(chunk.getWorld().getMinHeight()+16,baseY-8);
+            if(natural>=minimumFloor){
+            for(int cy=Math.max(chunk.getWorld().getSeaLevel()+6,natural+6);cy<h-6;cy++){
                 if(!KarstSpanVolume.erodeBank(terrainSeed,x,cy,z,h,natural))continue;
                 Block rock=chunk.getBlock(lx,cy,lz);
                 Material m=rock.getType();
                 if(m==Material.STONE||m==Material.TUFF||m==Material.CALCITE||
                    m==Material.DIORITE||m==Material.ANDESITE)
                     rock.setType(Material.AIR,false);
+            }
             }
         }
     }
