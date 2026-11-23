@@ -21,7 +21,7 @@ public final class WildBiomeAppearanceProbe {
          // of final field cells rather than repeatedly sampling one patch.
          for (int gx = -96; gx < 96; gx++) {
             for (int gz = -96; gz < 96; gz++) {
-               int label = field.label(gx * 512.0 + 113.0, gz * 512.0 - 197.0);
+               int label = field.label(gx * 512 + 113, gz * 512 - 197);
                if (label == WildBiome.BLOOMLANDS.ordinal()) bloom++;
                if (label == WildBiome.VOLCANIC_BARRENS.ordinal()) karst++;
                samples++;
