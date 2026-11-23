@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.9-R14.9-Queue-Backpressure-Karst-DEV</version>
+    <version>0.1.9-R14.10-Universal-Biome-TP-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.9 Queue, backpressure, inland karst + open landbridges)</name>
-    <description>Durable deferred queue with automatic draining, stable high-heap recovery, Morphomos natural-family boundaries, inland-only karst with open landbridges, Bloomlands locator and file-only completed BUILD export</description>
+    <name>Metropolis for Paper 26.2 (R14.10 Universal Biome Teleport)</name>
+    <description>Durable deferred queue, memory backpressure, Morphomos natural-family boundaries, elevated karst with open landbridges, universal asynchronous nearest-biome teleport and file-only completed BUILD export</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_9_Queue_Backpressure_Karst_DEV</finalName>
+        <finalName>Metropolis_R14_10_Universal_Biome_Teleport_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
