@@ -278,9 +278,15 @@ public class ClipboardParcel extends Parcel {
       // The parcel's actual assigned district is authoritative. Schematic
       // names, filenames and group IDs are never used to infer context.
       ch.k42.metropolis.grid.urbanGrid.districts.District district = this.getDistrict();
+      // Landmark placements are forced BUILD districts (including those that
+      // fall back to an ordinary zoning context), so filter the forced marker
+      // rather than relying only on ContextType.LANDMARK or schematic tags.
+      if (district != null && district.isForced()) return;
       ch.k42.metropolis.grid.urbanGrid.enums.ContextType context =
               district == null ? this.getContextType() : district.getContext();
-      if (context == null) return;
+      // Parks and the explicit landmark pool are not building population
+      // sources for Dead Streets, even if a config tags one as BUILD.
+      if (context == null || context == ContextType.PARK || context == ContextType.LANDMARK) return;
 
       Cartesian3D dimensions = this.clipboard.getSize();
       int minX = this.chunkX << 4, minZ = this.chunkZ << 4;
