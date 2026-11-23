@@ -12,9 +12,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -49,7 +51,9 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
     // rescanning an arbitrarily large disk backlog every server tick.
     private long lastCompleteScanAtMillis;
     private long earliestRetryAtMillis;
-    private long fallbackRetryAtNanos;
+    // Only used when the filesystem refuses to persist an optional retry hint.
+    // The transient map is independently capped and never grows with the backlog.
+    private final Map<Long, Long> transientRetries = new HashMap<>();
 
     public record Chunk(int x, int z) {}
     private static final class Entry {
@@ -218,6 +222,15 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
                 Path candidate = iterator.next();
                 long found = parseName(candidate);
                 if ((active == null || active != found) && !windowKeys.contains(found)) {
+                    Long transientAt = transientRetries.get(found);
+                    if (transientAt != null) {
+                        if (transientAt > nowMillis) {
+                            if (earliestRetryAtMillis == 0L || transientAt < earliestRetryAtMillis)
+                                earliestRetryAtMillis = transientAt;
+                            continue;
+                        }
+                        transientRetries.remove(found);
+                    }
                     long retryAt = retryAfterMillis(candidate);
                     if (retryAt <= nowMillis) {
                         addToWindow(found);
@@ -273,6 +286,7 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         // Delete the hint first. If job deletion fails, the still-durable job
         // becomes immediately eligible rather than being hidden by stale metadata.
         Files.deleteIfExists(retryMarker(record));
+        transientRetries.remove(active);
         if (!Files.deleteIfExists(record))
             throw new IOException("Cannot acknowledge missing pending population: " + record);
         forceDirectory(record.getParent());
@@ -289,17 +303,17 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         long retryAtMillis = System.currentTimeMillis() + Math.max(1L, RETRY_NS / 1_000_000L);
         active = null;
         if (writeRetryAfter(record, retryAtMillis)) {
+            transientRetries.remove(key);
             if (earliestRetryAtMillis == 0L || retryAtMillis < earliestRetryAtMillis)
                 earliestRetryAtMillis = retryAtMillis;
         } else {
             // Filesystem trouble writing the optional hint must not lose the job.
-            // Keep a bounded in-memory cooldown; after restart the unchanged job
-            // marker is eligible immediately, preserving at-least-once recovery.
-            if (windowKeys.add(key) && window.size() < MAX_IN_MEMORY) {
-                Entry entry = new Entry(key);
-                entry.retryAfterNanos = nowNanos + RETRY_NS;
-                window.addLast(entry);
-                fallbackRetryAtNanos = entry.retryAfterNanos;
+            // Keep at most 128 transient deadlines; any overflow remains durable
+            // and immediately eligible rather than consuming the RAM ready window.
+            if (transientRetries.containsKey(key) || transientRetries.size() < MAX_IN_MEMORY) {
+                transientRetries.put(key, retryAtMillis);
+                if (earliestRetryAtMillis == 0L || retryAtMillis < earliestRetryAtMillis)
+                    earliestRetryAtMillis = retryAtMillis;
             }
         }
     }
@@ -309,18 +323,15 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
         if (pending <= 0L) return 0L;
         long nowMillis = System.currentTimeMillis();
         long delay = earliestRetryAtMillis > nowMillis ? earliestRetryAtMillis - nowMillis : 0L;
-        long nowNanos = System.nanoTime();
-        if (fallbackRetryAtNanos > nowNanos) {
-            long fallbackMillis = Math.max(1L, (fallbackRetryAtNanos - nowNanos + 999_999L) / 1_000_000L);
-            delay = delay == 0L ? fallbackMillis : Math.min(delay, fallbackMillis);
-        }
         // Ready work or an unfinished shard sweep should be polled next tick.
         if (!window.isEmpty() || lastCompleteScanAtMillis == 0L) return 0L;
         return delay;
     }
 
     public synchronized long pending() { return pending; }
-    public synchronized int inMemory() { return window.size() + (active == null ? 0 : 1); }
+    public synchronized int inMemory() {
+        return window.size() + transientRetries.size() + (active == null ? 0 : 1);
+    }
     public synchronized boolean hasPending() { return pending > 0; }
 
     private void closeListing() throws IOException {
