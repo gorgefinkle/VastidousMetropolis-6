@@ -32,9 +32,9 @@ public final class KarstLandbridgeClearanceProbe {
 
                 double natural = KarstLandforms.unbridgedRelief(seed, x, z);
                 double raised = KarstSpanVolume.upperRelief(seed, x, z, natural);
-                int topY = 64 + (int)Math.round(raised);
-                int floor = KarstLandforms.bridgeFloor(seed, x, z, topY);
-                if (floor < 0 || topY - floor < 18) continue;
+                int topY = 65 + (int)Math.round(raised);
+                int floor = KarstLandforms.bridgeFloor(seed, x, z, topY, 65, 59);
+                if (floor < 59 || topY - floor < 48) continue;
 
                 int upperCut = KarstSpanVolume.undercutCeiling(seed, x, z, topY, floor);
                 int clearance = upperCut - floor;
@@ -42,7 +42,7 @@ public final class KarstLandbridgeClearanceProbe {
                 checked++;
                 minimumClearance = Math.min(minimumClearance, clearance);
 
-                check(clearance >= 10,
+                check(clearance >= 30,
                         "bridge core lacks an open void: seed=" + seed + " x=" + x + " z=" + z
                         + " floor=" + floor + " upperCut=" + upperCut + " top=" + topY
                         + " clearance=" + clearance);
@@ -56,8 +56,8 @@ public final class KarstLandbridgeClearanceProbe {
                 if (r < .16 && coverage > .92) {
                     int thickness = topY - upperCut - 1;
                     maximumCoreThickness = Math.max(maximumCoreThickness, thickness);
-                    check(thickness <= 22,
-                            "central keystone is too thick: " + thickness + " blocks");
+                    check(thickness >= 38 && thickness <= 48,
+                            "central keystone thickness outside 38..48 blocks: " + thickness);
                 }
                 open++;
             }
