@@ -28,7 +28,25 @@ public final class FarmRoadRoutePolicyProbe {
       for (int i = 8; i <= 22; i++) check(union[i], "shared trunk gap at " + i);
       check(!union[7] && !union[23], "shared spine must not leave an unused tail");
 
-      System.out.println("FarmRoadRoutePolicyProbe PASS: nearest street selection, negative coordinates, bounded access, shared trunk, no dead tails");
+      java.util.Set<Integer> run = new java.util.HashSet<Integer>();
+      for (int i = 0; i <= 8; i++) run.add(i);
+      java.util.Set<Integer> gates = new java.util.HashSet<Integer>(Arrays.asList(1, 3));
+      java.util.Set<Integer> streets = new java.util.HashSet<Integer>(Arrays.asList(8));
+      check(FarmRoadRoutePolicy.requestedRouteContains(2, run, gates, streets, 66),
+              "a requested site-to-street connection must paint its interval");
+      check(FarmRoadRoutePolicy.requestedRouteContains(7, run, gates, streets, 66),
+              "shared access trunk must stay connected to the paved street");
+      check(!FarmRoadRoutePolicy.requestedRouteContains(0, run, gates, streets, 66),
+              "unused farm-run tail before the first site must remain unpainted");
+      check(!FarmRoadRoutePolicy.requestedRouteContains(4, run, java.util.Collections.<Integer>emptySet(), streets, 66),
+              "a boundary with no requesting farm site must remain unpainted");
+      check(!FarmRoadRoutePolicy.requestedRouteContains(4, run, gates, java.util.Collections.<Integer>emptySet(), 66),
+              "without a paved street there must be no dirt road");
+      java.util.Set<Integer> outsideGate = new java.util.HashSet<Integer>(Arrays.asList(-2));
+      check(!FarmRoadRoutePolicy.requestedRouteContains(1, run, outsideGate, streets, 66),
+              "a site outside the connected farm run must not request a road");
+
+      System.out.println("FarmRoadRoutePolicyProbe PASS: nearest street selection, negative coordinates, bounded access, shared trunks, no orphan sites or dead tails");
    }
 
    private static void check(boolean condition, String message) {
