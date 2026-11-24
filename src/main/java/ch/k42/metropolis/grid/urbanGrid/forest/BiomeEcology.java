@@ -569,7 +569,7 @@ public final class BiomeEcology {
             int tx = cx + (int) Math.round(Math.cos(angle) * distance);
             int tz = cz + (int) Math.round(Math.sin(angle) * distance);
             if (!treeNearChunk(c, tx, tz, 9) || !understoryFootprint(site, wild, tx, tz, seed)) continue;
-            bloomUnderstory(c, site, wild, tx, tz, hash(h, cellHash), (int) (unit(h + 2) * 3));
+            bloomUnderstory(c, site, wild, tx, tz, mix(h ^ cellHash), (int) (unit(h + 2) * 3));
         }
     }
 
@@ -728,7 +728,7 @@ public final class BiomeEcology {
                         && treeNearChunk(chunk,x,z,9)
                         && !nearGiantMushroom(wild,seed,x,z)
                         && understoryFootprint(cachedSite,wild,x,z,seed)) {
-                    bloomUnderstory(chunk,cachedSite,wild,x,z,seed,h,(int)(unit(h+8)*3));
+                    bloomUnderstory(chunk,cachedSite,wild,x,z,mix(seed ^ h),(int)(unit(h+8)*3));
                 }
                 if(spacing==48 && b==WildBiome.VOLCANIC_BARRENS)
                     karstBoulder(chunk,site,x,z,seed);
