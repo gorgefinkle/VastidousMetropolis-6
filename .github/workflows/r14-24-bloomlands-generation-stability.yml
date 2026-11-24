@@ -64,7 +64,7 @@ jobs:
           javac -d target/qa-queue src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java QA/R14_6/DiskDeferredChunkQueueProbe.java
           java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
       - name: Assemble complete source archive
-        run: zip -r Metropolis_R14_24_Bloomlands_Generation_Stability_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
+        run: zip -r Metropolis_R14_24_Bloomlands_Generation_Stability_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
       - name: Assemble exact two-file development package
         run: |
           mkdir -p r14-24-package
