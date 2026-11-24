@@ -1,9 +1,9 @@
-name: R14.16 one creek origin per city validation
+name: R14.16 mushroom cap stem occlusion validation
 
 on:
   push:
     branches:
-      - feature/r14-15-mushroom-cap-stem-occlusion
+      - feature/r14-16-mushroom-cap-stem-occlusion
   pull_request:
     branches:
       - integration/morphomos-natural-family-bloomlands
@@ -28,8 +28,8 @@ jobs:
         run: mvn -B -ntp clean verify
       - name: Morphomos boundary-family probe
         run: sh QA/R14_8/run_boundary_family_probe.sh
-      - name: One creek origin per generated city
-        run: sh QA/R14_16/run_creek_city_origin_policy_probe.sh
+      - name: One creek origin per generated city (inherited R14.15 regression)
+        run: sh QA/R14_15/run_creek_city_origin_policy_probe.sh
       - name: Rare-biome appearance probe
         run: sh QA/R14_8/run_wild_biome_appearance_probe.sh
       - name: Rare-province physical-size probe
@@ -59,10 +59,10 @@ jobs:
         run: zip -r Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
       - name: Assemble exact two-file development package
         run: |
-          mkdir -p r14-15-package
-          cp target/Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_DEV.jar r14-15-package/
+          mkdir -p r14-16-package
+          cp target/Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_DEV.jar r14-16-package/
           cp Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_SOURCE.zip r14-15-package/
-          (cd r14-15-package && zip -q ../Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_DEV_PACKAGE.zip ./*)
+          (cd r14-16-package && zip -q ../Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_DEV_PACKAGE.zip ./*)
       - name: Verify exact package contents
         run: |
           unzip -Z1 Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_DEV_PACKAGE.zip | sort > package-files.txt
