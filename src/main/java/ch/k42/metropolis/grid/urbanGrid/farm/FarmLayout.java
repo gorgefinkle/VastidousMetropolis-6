@@ -763,19 +763,31 @@ final class FarmLayout {
 
       int sLoX = ux0 + 3;
       int sLoZ = uz0 + 3;
-      // a silage bunker, and the feed silos beside it
+      // One operation specialization drives the rest of the compound mix.
+      // It is chosen before ancillary structures so storage and handling
+      // equipment can be appropriate to the actual operation.
+      int operation = this.chooseIndustrialStyle(x);
+      boolean grainOperation = operation == FarmIndustrial.ELEVATOR || operation == FarmIndustrial.GRAIN_DRYER;
+      boolean feedOperation = grainOperation || operation == FarmIndustrial.POULTRY_HALL;
       boolean bAx = x.nextBoolean();
       int bunkerW = bAx ? 24 : 9;
       int bunkerD = bAx ? 9 : 24;
-      int[] bs = this.findSpot(x, bunkerW, bunkerD, 3, sLoX, sLoZ, ux1 - 3 - bunkerW + 1, uz1 - 3 - bunkerD + 1);
-      if (bs != null) {
-         this.features.add(new FarmModernBarn.Bunker(bs[0], bs[1], bAx, x.nextBoolean(), 24, 9, h, this.seed));
+      int bunkerChance = operation == FarmIndustrial.PUMPWORKS
+              || operation == FarmIndustrial.ORGANIC_RECOVERY
+              || operation == FarmIndustrial.PACKHOUSE ? 30 : 72;
+      if (x.nextInt(100) < bunkerChance) {
+         int[] bs = this.findSpot(x, bunkerW, bunkerD, 3, sLoX, sLoZ,
+                 ux1 - 3 - bunkerW + 1, uz1 - 3 - bunkerD + 1);
+         if (bs != null) {
+            this.features.add(new FarmModernBarn.Bunker(bs[0], bs[1], bAx, x.nextBoolean(), 24, 9, h, this.seed));
+         }
       }
-      int silos = 1 + x.nextInt(2);
-      for (int i = 0; i < silos; i++) {
-         int[] s = this.findSpot(x, 7, 7, 3, sLoX, sLoZ, ux1 - 3 - 6, uz1 - 3 - 6);
-         if (s != null) {
-            this.features.add(new FarmSilo(s[0] + 3, s[1] + 3, h, this.seed));
+      int siloChance = grainOperation ? 88 : (feedOperation ? 48 : 20);
+      if (x.nextInt(100) < siloChance) {
+         int silos = grainOperation ? 1 + x.nextInt(2) : 1;
+         for (int i = 0; i < silos; i++) {
+            int[] s = this.findSpot(x, 7, 7, 3, sLoX, sLoZ, ux1 - 3 - 6, uz1 - 3 - 6);
+            if (s != null) this.features.add(new FarmSilo(s[0] + 3, s[1] + 3, h, this.seed));
          }
       }
       // a machine shed (the long pole barn), a windmill perhaps, and the rest of the yard
@@ -790,20 +802,18 @@ final class FarmLayout {
             this.features.add(new FarmOutbuildings.PoleBarn(s[0] + 1, s[1] + 1, ax, 2, h, this.seed));
          }
       }
-      this.plantSmallExtras(h, ux0, uz0, ux1, uz1);
-      // A separate mechanised worksite, reserved *after* the barn/bunkers,
-      // so an auger elevator or harvester depot never intersects the barns,
-      // loading drive or nearby fields. The two silhouettes are intentionally
-      // very different, rather than recoloured versions of the same barn.
-      if (x.nextInt(100) < 38) {
-         int style = x.nextBoolean() ? FarmIndustrial.ELEVATOR : FarmIndustrial.DEPOT;
+      this.plantModernExtras(x, h, ux0, uz0, ux1, uz1);
+      // One operation-specific facility per compound at most. Its unique
+      // footprint is reserved after the barn, yard, feed handling and small
+      // essentials so it cannot collide with the main farm or its driveway.
+      if (x.nextInt(100) < 62) {
          boolean ax = x.nextBoolean();
-         int bl = FarmIndustrial.length(style), wd = FarmIndustrial.width(style);
+         int bl = FarmIndustrial.length(operation), wd = FarmIndustrial.width(operation);
          int rw = (ax ? bl : wd) + 2, rd = (ax ? wd : bl) + 2;
          int[] site = this.findSpot(x, rw, rd, 2, sLoX, sLoZ,
                  ux1 - 3 - rw + 1, uz1 - 3 - rd + 1);
          if (site != null) {
-            this.features.add(new FarmIndustrial(site[0] + 1, site[1] + 1, ax, style, h, this.seed));
+            this.features.add(new FarmIndustrial(site[0] + 1, site[1] + 1, ax, operation, h, this.seed));
          }
       }
       int stacks = x.nextInt(3);
@@ -815,6 +825,39 @@ final class FarmLayout {
       }
       this.planWindbreaks(x, h, side, ux0, uz0, ux1, uz1);
       return true;
+   }
+
+   /** Weighted operation mix. The old elevator/depot pair no longer dominates every modern site. */
+   private int chooseIndustrialStyle(Random x) {
+      int roll = x.nextInt(100);
+      if (roll < 17) return FarmIndustrial.ELEVATOR;
+      if (roll < 30) return FarmIndustrial.DEPOT;
+      if (roll < 44) return FarmIndustrial.PACKHOUSE;
+      if (roll < 58) return FarmIndustrial.GRAIN_DRYER;
+      if (roll < 70) return FarmIndustrial.PUMPWORKS;
+      if (roll < 80) return FarmIndustrial.POULTRY_HALL;
+      if (roll < 92) return FarmIndustrial.LIVESTOCK_WORKS;
+      return FarmIndustrial.ORGANIC_RECOVERY;
+   }
+
+   /** Keep modern compounds functional without filling every spare corner with sheds. */
+   private void plantModernExtras(Random x, int h, int ux0, int uz0, int ux1, int uz1) {
+      int loX = ux0 + 3, loZ = uz0 + 3;
+      if (x.nextInt(100) < 32) {
+         boolean ax = x.nextBoolean();
+         int len = FarmOutbuildings.Shed.lengthOf(FarmOutbuildings.Shed.TOOL);
+         int wid = FarmOutbuildings.Shed.widthOf(FarmOutbuildings.Shed.TOOL);
+         int bw = (ax ? len : wid) + 2, bd = (ax ? wid : len) + 2;
+         int[] s = this.findSpot(x, bw, bd, 2, loX, loZ, ux1 - 3 - bw + 1, uz1 - 3 - bd + 1);
+         if (s != null) this.features.add(new FarmOutbuildings.Shed(
+                 s[0] + 1, s[1] + 1, ax, FarmOutbuildings.Shed.TOOL, h, this.seed));
+      }
+      if (x.nextInt(100) < 48) {
+         boolean ax = x.nextBoolean();
+         int bw = ax ? 6 : 3, bd = ax ? 3 : 6;
+         int[] s = this.findSpot(x, bw, bd, 2, loX, loZ, ux1 - 3 - bw + 1, uz1 - 3 - bd + 1);
+         if (s != null) this.features.add(new FarmOutbuildings.Pickup(s[0], s[1], ax, h, this.seed));
+      }
    }
 
    // ---------------------------------------------------------------- the nursery
