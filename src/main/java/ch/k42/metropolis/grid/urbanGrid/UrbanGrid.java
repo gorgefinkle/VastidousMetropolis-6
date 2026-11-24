@@ -1966,6 +1966,29 @@ public class UrbanGrid extends Grid implements DistrictHost {
       return this.parcels[x][z];
    }
 
+   /**
+    * True only when a karst span's complete safety footprint is backed by
+    * populated forest Morphomos parcels belonging to the exact same world
+    * region. A span must not bridge over EmptyParcel, fallback, road, water,
+    * city or another region cells; it is refused rather than carving into
+    * terrain owned by another parcel.
+    */
+   public boolean isKarstBridgeFootprintOwned(MorphomosRegion owner,int centerChunkX,int centerChunkZ,int radiusChunks) {
+      if(owner==null || owner.getContext()!=ContextType.FOREST || radiusChunks<0) return false;
+      int minX=this.root.X, minZ=this.root.Y, maxX=minX+64, maxZ=minZ+64;
+      for(int dx=-radiusChunks;dx<=radiusChunks;dx++) {
+         for(int dz=-radiusChunks;dz<=radiusChunks;dz++) {
+            int cx=centerChunkX+dx, cz=centerChunkZ+dz;
+            if(cx<minX || cx>=maxX || cz<minZ || cz>=maxZ) return false;
+            Parcel parcel=this.getParcel(cx,cz);
+            if(!(parcel instanceof MorphomosParcel morph)
+                    || morph.getContextType()!=ContextType.FOREST
+                    || morph.getRegion()!=owner) return false;
+         }
+      }
+      return true;
+   }
+
    /** R30ea trace label for a parcel writer; read only for debug diagnostics. */
    private static String parcelName(Parcel parcel) {
       return parcel == null ? "null" : parcel.getClass().getSimpleName();
@@ -3756,6 +3779,9 @@ public class UrbanGrid extends Grid implements DistrictHost {
             @Override public boolean hasExactBankReservation() { return true; }
             @Override public boolean useRiverPlanningLattice() { return true; }
             @Override public boolean protectedDryParkAt(int x,int z) { return sites.protectedDryParkAt(x,z); }
+            @Override public double nearestBankDistanceBlocks(double x,double z,double maxDistance) {
+               return sites.nearestBankDistanceBlocks(x,z,maxDistance);
+            }
          });
       }
    }
