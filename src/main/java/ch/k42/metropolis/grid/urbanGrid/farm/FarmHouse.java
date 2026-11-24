@@ -72,9 +72,16 @@ final class FarmHouse extends FarmFeature {
         if(this.cellar) paintCellar(p);
     }
 
+    private void cellarSet(FarmPainter p,int cx,int cz,int dx,int y,int dz,int id,int data) {
+        int wx=this.axisX?cx+dx:cx+dz;
+        int wz=this.axisX?cz+dz:cz+dx;
+        p.set(wx,y,wz,id,data);
+    }
+
     /** A compact hobbit-like root cellar tucked beneath the back of the house. */
     private void paintCellar(FarmPainter p) {
-        int cx=this.x+5, cz=this.z+6;
+        int cx=this.axisX?this.x+5:this.x+6;
+        int cz=this.axisX?this.z+6:this.z+5;
         int bottom=this.h-8, ceiling=this.h-2;
         for(int dx=-4;dx<=4;dx++) for(int dz=-3;dz<=3;dz++) {
             boolean wall=Math.abs(dx)==4||Math.abs(dz)==3;
@@ -93,27 +100,27 @@ final class FarmHouse extends FarmFeature {
         }
         // Narrow stair/ladder access hidden inside the pantry floor.
         for(int y=bottom+1;y<=this.h-1;y++) {
-            p.set(cx+3,y,cz+1,FarmPainter.LADDER,4);
-            if(y>=this.h-2) p.set(cx+3,y,cz+2,FarmPainter.AIR,0);
+            cellarSet(p,cx,cz,3,y,1,FarmPainter.LADDER,4);
+            if(y>=this.h-2) cellarSet(p,cx,cz,3,y,2,FarmPainter.AIR,0);
         }
-        p.set(cx+3,this.h,cz+1,96,0); // flush closed pantry-floor hatch
+        cellarSet(p,cx,cz,3,this.h,1,96,0); // flush closed pantry-floor hatch
         // A grass-covered low earth mound and stone arch identify the cellar
         // only when approached closely; it is not a separate above-ground shed.
         for(int dx=-2;dx<=2;dx++) for(int dz=0;dz<=2;dz++) {
             int rise=3-Math.abs(dx)/2-dz/2;
             if(rise>0) for(int dy=1;dy<=rise;dy++)
-                p.set(cx+dx,this.h+dy,cz+4+dz,dy==rise?FarmPainter.GRASS:FarmPainter.DIRT,0);
+                cellarSet(p,cx,cz,dx,this.h+dy,4+dz,dy==rise?FarmPainter.GRASS:FarmPainter.DIRT,0);
         }
-        for(int side=-1;side<=1;side++) p.set(cx+side,this.h+1,cz+4,FarmPainter.STONE_BRICK,0);
-        p.set(cx,this.h+1,cz+4,FarmPainter.AIR,0);
-        p.set(cx,this.h+2,cz+4,FarmPainter.AIR,0);
+        for(int side=-1;side<=1;side++) cellarSet(p,cx,cz,side,this.h+1,4,FarmPainter.STONE_BRICK,0);
+        cellarSet(p,cx,cz,0,this.h+1,4,FarmPainter.AIR,0);
+        cellarSet(p,cx,cz,0,this.h+2,4,FarmPainter.AIR,0);
         // The rounded mound doorway is a real second entrance: a narrow
         // ladder shaft drops behind the arch and opens through the cellar wall.
         // The doorway passes through the cellar's front wall into the mound.
         // The ladder occupies the open shaft column and attaches to its solid
         // side wall; the adjacent clear column gives a player room to climb.
-        for(int y=bottom+1;y<=this.h+1;y++) p.set(cx,y,cz+4,FarmPainter.AIR,0);
-        for(int y=bottom+1;y<=ceiling-1;y++) p.set(cx,y,cz+3,FarmPainter.AIR,0);
-        for(int y=bottom+1;y<=this.h;y++) p.set(cx,y,cz+4,FarmPainter.LADDER,4);
+        for(int y=bottom+1;y<=this.h+1;y++) cellarSet(p,cx,cz,0,y,4,FarmPainter.AIR,0);
+        for(int y=bottom+1;y<=ceiling-1;y++) cellarSet(p,cx,cz,0,y,3,FarmPainter.AIR,0);
+        for(int y=bottom+1;y<=this.h;y++) cellarSet(p,cx,cz,0,y,4,FarmPainter.LADDER,4);
     }
 }
