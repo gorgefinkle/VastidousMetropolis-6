@@ -34,10 +34,12 @@ import java.util.Set;
  * stream (the field `extra`), kept apart from the one the original plan uses, so
  * with those options at 0 every cell is planned exactly as it was before.
  *
- * The first 4 blocks along the cell's west and north edges belong to the dirt
- * road strips (see FarmRoads). Fields stand back from a strip that exists; where
- * there is none they run to the cell edge, so neighbouring fields are only
- * separated by their own broken fences. There is no path around any field.
+ * Farm boundaries can carry shared dirt access spines, but are not painted
+ * automatically. A boundary segment is only built when a real farm site asks
+ * for access and the spine reaches an ordinary paved street. Each farm site
+ * has its own driveway into the shared spine; unused boundaries remain meadow.
+ * Fields are laid out as separate plots and the access routes stay on their
+ * edges rather than cutting across crop interiors.
  *
  * Fields are found by taking the largest rectangle of free, same-height farm
  * chunks, again and again, so they follow the shape of the region instead of
