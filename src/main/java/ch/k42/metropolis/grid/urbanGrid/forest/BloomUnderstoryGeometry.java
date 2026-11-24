@@ -98,7 +98,8 @@ public final class BloomUnderstoryGeometry {
                 P next=new P(x+Math.cos(angle)*lean*t*t+Math.sin(t*4.2+angle)*.42*t,
                         ground+1+(height-1)*t,
                         z+Math.sin(angle)*lean*t*t+Math.cos(t*3.7+angle)*.36*t);
-                groundedTube(previous,next,1.25-.67*t,.58);
+                if(i==1) groundedTube(previous,next,1.25-.67*t,.58);
+                else tube(previous,next,1.25-.67*t,.58);
                 previous=next;
             }
             tuft(top,3.3,2.25,3.0,hash(seed,91));
