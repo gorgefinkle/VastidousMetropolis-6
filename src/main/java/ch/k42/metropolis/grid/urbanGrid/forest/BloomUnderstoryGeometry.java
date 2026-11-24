@@ -68,8 +68,8 @@ public final class BloomUnderstoryGeometry {
                     if(remain<-.25)continue;
                     int wx=(int)Math.round(q.x)+ox,wz=(int)Math.round(q.z)+oz;
                     if(!terrain.allows(wx,wz))continue;
-                    int top=(int)Math.round(q.y+Math.sqrt(Math.max(0.0,remain)));
                     int floor=terrain.groundAt(wx,wz)+1;
+                    int top=Math.max((int)Math.round(q.y+Math.sqrt(Math.max(0.0,remain))),floor+2);
                     for(int y=floor;y<=top;y++)sink.set(wx,y,wz,wood+"[axis=y]");
                 }
             }
