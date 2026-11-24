@@ -470,25 +470,26 @@ final class FarmGreenhouse extends FarmFeature {
     */
    private void propagationBed(FarmPainter p, int u, int v) {
       if (v != 1 && v != this.width - 2) {
-         // Narrow auxiliary trays between the main benches.
-         if (u % 3 == 1 && (v & 1) == 0) {
+         // Narrow auxiliary trays sit one step farther from the sloping roof.
+         if (u % 3 == 1 && (v == 2 || v == this.width - 3)) {
             this.put(p, u, v, 1, PLANKS, 1);
             this.put(p, u, v, 2, FARMLAND_B, 7);
             if (this.rnd(u, v, 1, 1761) < 0.78) {
-               this.put(p, u, v, 3, (v & 2) == 0 ? FarmPainter.CARROTS : FarmPainter.WHEAT, 1);
+               this.put(p, u, v, 3, v < this.width / 2 ? FarmPainter.CARROTS : FarmPainter.WHEAT, 1);
             }
          }
          return;
       }
-      if (u % 5 == 0) this.put(p, u, v, 1, FarmPainter.FENCE, 0);
-      this.put(p, u, v, 2, PLANKS, 1);
-      this.put(p, u, v, 3, FARMLAND_B, 7);
+      // The main bench uses raised farmland with fence legs. Crops stay below
+      // the roof eave instead of replacing the lower glass course.
+      if (u % 5 == 0) this.put(p, u, v, 0, FarmPainter.FENCE, 0);
+      this.put(p, u, v, 1, FARMLAND_B, 7);
       double seedling = this.rnd(u, v, 1, 1762);
       if (seedling < 0.84) {
          int crop = (v == 1) ? FarmPainter.CARROTS : FarmPainter.WHEAT;
-         this.put(p, u, v, 4, crop, 1);
+         this.put(p, u, v, 2, crop, 1);
       } else if (seedling < 0.94) {
-         this.put(p, u, v, 4, FarmPainter.TALL_GRASS, 1);
+         this.put(p, u, v, 2, FarmPainter.TALL_GRASS, 1);
       }
    }
 
