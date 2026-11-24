@@ -622,14 +622,14 @@ public class MetropolisGenerator extends ChunkGenerator {
          try {
             Bukkit.getScheduler().runTaskLater(MetropolisGenerator.this.plugin, () -> {
                long followUpDelayTicks = 1L;
+               boolean asyncInFlight = false;
+               DiskDeferredChunkQueue.Chunk job = null;
                try {
-                  DiskDeferredChunkQueue.Chunk job = this.deferred.poll(System.nanoTime());
+                  job = this.deferred.poll(System.nanoTime());
                   if (job == null) {
                      long retryDelay = this.deferred.nextRetryDelayMillis();
                      followUpDelayTicks = retryDelay <= 0L ? 1L
                              : Math.max(1L, Math.min(1200L, (retryDelay + 49L) / 50L));
-                     this.drainScheduled.set(false);
-                     if (this.deferred.hasPending()) this.scheduleDrain(followUpDelayTicks);
                      return;
                   }
 
@@ -638,11 +638,13 @@ public class MetropolisGenerator extends ChunkGenerator {
                   // load it from the server-thread drain: doing so can enter
                   // ChunkTaskScheduler/lighting while a player tick is waiting
                   // for the same chunk, reproducing the watchdog deadlock.
-                  this.owner.getChunkAtAsync(job.x(), job.z(), false, false)
+                  asyncInFlight = true;
+                  DiskDeferredChunkQueue.Chunk staged = job;
+                  this.owner.getChunkAtAsync(staged.x(), staged.z(), false, false)
                           .whenComplete((loaded, loadFailure) -> {
                              try {
                                 Bukkit.getScheduler().runTask(MetropolisGenerator.this.plugin,
-                                        () -> this.finishDeferredLoad(job, loaded, loadFailure));
+                                        () -> this.finishDeferredLoad(staged, loaded, loadFailure));
                              } catch (RuntimeException schedulingFailure) {
                                 try {
                                    this.deferred.retry(System.nanoTime());
@@ -650,32 +652,26 @@ public class MetropolisGenerator extends ChunkGenerator {
                                    schedulingFailure.addSuppressed(retryFailure);
                                 }
                                 Minions.w("Could not schedule deferred populate completion for chunk [%d,%d]; job retained: %s",
-                                        job.x(), job.z(), schedulingFailure);
+                                        staged.x(), staged.z(), schedulingFailure);
                                 this.reportPending();
                                 this.drainScheduled.set(false);
                                 if (this.deferred.hasPending()) this.scheduleDrain(20L);
                              }
                           });
-                  // Keep the single-flight token until the async load and the
-                  // actual population callback have both completed.
-                  return;
                } catch (IOException | RuntimeException failure) {
+                  if (job != null && asyncInFlight) {
+                     try { this.deferred.retry(System.nanoTime()); }
+                     catch (RuntimeException retryFailure) { failure.addSuppressed(retryFailure); }
+                  }
                   Minions.w("Deferred Metropolis population could not be staged; durable job retained: %s", failure);
                   Minions.e(failure);
-                  try {
-                     // poll() may have made a job active before a later
-                     // operation failed. retry() is harmless only in that case.
-                     this.deferred.retry(System.nanoTime());
-                  } catch (RuntimeException retryFailure) {
-                     failure.addSuppressed(retryFailure);
-                  }
                   followUpDelayTicks = 20L;
+                  asyncInFlight = false;
                } finally {
-                  // The async path returns above with the token intentionally
-                  // held; its completion callback releases it.
-                  if (this.deferred.inMemory() == 0 && !this.deferred.hasPending()) {
-                     this.drainScheduled.set(false);
-                  } else if (followUpDelayTicks != 1L) {
+                  // The single-flight token remains held only while the
+                  // asynchronous disk load is outstanding. Empty/cooling
+                  // queues and synchronous staging failures release it here.
+                  if (!asyncInFlight) {
                      this.drainScheduled.set(false);
                      if (this.deferred.hasPending()) this.scheduleDrain(followUpDelayTicks);
                   }
