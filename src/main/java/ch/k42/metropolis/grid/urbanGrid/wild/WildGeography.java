@@ -170,10 +170,12 @@ public final class WildGeography {
    public double suitability(WildBiome biome, int x, int z) {
       if (biome == WildBiome.COASTAL_DUNES) return coastalProximity(x, z);
       if (biome == WildBiome.VOLCANIC_BARRENS) {
-         // Biome ownership describes one broad inland limestone massif. The
-         // mass is excluded from ocean shores, main rivers and accepted creeks;
-         // its own valley field only carves the interior after placement.
-         return karstInlandSuitability(x,z);
+         // Preserve the original fracture-habitat footprint: inland distance
+         // is an exclusion mask, not the habitat itself. Replacing the
+         // landform mask with this distance alone made nearly every inland
+         // column Karst and starved Bloomlands in the production picker.
+         return KarstLandforms.habitat(this.reliefSeed,x,z)
+                 * karstInlandSuitability(x,z);
       }
       double rain = .5 + .5 * rainfall.fbm(x / 1450.0, z / 1450.0, 3, .55);
       double temp = .5 + .5 * temperature.fbm(x / 2100.0, z / 2100.0, 3, .5);
