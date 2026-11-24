@@ -187,6 +187,14 @@ public final class ForestGenerator {
          int[] away = PluginConfig.getWildKeepAwayChunks();
          int cap = 0;
          for (int i = 0; i < this.awayBlocks.length && i < away.length; i++) {
+            // Karstlands get their city separation from the complete mountain
+            // range reserved around each province in WildLayers, not from an
+            // artificial keep-away hole around city/farm boundaries. Ignore
+            // stale user-configured values for this retired special case too.
+            if (WildBiome.ALL[i] == WildBiome.VOLCANIC_BARRENS) {
+               this.awayBlocks[i] = 0.0;
+               continue;
+            }
             this.awayBlocks[i] = away[i] * 16.0;
             cap = Math.max(cap, away[i]);
          }

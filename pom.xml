@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.9-R14.17-Growth-Timeout-Shutdown-Guard-DEV</version>
+    <version>0.1.9-R14.18-Branch-Growth-Throughput-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.17 Growth Timeout Shutdown Guard)</name>
-    <description>Prevents branch-growth timeout callbacks from rescheduling during plugin shutdown; retains R14.16 mushroom cap clearance and R14.15 creek-origin uniqueness</description>
+    <name>Metropolis for Paper 26.2 (R14.18 Branch Growth Throughput)</name>
+    <description>Removes artificial branch-growth flush throttles, bounds cache memory, adds combined Chunky backpressure, and encloses Karstlands with mountain ranges</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_DEV</finalName>
+        <finalName>Metropolis_R14_18_Branch_Growth_Throughput_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

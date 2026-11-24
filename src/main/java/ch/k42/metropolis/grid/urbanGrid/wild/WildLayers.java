@@ -192,8 +192,7 @@ final class WildLayers {
               seedHash ^ 0x4b41525354L, Math.max(0, slots - bloomCount));
       placeRareGroups(labels, occupied, WildBiome.BLOOMLANDS.ordinal(),
               bloomCount, tileX, tileZ, side, margin, 0x424c4f4f);
-      placeRareGroups(labels, occupied, WildBiome.VOLCANIC_BARRENS.ordinal(),
-              karstCount, tileX, tileZ, side, margin, 0x4b415253);
+      placeKarstGroupsWithMountainRing(labels, occupied, karstCount, tileX, tileZ, groups);
       return labels;
    }
 
@@ -204,6 +203,60 @@ final class WildLayers {
       double roll = (seed >>> 11) * (1.0 / (1L << 53));
       if (roll < fraction && count < maximum) count++;
       return count;
+   }
+
+   /**
+    * A Karstlands province is a basin inside a mountain range, not an exposed
+    * biome that relies on a city-distance exclusion radius. Reserve its full
+    * eight-neighbour ring as mountains on the same physical rare-province
+    * lattice. The two-cell-wide Karst core is therefore enclosed on the north,
+    * south, east, west and all four diagonal sides by a complete mountain belt.
+    *
+    * The ring is accepted atomically: if any of its eight mountain cells or
+    * the central Karst cell is already reserved by another rare province, try
+    * another deterministic slot rather than emitting a broken/partial range.
+    */
+   private void placeKarstGroupsWithMountainRing(byte[] labels, boolean[] occupied,
+                                                  int count, int tileX, int tileZ, int groups) {
+      final int margin = 2; // one empty macro-cell beyond the mountain ring at every sector edge
+      final int side = Math.max(1, groups - margin * 2);
+      final int slots = side * side;
+      for (int i = 0; i < count; i++) {
+         int start = (int) Math.floorMod(this.hash(0x4b415253 + i, tileX, tileZ), (long) slots);
+         boolean placed = false;
+         for (int attempt = 0; attempt < slots; attempt++) {
+            int slot = (start + attempt) % slots;
+            int localX = margin + slot % side;
+            int localZ = margin + slot / side;
+            int center = localZ * groups + localX;
+            boolean free = !occupied[center];
+            for (int dz = -1; dz <= 1 && free; dz++) {
+               for (int dx = -1; dx <= 1; dx++) {
+                  if (dx == 0 && dz == 0) continue;
+                  int neighbour = (localZ + dz) * groups + localX + dx;
+                  if (occupied[neighbour]) {
+                     free = false;
+                     break;
+                  }
+               }
+            }
+            if (!free) continue;
+
+            occupied[center] = true;
+            labels[center] = (byte) (WildBiome.VOLCANIC_BARRENS.ordinal() + 1);
+            for (int dz = -1; dz <= 1; dz++) {
+               for (int dx = -1; dx <= 1; dx++) {
+                  if (dx == 0 && dz == 0) continue;
+                  int neighbour = (localZ + dz) * groups + localX + dx;
+                  occupied[neighbour] = true;
+                  labels[neighbour] = (byte) (WildBiome.MOUNTAINS.ordinal() + 1);
+               }
+            }
+            placed = true;
+            break;
+         }
+         if (!placed) return; // no partial Karst range if the tile is saturated
+      }
    }
 
    private void placeRareGroups(byte[] labels, boolean[] occupied, int biomeOrdinal,

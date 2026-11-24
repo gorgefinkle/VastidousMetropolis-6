@@ -143,7 +143,7 @@ generator:
       oldGrowth: 7                        # humid old conifer forest with mossy earth and mature canopy
       deciduous: 9                        # broadleaf woodland with oak and birch; gentle slopes
       coastalDunes: 4                     # coastal land only, within duneInlandBlocks of the actual ocean shore
-      karstlands: 4                       # rare fractured-limestone drainage provinces; remains less common than ordinary wilderness biomes
+      karstlands: 4                       # rare fractured-limestone basins; each is enclosed by a full mountain ring on all eight sides
       bloomlands: 2                       # rarest biome: giant-fungus and willow provinces
     geography:
       riverWetlandReachChunks: 12          # radius from ACTUAL river banks, not lattice water reservations (1..24 chunks)
@@ -151,7 +151,7 @@ generator:
       minimumRegionBlocks: 480             # minimum-size averaging for the small geographic habitats; karst fracture valleys are exempt so their long narrow network is not erased
       wetlandCoreStrengthPercent: 86       # how strongly suitable river/coastal wetlands replace the background biome (0..92)
       duneCoreStrengthPercent: 86          # higher = stronger dune cores on exposed sandy coasts (0..92)
-      volcanicCoreStrengthPercent: 88       # legacy config key; strength of the Karstlands fracture-habitat core bias (0..92)
+      volcanicCoreStrengthPercent: 88       # legacy config key; strength of the Karstlands fracture-habitat core bias (0..92); city spacing comes from its mountain ring
     keepAway:                              # chunks from the nearest farm or city block at which a biome reaches full strength. it grows in from nothing at 40% of that distance, so there is none closer: farm beside forest or mountains looks natural, farm beside desert or mesa does not. 0 = may touch the cities. the wilderness between two cities' farm bands is only about 46 chunks wide at the default city spacing, so keep these well under that or the biome hardly appears. the shares above are measured without this, so a kept-away biome ends up with a little less than its share
       mountains: 0
       desert: 14
@@ -160,7 +160,7 @@ generator:
       dryForest: 8
       wetlands: 2
       oldGrowth: 5
-      karstlands: 6
+      karstlands: 0                       # legacy value ignored at runtime; mountain enclosure supplies natural city spacing
       bloomlands: 8
     transitions:
       - "forest>desert=dryForest"

@@ -41,6 +41,8 @@ public final class ChunkyMemoryValve {
     private static final long MIN_FREE_PROBE = ChunkyBackpressurePolicy.MIN_FREE_PROBE;
 
     private static final Map<String, Integer> PENDING = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> DEFERRED = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> GROWTH = new ConcurrentHashMap<>();
     private static final Map<String, State> STATES = new HashMap<>(); // main thread only
     private static final AtomicBoolean STARTED = new AtomicBoolean();
     private static volatile boolean missingServiceWarned;
@@ -68,9 +70,22 @@ public final class ChunkyMemoryValve {
 
     public static void startFromPluginEnable() { startMonitorIfNeeded(); }
 
+    /** Updates durable deferred-populate jobs for one world. */
     public static void pending(World world, int count) {
+        updateQueue(world, DEFERRED, count);
+    }
+
+    /** Updates cached, per-building branch-growth jobs for one world. */
+    public static void growthPending(World world, int count) {
+        updateQueue(world, GROWTH, count);
+    }
+
+    private static void updateQueue(World world, Map<String, Integer> source, int count) {
         if (world == null) return;
-        PENDING.put(world.getName(), Math.max(0, count));
+        String name = world.getName();
+        source.put(name, Math.max(0, count));
+        PENDING.put(name, ChunkyBackpressurePolicy.combinedQueueSize(
+                DEFERRED.getOrDefault(name, 0), GROWTH.getOrDefault(name, 0)));
         // Population may be reentrant through WorldEdit and chunk loads.
         // Never schedule Bukkit tasks from that callback; onEnable owns startup.
     }
@@ -84,7 +99,7 @@ public final class ChunkyMemoryValve {
                 return;
             }
             Bukkit.getScheduler().runTaskTimer(plugin, ChunkyMemoryValve::tick, 20L, 20L);
-            Bukkit.getLogger().info("[Metropolis] Chunky heap guard enabled: pause 74% (hard 86%), normal resume 68%; stable recovery band <=82% after 30s with headroom, queue <=128.");
+            Bukkit.getLogger().info("[Metropolis] Chunky heap guard enabled: pause 74% (hard 86%), normal resume 68%; stable recovery band <=82% after 30s with headroom, combined deferred/growth queue <=128.");
         } catch (RuntimeException | LinkageError ex) {
             STARTED.set(false);
             Bukkit.getLogger().severe("[Metropolis] Chunky heap guard NOT SCHEDULED: " + ex);
@@ -126,7 +141,7 @@ public final class ChunkyMemoryValve {
                 for (int count : PENDING.values()) deferred += count;
                 log.info("[Metropolis] GENERATION HEAP AUDIT: used=" + mib(used)
                         + " MiB, max=" + mib(max) + " MiB (" + pct(usage)
-                        + "%), free=" + mib(remaining) + " MiB, deferred=" + deferred
+                        + "%), free=" + mib(remaining) + " MiB, queuedWork=" + deferred
                         + ", " + gcStats() + ", " + retentionStats());
             }
             for (World world : Bukkit.getWorlds()) {
