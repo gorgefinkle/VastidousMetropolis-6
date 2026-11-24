@@ -195,7 +195,7 @@ final class FarmLayout {
       }
       boolean[][] used = new boolean[n][n];
       Random r = new Random(FarmRandom.hash(this.seed, this.cellX, this.cellZ, 101));
-      // A second stream for everything added later (modern compounds, nurseries, round barns, outbuildings). Kept apart from r so a
+      // A second stream for everything added later (modern compounds, nurseries, round barns, outbuildings, farmhouses, bunkers and the silo). Kept apart from r so a
       // cell that gets none of them is planned exactly as it was before they existed.
       this.extra = new Random(FarmRandom.hash(this.seed, this.cellX, this.cellZ, 104));
       if (r.nextInt(100) < PluginConfig.getFarmFarmsteadPercent()) {
