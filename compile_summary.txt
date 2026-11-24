@@ -1,12 +1,13 @@
-R14.15 DEV — One Creek Origin per City
+R14.16 DEV — Mushroom Cap / Stem Occlusion
 Java target: 25
 Paper API: 26.2.build.129-stable
 
-R14.15 retains the R14.14 Bloomlands minimum province dimensions, matching fungal landmark picker seed, broad-core biome teleport validation, and R14.13 inland Karst/open landbridge/deep geology. It corrects the creek-origin uniqueness gap:
-- Creek-origin schematics are fixed landmarks supplied by a separate FixedPlanner; they previously bypassed the normal LandmarkPlanner's per-city uniqueness decision.
-- Each accepted creek-origin park is associated with the exact generated HighwayNetwork.City containing its park centre.
-- All viable 64x64 host-tile candidates inside that city's actual box are enumerated and arbitrated by a deterministic unsigned site-rank. Exactly one creek origin can be accepted in that city, independent of tile generation/query order.
-- Candidate origins outside a present highway-city box retain their previous behavior.
-- QA verifies stable one-winner-per-city arbitration and city-box lookup at negative and positive world coordinates.
+R14.16 fixes a visible fungal landmark geometry defect. The giant mushroom trunk previously continued to a fixed height even when one of the cap profiles curved down through that height. In those variants the mushroom_stem blocks passed through the cap and appeared on the upper surface.
 
-The package remains a DEV build pending automated validation and in-world testing.
+The geometry now derives the lowest cap voxel for each horizontal column after assembling the complete cap/crown (including branch caps). Trunk voxels are emitted only below that cap underside in the same column. This keeps the trunk connected to the underside while preventing it from occupying or emerging above the cap. The cap profile, species selection, footprint, and site/terrain ownership are unchanged.
+
+QA/R14_16/run_mushroom_cap_stem_probe.sh exercises all six generated mushroom profiles over 96 deterministic seed/site combinations and asserts that no visible stem voxel reaches or crosses the cap in any shared vertical column.
+
+R14.16 retains R14.15 one-creek-origin-per-city arbitration, R14.14 Bloomlands province sizing and production fungal landmark picker corrections, and the R14.13 inland Karst/open landbridge work.
+
+The package remains a DEV build pending automated validation and in-world visual testing.
