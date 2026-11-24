@@ -362,12 +362,9 @@ final class FarmLayout {
             return;
          }
       }
-      // No road to reach: still build the farm, just without a driveway.
-      for (int[] c : corners) {
-         if (this.blockFree(gy, used, c[0], c[1]) && this.tryFarmstead(r, gy, used, c[0], c[1], -1)) {
-            return;
-         }
-      }
+      // A farmstead is a road-served site. If neither candidate edge reaches
+      // a paved street through a valid dirt strip, leave this cell as fields
+      // rather than place an isolated compound with no usable access.
    }
 
    private boolean tryFarmstead(Random r, int[][] gy, boolean[][] used, int a0, int c0, int side) {
@@ -601,11 +598,8 @@ final class FarmLayout {
             return true;
          }
       }
-      for (int[] cf : corners) {
-         if (this.tryModern(gy, used, cf, -1)) {
-            return true;
-         }
-      }
+      // Do not create an isolated modern compound as a fallback. Every
+      // placed farm site must have a real road-facing entrance and driveway.
       return false;
    }
 
@@ -715,7 +709,7 @@ final class FarmLayout {
       if (bs != null) {
          this.features.add(new FarmModernBarn.Bunker(bs[0], bs[1], bAx, x.nextBoolean(), 24, 9, h, this.seed));
       }
-      int silos = 2 + x.nextInt(2);
+      int silos = 1 + x.nextInt(2);
       for (int i = 0; i < silos; i++) {
          int[] s = this.findSpot(x, 7, 7, 3, sLoX, sLoZ, ux1 - 3 - 6, uz1 - 3 - 6);
          if (s != null) {
@@ -724,7 +718,7 @@ final class FarmLayout {
       }
       // a machine shed (the long pole barn), a windmill perhaps, and the rest of the yard
       this.plantBigExtras(h, ux0, uz0, ux1, uz1, false);
-      if (x.nextInt(100) < 60) {
+      if (x.nextInt(100) < 28) {
          boolean ax = x.nextBoolean();
          int pl = FarmOutbuildings.PoleBarn.lengthOf(2);
          int pw = ax ? pl + 2 : 13;
@@ -739,7 +733,7 @@ final class FarmLayout {
       // so an auger elevator or harvester depot never intersects the barns,
       // loading drive or nearby fields. The two silhouettes are intentionally
       // very different, rather than recoloured versions of the same barn.
-      if (x.nextInt(100) < 82) {
+      if (x.nextInt(100) < 38) {
          int style = x.nextBoolean() ? FarmIndustrial.ELEVATOR : FarmIndustrial.DEPOT;
          boolean ax = x.nextBoolean();
          int bl = FarmIndustrial.length(style), wd = FarmIndustrial.width(style);
