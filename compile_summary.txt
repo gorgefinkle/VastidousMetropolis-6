@@ -1,11 +1,12 @@
-R14.14 DEV — Bloomlands Province and Landmark Fix
+R14.15 DEV — One Creek Origin per City
 Java target: 25
 Paper API: 26.2.build.129-stable
 
-R14.14 retains the R14.13 inland Karst, open landbridge, deep geology, queue/backpressure, Morphomos and ocean ecology work, and corrects:
-- Bloomlands and Karst use a dedicated rare-habitat lattice with a minimum 512-block rare cell (at least 1,024 blocks across each 2x2 province), independent of the common wilderness scale/zoom settings.
-- Giant-mushroom, companion-tree and Mother Willow placement now sample the same salted per-column biome hash as the terrain painter. Previously the biome decorator queried a different field and rejected most valid Bloomlands landmarks.
-- /metrobiome tp candidates now require a sustained 192-block field-and-planner-owned core, rejecting isolated boundary slivers before loading a destination chunk.
-- QA covers every supported wilderness scale/zoom combination and the exact production picker/giant-mushroom/Mother Willow footprint tests.
+R14.15 retains the R14.14 Bloomlands minimum province dimensions, matching fungal landmark picker seed, broad-core biome teleport validation, and R14.13 inland Karst/open landbridge/deep geology. It corrects the creek-origin uniqueness gap:
+- Creek-origin schematics are fixed landmarks supplied by a separate FixedPlanner; they previously bypassed the normal LandmarkPlanner's per-city uniqueness decision.
+- Each accepted creek-origin park is associated with the exact generated HighwayNetwork.City containing its park centre.
+- All viable 64x64 host-tile candidates inside that city's actual box are enumerated and arbitrated by a deterministic unsigned site-rank. Exactly one creek origin can be accepted in that city, independent of tile generation/query order.
+- Candidate origins outside a present highway-city box retain their previous behavior.
+- QA verifies stable one-winner-per-city arbitration and city-box lookup at negative and positive world coordinates.
 
-Build and full QA results are recorded by the R14.14 GitHub Actions run associated with this commit. The package remains a DEV build pending visual in-world verification.
+The package remains a DEV build pending automated validation and in-world testing.
