@@ -440,7 +440,7 @@ public final class ForestTrees {
    }
 
    /** Accept only ground-hugging fallen trunks, with no unsupported bridges or water overlap. */
-   static boolean safeFallenPath(GroundLookup ground, int ox, int oz, int len, boolean alongX) {
+   private boolean safeFallenPath(GroundLookup ground, int ox, int oz, int len, boolean alongX) {
       int previous = ground.groundAt(ox, oz);
       for (int i = 0; i < len; i++) {
          int x = ox + (alongX ? i : 0);
@@ -449,7 +449,8 @@ public final class ForestTrees {
          int h = ground.groundAt(x, z);
          // Adjacent logs can touch at a corner, as intended; an elevation
          // jump larger than one would produce a suspended bridge or a gap.
-         if (h >= 249 || (i != 0 && Math.abs(h - previous) > 1)) return false;
+         if (h < this.chunk.getWorld().getMinHeight() || h >= this.chunk.getWorld().getMaxHeight() - 1
+                  || (i != 0 && Math.abs(h - previous) > 1)) return false;
          previous = h;
       }
       return true;
