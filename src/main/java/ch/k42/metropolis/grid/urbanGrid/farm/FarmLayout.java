@@ -203,6 +203,8 @@ final class FarmLayout {
       if (this.extra.nextInt(100) < PluginConfig.getFarmGreenhouse()) {
          this.planNursery(gy, used);
       }
+      this.planHiddenBunker(gy, used);
+      this.planMissileSilo(gy, used);
       this.planFields(r, gy, used);
    }
 
@@ -347,6 +349,36 @@ final class FarmLayout {
          for (int j = c; j <= d; j++) {
             used[i][j] = true;
          }
+      }
+   }
+
+   /** Rare concealed refuge, kept out of fields by reserving its 2x2-chunk footprint. */
+   private void planHiddenBunker(int[][] gy, boolean[][] used) {
+      if (this.extra.nextInt(100) >= 10) return;
+      int startX=this.extra.nextInt(CELL_CHUNKS-1), startZ=this.extra.nextInt(CELL_CHUNKS-1);
+      for(int n=0;n<(CELL_CHUNKS-1)*(CELL_CHUNKS-1);n++) {
+         int a=(startX+n)%(CELL_CHUNKS-1);
+         int c=(startZ+(startX+n)/(CELL_CHUNKS-1))%(CELL_CHUNKS-1);
+         if(!this.rectFree(gy,used,a,a+1,c,c+1)) continue;
+         int cx=this.x0+a*16+16, cz=this.z0+c*16+16;
+         this.features.add(new FarmBunker(cx,cz,gy[a][c],this.seed,this.extra.nextInt(3)));
+         this.markUsed(used,a,a+1,c,c+1);
+         return;
+      }
+   }
+
+   /** Extremely rare sealed military installation; never replaces a farmstead or greenhouse. */
+   private void planMissileSilo(int[][] gy, boolean[][] used) {
+      if (this.extra.nextInt(100) >= 2) return;
+      int startX=this.extra.nextInt(CELL_CHUNKS-1), startZ=this.extra.nextInt(CELL_CHUNKS-1);
+      for(int n=0;n<(CELL_CHUNKS-1)*(CELL_CHUNKS-1);n++) {
+         int a=(startX+n)%(CELL_CHUNKS-1);
+         int c=(startZ+(startX+n)/(CELL_CHUNKS-1))%(CELL_CHUNKS-1);
+         if(!this.rectFree(gy,used,a,a+1,c,c+1)) continue;
+         int cx=this.x0+a*16+16, cz=this.z0+c*16+16;
+         this.features.add(new FarmMissileSilo(cx,cz,gy[a][c],this.seed));
+         this.markUsed(used,a,a+1,c,c+1);
+         return;
       }
    }
 
