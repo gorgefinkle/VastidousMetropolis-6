@@ -1,10 +1,10 @@
-# R14.23 — FARM access and diversity
+# R14.23 — FARM diversity and demand-driven access roads
 
 ## Purpose
 
-Rebalance FARM districts away from repeated warehouse / round-barn silhouettes and make every placed farm site reachable from a real paved street by a dirt access road.
+Rebalance FARM regions away from repeated warehouse / round-barn silhouettes and make every placed farm site reachable from a genuine paved street by a dirt access road.
 
-This release retains the existing building families and their assets. It changes selection, site composition, and road ownership rather than adding a post-generation repair pass.
+The changes operate inside the existing planner and painter. There is no post-generation cleanup, patching or road-repair pass.
 
 ## FARM balance defaults
 
@@ -19,28 +19,64 @@ This release retains the existing building families and their assets. It changes
 | Outbuilding chance | 78% | 75% |
 | Candidate road-line share | 70% | 100% |
 
-The road-line value is now a candidate-availability setting, not a road-generation probability. A boundary is only painted where a placed site has recorded an access gate and the line reaches an actual paved street.
+Only exact historical shipped defaults are migrated in an existing config. Other server-tuned values are retained.
 
-Only exact historical shipped defaults are migrated. Other configured values remain intact.
+The road-line setting now controls whether a boundary is available as a candidate access spine. It does not create a road by itself. The shipped value is 100% so a site can use any boundary with a real street connection; actual dirt blocks still require a site request.
 
-## Road model
+## Fields, farm sites and road ownership
 
-- Farmsteads and modern compounds are not placed unless one of their road-facing gates reaches a paved street through a valid farm boundary spine.
-- Standard greenhouse plots reserve a four-wide site entry lane before buildings are placed.
-- Commercial glasshouses and polytunnel banks extend their existing service/head lane to the paved-road-connected farm spine.
-- Each site records a deterministic road-access gate on the boundary line.
-- FarmRoads gathers gates from both cells touching a boundary and paints only the interval between each gate and its nearest paved-street endpoint.
-- Multiple sites can share an interval; unused line segments, dead ends, and empty grid corridors remain unpaved.
-- Field plots remain separate and their crop interiors are not used as road corridors.
+- Fields are planned as separate rectangular plots and retain their own boundaries and fences.
+- A farmstead or modern compound is only placed after one of its road-facing gates is confirmed to connect through a farm boundary to an ordinary paved street.
+- A nursery uses the same rule. Its driveway is reserved before the greenhouse and optional service shed are placed.
+- Standard gabled greenhouse access meets the actual open gable entrance. East- and south-facing sites use mirrored geometry.
+- Commercial glasshouses and polytunnel fields extend their service/head lane to a connected paved-road spine.
+- Each site records one access gate on its chosen farm-cell boundary.
+- The two cells touching a shared boundary contribute their site requests to one dirt-road spine.
+- FarmRoads paints only the minimal route interval from each recorded gate to its nearest paved street. Overlapping routes naturally share a trunk.
+- Empty boundary sections, parallel grid strips, unused tails, loops and disconnected stubs remain meadow.
+- Road corridors follow field edges and site aprons; they do not cut across crop interiors.
+- If a site cannot find a genuine street connection within the existing bounded search, it is not placed. It is never spawned disconnected and patched afterward.
 
-The road geometry remains chunk-local and deterministic. The FarmRoads route cache is cleared with the FarmLayout cache when settings are reloaded.
+The road-route cache is deterministic, bounded and cleared together with the FARM layout cache when configuration is reloaded.
+
+## Industrial operation variants
+
+Modern compounds select one primary operation family rather than automatically stacking the same combination of silos, bunkers, sheds and elevator/depot structures.
+
+The existing elevator and equipment depot remain, with reduced selection weight. The same industrial facility family now also supports:
+
+- Produce grading, packing and cold storage
+- Grain drying and cleaning
+- Irrigation pumping and filtration
+- Poultry production
+- Livestock sorting, weighing and loading
+- Compost and anaerobic biogas recovery
+
+The main barn remains the compound's primary livestock structure. Bunkers, silos, tool sheds and vehicles are selected according to the chosen operation, with lower ancillary clutter.
+
+## Greenhouse variants
+
+Existing GABLED, BAYS and HOOP families remain the underlying categories. Their new internal purposes are variants, not new independent categories:
+
+- Standard growing house
+- Propagation house with raised seedling benches
+- Research house with crop-trial beds and an enclosed rear laboratory
+- Expanded four- or five-bay commercial glasshouse
+- Collapsed commercial wing, confined to one bay/section while the other bays remain standing
+- Existing polytunnel fields and row greenhouses remain part of the mix
+
+## Survival material budget
+
+- The new industrial facilities use common stone, stone brick, terracotta, gravel, ordinary timber, glass and fences.
+- No iron blocks are used by the new industrial facility styles.
+- The modern barn's continuous iron-block ridge cap has been replaced with ordinary stone brick.
+- Existing iron bars remain only as small machine railings, ventilation hoops and livestock barriers.
+- The only remaining iron-block accents are the two small gearbox/hub details in the optional outbuilding windmill.
 
 ## Validation
 
-`QA/R14_23/run_farm_road_route_policy_probe.sh` verifies nearest-street selection, negative-coordinate handling, bounded site-to-street intervals, shared trunk intervals, and the absence of unused road tails.
+`QA/R14_23/run_farm_road_route_policy_probe.sh` checks nearest-street selection, negative coordinates, bounded gate-to-street intervals, shared trunk behavior and the absence of unused road tails.
 
-The R14.23 workflow also runs the full inherited Maven/Java 25 regression suite and packages exactly one current JAR plus the complete source archive.
+The R14.23 GitHub Actions workflow runs Java 25 Maven verification and the inherited world-generation regression suite, then packages exactly one current JAR and the complete source archive.
 
-## Important boundary condition
-
-A site is omitted when no candidate boundary route reaches an actual paved street within the existing 66-chunk search limit. This is intentional: an inaccessible farm building is not generated and then patched later. It is not treated as a connected site.
+The route policy probe validates route interval rules. A fresh generated FARM region still needs visual confirmation before merging or treating the changes as field-certified.
