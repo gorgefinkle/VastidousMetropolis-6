@@ -24,6 +24,8 @@ public final class BoundedRiverSites {
     private final Rules rules;
     private final Map<Long,Site> candidates = lru(), accepted = lru();
     private final Map<Long,List<Site>> tiles = lru();
+    /** City key -> winning host-tile key. Selection is seed-stable, not query-order dependent. */
+    private final Map<Long,Long> cityWinners = lru();
     private List<Variant> variants;
 
     public interface Rules {
@@ -35,6 +37,18 @@ public final class BoundedRiverSites {
         boolean existingWaterAt(int x,int z);
         boolean unrelatedWaterAt(int x,int z);
         default boolean unrelatedWaterAt(int x,int z,RiverProvider receiver) { return unrelatedWaterAt(x,z); }
+        /** Highway city containing the origin park centre, or null outside all present city boxes. */
+        default CityBounds cityAt(int chunkX,int chunkZ) { return null; }
+    }
+
+    /** Immutable city identity and inclusive box used to enumerate every potential origin tile. */
+    public static final class CityBounds {
+        public final long key;
+        public final int minX,minZ,maxX,maxZ;
+        public CityBounds(long key,int minX,int minZ,int maxX,int maxZ) {
+            if(minX>maxX||minZ>maxZ)throw new IllegalArgumentException("Invalid city bounds");
+            this.key=key;this.minX=minX;this.minZ=minZ;this.maxX=maxX;this.maxZ=maxZ;
+        }
     }
 
     private static final class Variant {
@@ -55,18 +69,20 @@ public final class BoundedRiverSites {
         public final int dryCandidatesBeforeResolution;
         public final BoundedRiverReservation.Exit exit;
         public final int minX,minZ,maxX,maxZ;
+        /** Null only when the origin park is outside all generated highway city boxes. */
+        public final CityBounds city;
         private final String id;
 
         private Site(long seed,long carrierSeed,int tileX,int tileZ,int x,int z,int w,int h,
                      Clipboard clipboard,Direction direction,ClipboardParcel.CreekOrigin origin,
                      BoundedRiverSegment river,BoundedRiverOwnershipPlan ownership,int dry,
-                     BoundedRiverReservation.Exit exit) {
+                     BoundedRiverReservation.Exit exit,CityBounds city) {
             this.seed=seed;this.carrierSeed=carrierSeed;
             this.hostTileX=tileX;this.hostTileZ=tileZ;
             this.lotBaseX=x;this.lotBaseZ=z;this.lotSizeX=w;this.lotSizeZ=h;
             this.clipboard=clipboard;this.direction=direction;this.origin=origin;
             this.river=river;this.ownership=ownership;
-            this.dryCandidatesBeforeResolution=dry;this.exit=exit;
+            this.dryCandidatesBeforeResolution=dry;this.exit=exit;this.city=city;
             int low=river.getAlongLoChunk(), high=river.getAlongHiChunk();
             int half=(int)Math.ceil(river.getEnvelopeHalfWidth())+2;
             int min=Integer.MAX_VALUE,max=Integer.MIN_VALUE;
@@ -203,7 +219,8 @@ public final class BoundedRiverSites {
             }catch(IllegalArgumentException ex){continue;}
             if(!ownership.audit().isEmpty())continue;
             if(rng.nextInt(100)>=RiverConfig.getCreekSiteChancePercent())return null;
-            return new Site(seed,riverSeed,tx,tz,bx,bz,w,h,clipboard,variant.rotation,origin,river,ownership,dry,exit);
+            CityBounds city=rules.cityAt(bx+w/2,bz+h/2);
+            return new Site(seed,riverSeed,tx,tz,bx,bz,w,h,clipboard,variant.rotation,origin,river,ownership,dry,exit,city);
         }
         return null;
     }
@@ -244,6 +261,14 @@ public final class BoundedRiverSites {
         if(accepted.containsKey(k))return accepted.get(k);
         Site choice=candidate(x,z);
         if(choice==null){accepted.put(k,null);return null;}
+        // Creek-origin schematics are fixed landmarks, but unlike the ordinary
+        // LandmarkPlanner they previously bypassed the one-per-city decision.
+        // Resolve all viable candidate tiles in this city and keep exactly one
+        // deterministic winner, regardless of which tile is requested first.
+        if(choice.city!=null && !isCityWinner(x,z,choice)) {
+            accepted.put(k,null);
+            return null;
+        }
         int radius=Math.max(1,Math.min(6,PluginConfig.getLandmarkCloneRadius()));
         for(int dx=-radius;dx<=radius;dx++)for(int dz=-radius;dz<=radius;dz++){
             if(dx==0&&dz==0)continue;
@@ -262,6 +287,36 @@ public final class BoundedRiverSites {
         }
         accepted.put(k,choice);return choice;
     }
+
+    private boolean isCityWinner(int tileX,int tileZ,Site site) {
+        long cityKey=site.city.key;
+        Long winner=cityWinners.get(cityKey);
+        if(winner==null && !cityWinners.containsKey(cityKey)) {
+            List<Long> tileKeys=new ArrayList<>();
+            List<Long> ranks=new ArrayList<>();
+            List<Long> cityKeys=new ArrayList<>();
+            int minTileX=Math.floorDiv(site.city.minX,TILE);
+            int maxTileX=Math.floorDiv(site.city.maxX,TILE);
+            int minTileZ=Math.floorDiv(site.city.minZ,TILE);
+            int maxTileZ=Math.floorDiv(site.city.maxZ,TILE);
+            for(int tx=minTileX;tx<=maxTileX;tx++) {
+                for(int tz=minTileZ;tz<=maxTileZ;tz++) {
+                    Site other=candidate(tx,tz);
+                    if(other==null || other.city==null || other.city.key!=cityKey) continue;
+                    tileKeys.add(key(tx,tz));
+                    ranks.add(siteRank(tx,tz));
+                    cityKeys.add(other.city.key);
+                }
+            }
+            long[] tk=new long[tileKeys.size()],rk=new long[ranks.size()],ck=new long[cityKeys.size()];
+            for(int i=0;i<tk.length;i++){tk[i]=tileKeys.get(i);rk[i]=ranks.get(i);ck[i]=cityKeys.get(i);}
+            long selected=CreekCityOriginPolicy.winnerTileKey(cityKey,ck,rk,tk);
+            cityWinners.put(cityKey,selected);
+            winner=selected;
+        }
+        return winner!=null && winner.longValue()==key(tileX,tileZ);
+    }
+
     private static boolean rectOverlap(int ax,int az,int bx,int bz,int cx,int cz,int dx,int dz){
         return ax<=dx&&cx<=bx&&az<=dz&&cz<=bz;
     }
@@ -291,6 +346,35 @@ public final class BoundedRiverSites {
         return s!=null&&x>=s.lotBaseX-1&&x<=s.lotBaseX+s.lotSizeX
                 &&z>=s.lotBaseZ-1&&z<=s.lotBaseZ+s.lotSizeZ&&!s.ownsRiverCell(x,z);
     }
+    /**
+     * Exact nearest distance to the accepted creek banks near a world-block
+     * point. Sites are enumerated by the tiles their actual bounded river and
+     * origin park touch; no generated-chunk state or coarse water sampling is
+     * involved. NaN means no accepted creek bank within the requested radius.
+     */
+    public synchronized double nearestBankDistanceBlocks(double blockX,double blockZ,double maxDistanceBlocks) {
+        if(!Double.isFinite(blockX)||!Double.isFinite(blockZ)||!Double.isFinite(maxDistanceBlocks)||maxDistanceBlocks<0)
+            return Double.NaN;
+        int chunkX=(int)Math.floor(blockX/16.0), chunkZ=(int)Math.floor(blockZ/16.0);
+        int tileX=Math.floorDiv(chunkX,TILE), tileZ=Math.floorDiv(chunkZ,TILE);
+        int rings=Math.max(1,Math.min(8,(int)Math.ceil(maxDistanceBlocks/(TILE*16.0))+1));
+        Set<Site> seen=new HashSet<>();
+        double best=Double.POSITIVE_INFINITY;
+        for(int dx=-rings;dx<=rings;dx++) for(int dz=-rings;dz<=rings;dz++) {
+            for(Site site:sitesCovering(tileX+dx,tileZ+dz)) {
+                if(!seen.add(site)) continue;
+                double along=site.river.isZBound()?blockZ:blockX;
+                double across=site.river.distanceFromCenterBlock(blockX,blockZ);
+                double width=site.river.widthAtBlock(along);
+                if(!Double.isFinite(across)||!Double.isFinite(width)) continue;
+                double bankHalf=width*.5+site.river.getFallbackBankMarginBlocks();
+                double distance=Math.max(0.0,Math.abs(across)-bankHalf);
+                if(distance<best) best=distance;
+            }
+        }
+        return best<=maxDistanceBlocks?best:Double.NaN;
+    }
+
     public synchronized List<Site> parksIn(int minX,int minZ,int maxX,int maxZ){
         List<Site> parks=new ArrayList<>();
         for(int tx=Math.floorDiv(minX,64);tx<=Math.floorDiv(maxX,64);tx++)

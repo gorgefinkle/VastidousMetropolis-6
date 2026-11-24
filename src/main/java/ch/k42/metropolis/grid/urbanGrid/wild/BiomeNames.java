@@ -42,6 +42,8 @@ public final class BiomeNames {
    public static Biome prairie() { return resolve(Biome.PLAINS, "PLAINS", "SUNFLOWER_PLAINS"); }
    public static Biome wetlands() { return resolve(Biome.PLAINS, "SWAMP", "MANGROVE_SWAMP"); }
    public static Biome oldGrowth() { return resolve(Biome.FOREST, "OLD_GROWTH_PINE_TAIGA", "OLD_GROWTH_SPRUCE_TAIGA", "TAIGA"); }
+   /** Bloomlands use a distinct forest tint/registry identity while retaining ordinary hostile-mob spawning. */
+   public static Biome bloomlands() { return resolve(Biome.FOREST, "DARK_FOREST", "OLD_GROWTH_BIRCH_FOREST", "FOREST"); }
    public static Biome deciduous() { return resolve(Biome.FOREST, "FOREST", "BIRCH_FOREST"); }
    public static Biome dunes() { return resolve(Biome.BEACH, "BEACH", "WINDSWEPT_SAVANNA"); }
    public static Biome volcanic() { return resolve(Biome.PLAINS, "STONY_PEAKS", "WINDSWEPT_GRAVELLY_HILLS"); }

@@ -15,6 +15,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.IllegalPluginAccessException;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,6 +25,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.TimeoutException;
 
 /**
  * /metrobiome tp <biome> -- progressively searches the planner's deterministic
@@ -31,8 +34,13 @@ import java.util.concurrent.ConcurrentMap;
  * column. There is no arbitrary user radius or small fixed search cap.
  */
 public final class CommandMetropolisBiome implements CommandExecutor, TabCompleter {
-   private static final int SAMPLE_STEP = 4;
+   // The final wilderness regions are hundreds of blocks across. A 32-block
+   // lattice finds their broad cores without spending most of the search on
+   // redundant samples; every candidate chunk is still verified column-by-column.
+   private static final int SAMPLE_STEP = 32;
    private static final int SAMPLES_PER_TICK = 96;
+   /** A stalled Paper chunk future must not hold a rare-biome search forever. */
+   private static final long DESTINATION_TIMEOUT_TICKS = 20L * 180L;
    /** Conservative bound from a lattice sample to a safe landing in its chunk. */
    private static final double LANDING_COVER_RADIUS = 23.0;
    private static final ConcurrentMap<UUID, Search> ACTIVE = new ConcurrentHashMap<>();
@@ -139,6 +147,8 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       private final double borderMinX, borderMaxX, borderMinZ, borderMaxZ;
       private final int maxRing;
       private final java.util.Set<Long> candidateChunks = ConcurrentHashMap.newKeySet();
+      private final java.util.Set<Long> plannerRejectedChunks = ConcurrentHashMap.newKeySet();
+      private final java.util.Set<Long> coreRejectedChunks = ConcurrentHashMap.newKeySet();
       private final List<Candidate> candidates = new ArrayList<>();
       private int ring;
       private long pointIndex;
@@ -146,6 +156,10 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       private boolean closed;
       private boolean resolving;
       private long scannedSamples;
+      private long destinationChunksChecked;
+      private long destinationGenerationFailures;
+      private long landingRejectedChunks;
+      private long safeLandingChunks;
       private long bestDistanceSquared = Long.MAX_VALUE;
       private int[] bestLanding;
       private long lastProgressMillis = System.currentTimeMillis();
@@ -240,10 +254,18 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             scannedSamples++;
             int chunkX = point[0] >> 4, chunkZ = point[1] >> 4;
             long chunkKey = ((long) chunkX << 32) ^ (chunkZ & 0xffffffffL);
-            if (candidateChunks.contains(chunkKey)) continue;
+            if (candidateChunks.contains(chunkKey) || plannerRejectedChunks.contains(chunkKey)
+                    || coreRejectedChunks.contains(chunkKey)) continue;
             try {
-               if (ForestGenerator.wildBiomeCandidateScore(generator, biome, point[0], point[1]) >= 0) {
-                  if (candidateChunks.add(chunkKey)) candidates.add(new Candidate(point[0], point[1], distanceSquared(point[0], point[1])));
+               int score = ForestGenerator.wildBiomeCandidateScore(generator, biome, point[0], point[1]);
+               if (score == -2) {
+                  plannerRejectedChunks.add(chunkKey);
+               } else if (score == -3) {
+                  coreRejectedChunks.add(chunkKey);
+               } else if (score >= 0) {
+                  if (candidateChunks.add(chunkKey)) {
+                     candidates.add(new Candidate(point[0], point[1], distanceSquared(point[0], point[1])));
+                  }
                }
             } catch (RuntimeException ex) {
                Minions.w("[METROBIOME] planner lookup failed for %s at %d,%d: %s",
@@ -266,8 +288,17 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          long now = System.currentTimeMillis();
          if (now - lastProgressMillis < 10000L) return;
          lastProgressMillis = now;
-         player.sendMessage("Still searching for " + MetropolisBiomeTargets.displayName(biome) + "... checked "
-                 + String.format(Locale.ROOT, "%,d", scannedSamples) + " planner positions so far.");
+         player.sendMessage("Still searching for " + MetropolisBiomeTargets.displayName(biome)
+                 + "... sampled " + String.format(Locale.ROOT, "%,d", scannedSamples) + " biome-field positions; "
+                 + String.format(Locale.ROOT, "%,d", candidateChunks.size() + plannerRejectedChunks.size() + coreRejectedChunks.size())
+                 + " chunks contain a biome match ("
+                 + String.format(Locale.ROOT, "%,d", candidateChunks.size()) + " broad-core planner-owned, "
+                 + String.format(Locale.ROOT, "%,d", plannerRejectedChunks.size()) + " rejected by ownership, "
+                 + String.format(Locale.ROOT, "%,d", coreRejectedChunks.size()) + " rejected as edge slivers); "
+                 + "destinations tested=" + String.format(Locale.ROOT, "%,d", destinationChunksChecked)
+                 + ", safe landings=" + String.format(Locale.ROOT, "%,d", safeLandingChunks)
+                 + ", no-safe-landing=" + String.format(Locale.ROOT, "%,d", landingRejectedChunks)
+                 + ", generation failures=" + String.format(Locale.ROOT, "%,d", destinationGenerationFailures) + ".");
       }
 
       private void processCandidates() {
@@ -279,12 +310,23 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             if (bestLanding != null && lowerBound * lowerBound >= bestDistanceSquared) continue;
             resolving = true;
             int chunkX = candidate.x >> 4, chunkZ = candidate.z >> 4;
+            destinationChunksChecked++;
             boolean generated = world.isChunkGenerated(chunkX, chunkZ);
             player.sendMessage(MetropolisBiomeTargets.displayName(biome) + " candidate found at "
                     + candidate.x + ", " + candidate.z + ". "
                     + (generated ? "Verifying the existing terrain..." : "Generating and verifying this destination chunk..."));
+            AtomicBoolean completed = new AtomicBoolean(false);
+            BukkitTask timeout = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+               if (!completed.compareAndSet(false, true)) return;
+               TimeoutException failure = new TimeoutException("destination chunk did not complete within 180 seconds");
+               Minions.w("[METROBIOME] destination chunk timed out at %d,%d; continuing biome search",
+                       candidate.x, candidate.z);
+               finishCandidate(candidate, null, failure);
+            }, DESTINATION_TIMEOUT_TICKS);
             try {
                world.getChunkAtAsync(chunkX, chunkZ, true).whenComplete((chunk, error) -> {
+                  if (!completed.compareAndSet(false, true)) return;
+                  timeout.cancel();
                   if (!plugin.isEnabled()) return;
                   try {
                      Bukkit.getScheduler().runTask(plugin, () -> finishCandidate(candidate, chunk, error));
@@ -293,7 +335,9 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
                   }
                });
             } catch (RuntimeException ex) {
+               if (completed.compareAndSet(false, true)) timeout.cancel();
                resolving = false;
+               destinationGenerationFailures++;
                Minions.w("[METROBIOME] async chunk request failed at %d,%d: %s", candidate.x, candidate.z, ex.toString());
                processCandidates();
             }
@@ -307,6 +351,7 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          if (!active()) { close(); return; }
          resolving = false;
          if (error != null || chunk == null) {
+            destinationGenerationFailures++;
             Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
             Minions.w("[METROBIOME] destination generation failed at %d,%d: %s", candidate.x, candidate.z,
                     cause == null ? "unknown error" : cause.toString());
@@ -322,11 +367,14 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             landing = null;
          }
          if (landing != null && insideBorder(landing[0], landing[2])) {
+            safeLandingChunks++;
             long distance = distanceSquared(landing[0], landing[2]);
             if (distance < bestDistanceSquared) {
                bestDistanceSquared = distance;
                bestLanding = landing;
             }
+         } else {
+            landingRejectedChunks++;
          }
          processCandidates();
       }
@@ -352,7 +400,15 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          close();
          if (landing == null) {
             player.sendMessage("No safe " + MetropolisBiomeTargets.displayName(biome)
-                    + " destination was found inside this world's border. The search did not use a fixed radius.");
+                    + " destination was found inside this world's border. Samples="
+                    + String.format(Locale.ROOT, "%,d", scannedSamples)
+                    + "; field-match chunks=" + String.format(Locale.ROOT, "%,d", candidateChunks.size() + plannerRejectedChunks.size())
+                    + " (planner-owned=" + String.format(Locale.ROOT, "%,d", candidateChunks.size())
+                    + ", ownership-rejected=" + String.format(Locale.ROOT, "%,d", plannerRejectedChunks.size()) + ")"
+                    + "; destination chunks tested=" + String.format(Locale.ROOT, "%,d", destinationChunksChecked)
+                    + " (safe=" + String.format(Locale.ROOT, "%,d", safeLandingChunks)
+                    + ", no-safe-landing=" + String.format(Locale.ROOT, "%,d", landingRejectedChunks)
+                    + ", generation-failed=" + String.format(Locale.ROOT, "%,d", destinationGenerationFailures) + ").");
             return;
          }
          Location destination = new Location(world, landing[0] + 0.5, landing[1], landing[2] + 0.5,

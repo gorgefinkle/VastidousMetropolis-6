@@ -1,0 +1,75 @@
+name: R14.13 Inland Karst, open landbridges and deep geology validation
+
+on:
+  push:
+    branches:
+      - feature/r14-11-karst-massif-bridge-rework
+      - feature/r14-12-bloomlands-final-calibration-release
+      - feature/r14-12-bloomlands-final-field-tested
+      - feature/r14-12-bloomlands-ci-release
+  pull_request:
+    branches:
+      - integration/morphomos-natural-family-bloomlands
+  workflow_dispatch:
+
+ # R14.13 release-candidate CI: inland Karst, open landbridge and deep geology QA with exact two-file packaging.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Maven clean verify
+        run: mvn -B -ntp clean verify
+      - name: Morphomos boundary-family probe
+        run: sh QA/R14_8/run_boundary_family_probe.sh
+      - name: Rare-biome appearance probe
+        run: sh QA/R14_8/run_wild_biome_appearance_probe.sh
+      - name: Full production Bloomlands picker probe
+        run: sh QA/R14_13/run_wild_biome_production_picker_probe.sh
+      - name: BUILD export durability probe
+        run: sh QA/R14_8/run_build_flag_exporter_probe.sh
+      - name: Disk deferred queue probe
+        run: |
+          mkdir -p target/qa-queue
+          javac -d target/qa-queue src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java QA/R14_6/DiskDeferredChunkQueueProbe.java
+          java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
+      - name: Chunky backpressure recovery policy probe
+        run: sh QA/R14_8/run_chunky_backpressure_policy_probe.sh
+      - name: Karst landbridge open-clearance and safe-floor probe
+        run: sh QA/R14_8/run_karst_landbridge_clearance_probe.sh
+      - name: Karst massif, deep-cut and buildable-upland probe
+        run: sh QA/R14_9/run_karst_mountain_profile_probe.sh
+      - name: Universal biome command target probe
+        run: sh QA/R14_10/run_metropolis_biome_target_probe.sh
+      - name: Underwater marine habitat probe
+        run: bash QA/R14_11/run_marine_habitat_probe.sh
+      - name: Assemble complete source archive
+        run: |
+          zip -r Metropolis_R14_13_Inland_Karst_Landbridges_Geology_SOURCE.zip \
+            .gitattributes .gitignore .github pom.xml compile_summary.txt \
+            README*.md QA src
+      - name: Assemble exact two-file development package
+        run: |
+          mkdir -p r14-13-package
+          cp target/Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV.jar r14-13-package/
+          cp Metropolis_R14_13_Inland_Karst_Landbridges_Geology_SOURCE.zip r14-13-package/
+          (cd r14-13-package && zip -q ../Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV_PACKAGE.zip ./*)
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV
+          if-no-files-found: error
+          path: |
+            target/Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV.jar
+            Metropolis_R14_13_Inland_Karst_Landbridges_Geology_SOURCE.zip
+            Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV_PACKAGE.zip
