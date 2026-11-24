@@ -61,7 +61,7 @@ jobs:
         run: |
           mkdir -p r14-16-package
           cp target/Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_DEV.jar r14-16-package/
-          cp Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_SOURCE.zip r14-15-package/
+          cp Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_SOURCE.zip r14-16-package/
           (cd r14-16-package && zip -q ../Metropolis_R14_16_Mushroom_Cap_Stem_Occlusion_DEV_PACKAGE.zip ./*)
       - name: Verify exact package contents
         run: |
