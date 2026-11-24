@@ -120,11 +120,23 @@ public final class MushroomGeometry {
             Integer previous=capBottomByColumn.get(key);
             if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
         }
+        // First retain the intended stalk ceiling in each column. Then root
+        // every stalk column at its own true terrain height. This matters on
+        // valley walls: a single centre-ground anchor leaves the uphill side
+        // of a broad stalk visibly suspended.
+        Map<Long,Integer> trunkTopByColumn=new HashMap<>();
         for(P q:trunk) {
             Integer capBottom=capBottomByColumn.get(columnKey(q.x,q.z));
             if(capBottom!=null&&q.y>=capBottom)continue;
-            if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
-                sink.set(q.x,q.y,q.z,STEM);
+            long key=columnKey(q.x,q.z);
+            Integer old=trunkTopByColumn.get(key);
+            if(old==null||q.y>old)trunkTopByColumn.put(key,q.y);
+        }
+        for(Map.Entry<Long,Integer> entry:trunkTopByColumn.entrySet()) {
+            int tx=(int)(entry.getKey()>>32),tz=(int)(long)entry.getKey();
+            if(!terrain.allows(tx,tz))continue;
+            int floor=terrain.groundAt(tx,tz)+1;
+            for(int ty=floor;ty<=entry.getValue();ty++)sink.set(tx,ty,tz,STEM);
         }
         for(P q:crown)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z)) {
             StringBuilder state=new StringBuilder(cap).append('[');
