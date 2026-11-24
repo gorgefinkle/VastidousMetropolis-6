@@ -43,8 +43,8 @@ final class FarmHouse extends FarmFeature {
         for(int rise=0;rise<=4;rise++) {
             int v0= -1+rise, v1=9-rise;
             for(int u=-1;u<=11;u++) {
-                set(p,u,v0,5+rise,53,2);
-                set(p,u,v1,5+rise,53,3);
+                set(p,u,v0,5+rise,53,axisX?2:0);
+                set(p,u,v1,5+rise,53,axisX?3:1);
             }
         }
         for(int u=0;u<11;u++) {
