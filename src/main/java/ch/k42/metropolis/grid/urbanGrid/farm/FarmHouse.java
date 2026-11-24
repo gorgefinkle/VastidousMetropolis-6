@@ -32,6 +32,8 @@ final class FarmHouse extends FarmFeature {
                 } else set(p,u,v,dy,FarmPainter.AIR,0);
             }
         }
+        set(p,5,0,1,64,0);
+        set(p,5,0,2,64,8);
         // Timber corners and a simple central chimney.
         for(int[] corner:new int[][]{{0,0},{0,8},{10,0},{10,8}})
             for(int dy=1;dy<=5;dy++) set(p,corner[0],corner[1],dy,FarmPainter.LOG,0);
