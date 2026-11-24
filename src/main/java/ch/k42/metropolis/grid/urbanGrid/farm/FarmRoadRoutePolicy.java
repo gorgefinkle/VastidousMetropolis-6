@@ -1,5 +1,7 @@
 package ch.k42.metropolis.grid.urbanGrid.farm;
 
+import java.util.Set;
+
 /** Pure interval rules for a requested farm-site-to-street access route. */
 final class FarmRoadRoutePolicy {
    private FarmRoadRoutePolicy() {
