@@ -92,11 +92,11 @@ final class FarmHouse extends FarmFeature {
             p.set(cx+dx,bottom+3,cz+2,FarmPainter.PUMPKIN,0);
         }
         // Narrow stair/ladder access hidden inside the pantry floor.
-        for(int y=bottom+1;y<=this.h;y++) {
+        for(int y=bottom+1;y<=this.h-1;y++) {
             p.set(cx+3,y,cz+1,FarmPainter.LADDER,4);
             if(y>=this.h-2) p.set(cx+3,y,cz+2,FarmPainter.AIR,0);
         }
-        p.set(cx+3,this.h+1,cz+2,96,0); // closed trapdoor under the pantry rug
+        p.set(cx+3,this.h,cz+1,96,0); // flush closed pantry-floor hatch
         // A grass-covered low earth mound and stone arch identify the cellar
         // only when approached closely; it is not a separate above-ground shed.
         for(int dx=-2;dx<=2;dx++) for(int dz=0;dz<=2;dz++) {
