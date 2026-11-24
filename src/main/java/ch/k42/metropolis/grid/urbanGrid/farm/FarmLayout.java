@@ -607,7 +607,6 @@ final class FarmLayout {
                     axisX, cellar));
          }
       }
-      int sLoZ = uz0 + 3;
       int silos = 1 + r.nextInt(2);
       for (int i = 0; i < silos; i++) {
          int[] s = this.findSpot(r, 7, 7, 3, sLoX, sLoZ, ux1 - 3 - 6, uz1 - 3 - 6);
