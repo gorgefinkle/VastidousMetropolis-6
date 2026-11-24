@@ -12,14 +12,17 @@ public final class MotherWillowJunctionProbe {
         MotherWillowGeometry.P end=new MotherWillowGeometry.P(16,18,16);
         MotherWillowGeometry.P before=new MotherWillowGeometry.P(-.2,-4,-.1);
         MotherWillowGeometry.P after=new MotherWillowGeometry.P(.3,4,.2);
-        MotherWillowGeometry.P p0=MotherWillowGeometry.leaderJunctionPoint(start,end,before,after,0);
-        MotherWillowGeometry.P p1=MotherWillowGeometry.leaderJunctionPoint(start,end,before,after,.001);
-        MotherWillowGeometry.P pEnd=MotherWillowGeometry.leaderJunctionPoint(start,end,before,after,1);
+        MotherWillowGeometry.P surface=MotherWillowGeometry.leaderSurfaceStart(start,end,4.12);
+        MotherWillowGeometry.P p0=MotherWillowGeometry.leaderJunctionPoint(surface,end,before,after,0);
+        MotherWillowGeometry.P p1=MotherWillowGeometry.leaderJunctionPoint(surface,end,before,after,.001);
+        MotherWillowGeometry.P pEnd=MotherWillowGeometry.leaderJunctionPoint(surface,end,before,after,1);
+        double offset=Math.hypot(surface.x-start.x,surface.z-start.z);
+        if(offset<3.1)throw new AssertionError("top leader still begins inside the bole instead of at its outer wood: "+offset);
         double tx=after.x-before.x,ty=after.y-before.y,tz=after.z-before.z;
         double lt=length(tx,ty,tz),dx=p1.x-p0.x,dy=p1.y-p0.y,dz=p1.z-p0.z,ld=length(dx,dy,dz);
         double alignment=dot(tx/lt,ty/lt,tz/lt,dx/ld,dy/ld,dz/ld);
-        if(Math.abs(p0.x-start.x)>1e-9||Math.abs(p0.y-start.y)>1e-9||Math.abs(p0.z-start.z)>1e-9)
-            throw new AssertionError("leader curve does not start on the trunk node");
+        if(Math.abs(p0.x-surface.x)>1e-9||Math.abs(p0.y-surface.y)>1e-9||Math.abs(p0.z-surface.z)>1e-9)
+            throw new AssertionError("leader curve does not start at the bole's outer surface");
         if(Math.abs(pEnd.x-end.x)>1e-9||Math.abs(pEnd.y-end.y)>1e-9||Math.abs(pEnd.z-end.z)>1e-9)
             throw new AssertionError("leader curve moved its existing mid point");
         double outwardX=end.x-start.x,outwardZ=end.z-start.z;
@@ -30,6 +33,6 @@ public final class MotherWillowJunctionProbe {
         if(outwardAlignment<.30)
             throw new AssertionError("leader take-off remains hidden along the bole: "+outwardAlignment);
         System.out.println("MotherWillowJunctionProbe PASS: bole continuity="+alignment
-                +", outward emergence="+outwardAlignment+"; endpoint unchanged");
+                +", outward emergence="+outwardAlignment+", surface offset="+offset+"; endpoint unchanged");
     }
 }
