@@ -906,6 +906,9 @@ final class FarmLayout {
       boolean axisX = side < 2;
       boolean mirror = side == 1 || side == 3;
       int variant = x.nextInt(3);
+      int purposeRoll = x.nextInt(100);
+      int purpose = purposeRoll < 38 ? FarmGreenhouse.PROPAGATION
+              : (purposeRoll < 58 ? FarmGreenhouse.RESEARCH : FarmGreenhouse.STANDARD);
       int len = FarmGreenhouse.lengthOf(FarmGreenhouse.GABLED, variant);
       int wid = FarmGreenhouse.widthOf(FarmGreenhouse.GABLED, variant, 0);
       int acrossCentre = axisX ? (u[1] + u[3]) / 2 : (u[0] + u[2]) / 2;
@@ -953,7 +956,7 @@ final class FarmLayout {
       this.taken.add(new int[]{minX, minZ, maxX, maxZ});
       this.features.add(new FarmProps.Driveway(minX, minZ, maxX, maxZ, h, axisX));
       this.recordRoadAccess(side, acrossCentre);
-      this.features.add(FarmGreenhouse.gabled(ox, oz, axisX, mirror, variant, h, this.seed));
+      this.features.add(FarmGreenhouse.gabled(ox, oz, axisX, mirror, variant, purpose, h, this.seed));
       this.taken.add(new int[]{ox - 1, oz - 1,
               ox + (axisX ? len : wid), oz + (axisX ? wid : len)});
 
@@ -1123,7 +1126,7 @@ final class FarmLayout {
     */
    private boolean planCommercialGlass(int[][] gy, boolean[][] used) {
       Random x = this.extra;
-      int bays = 3 + x.nextInt(2);
+      int bays = 4 + x.nextInt(2);
       int variant = x.nextInt(3);
       int len = FarmGreenhouse.lengthOf(FarmGreenhouse.BAYS, variant);
       int wid = FarmGreenhouse.widthOf(FarmGreenhouse.BAYS, variant, bays);
@@ -1183,7 +1186,8 @@ final class FarmLayout {
          this.features.add(new FarmProps.Driveway(acrossStart - 1, laneStart, acrossStart + wid, houseStart - 1, h, false));
       }
       this.recordRoadAccess(side, gate);
-      this.features.add(FarmGreenhouse.bays(ox, oz, ax, variant, bays, h, this.seed));
+      int purpose = x.nextInt(100) < 18 ? FarmGreenhouse.COLLAPSED_WING : FarmGreenhouse.STANDARD;
+      this.features.add(FarmGreenhouse.bays(ox, oz, ax, false, variant, bays, purpose, h, this.seed));
       if (x.nextInt(100) < 55) {
          int slide = x.nextInt(Math.max(1, wid - 8));
          if (ax) {
