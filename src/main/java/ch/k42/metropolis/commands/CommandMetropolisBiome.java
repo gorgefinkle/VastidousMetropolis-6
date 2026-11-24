@@ -15,6 +15,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.IllegalPluginAccessException;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,6 +25,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.TimeoutException;
 
 /**
  * /metrobiome tp <biome> -- progressively searches the planner's deterministic
@@ -35,6 +38,8 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
    // larger scales and every candidate chunk is verified column-by-column.
    private static final int SAMPLE_STEP = 8;
    private static final int SAMPLES_PER_TICK = 96;
+   /** A stalled Paper chunk future must not hold a rare-biome search forever. */
+   private static final long DESTINATION_TIMEOUT_TICKS = 20L * 180L;
    /** Conservative bound from a lattice sample to a safe landing in its chunk. */
    private static final double LANDING_COVER_RADIUS = 23.0;
    private static final ConcurrentMap<UUID, Search> ACTIVE = new ConcurrentHashMap<>();
@@ -304,8 +309,18 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             player.sendMessage(MetropolisBiomeTargets.displayName(biome) + " candidate found at "
                     + candidate.x + ", " + candidate.z + ". "
                     + (generated ? "Verifying the existing terrain..." : "Generating and verifying this destination chunk..."));
+            AtomicBoolean completed = new AtomicBoolean(false);
+            BukkitTask timeout = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+               if (!completed.compareAndSet(false, true)) return;
+               TimeoutException failure = new TimeoutException("destination chunk did not complete within 180 seconds");
+               Minions.w("[METROBIOME] destination chunk timed out at %d,%d; continuing biome search",
+                       candidate.x, candidate.z);
+               finishCandidate(candidate, null, failure);
+            }, DESTINATION_TIMEOUT_TICKS);
             try {
                world.getChunkAtAsync(chunkX, chunkZ, true).whenComplete((chunk, error) -> {
+                  if (!completed.compareAndSet(false, true)) return;
+                  timeout.cancel();
                   if (!plugin.isEnabled()) return;
                   try {
                      Bukkit.getScheduler().runTask(plugin, () -> finishCandidate(candidate, chunk, error));
@@ -314,7 +329,9 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
                   }
                });
             } catch (RuntimeException ex) {
+               if (completed.compareAndSet(false, true)) timeout.cancel();
                resolving = false;
+               destinationGenerationFailures++;
                Minions.w("[METROBIOME] async chunk request failed at %d,%d: %s", candidate.x, candidate.z, ex.toString());
                processCandidates();
             }
