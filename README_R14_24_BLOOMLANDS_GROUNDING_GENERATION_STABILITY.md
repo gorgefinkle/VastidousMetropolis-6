@@ -27,7 +27,7 @@ The supplied watchdog excerpt shows a player tick waiting for a chunk stuck at `
 
 - Add occasional rural farmhouses. A separate deterministic roll gives some houses an earth-sheltered, hobbit-style root cellar with storage shelves and a concealed pantry hatch.
 - Add three structurally distinct hidden survival bunker layouts: a compact refuge, a two-room shelter, and a deeper reinforced multi-room shelter. Their entrances are concealed beneath hay and surface soil.
-- Add a rare, sealed missile silo with a roughly 13-block internal shaft, about 34 blocks deep, a missile still inside, a heavy closed hatch and capped service vents. It is not an open pit.
+- Add a rare, sealed missile silo with a roughly 10-block internal shaft, about 34 blocks deep, a missile still inside, a heavy closed hatch and capped service vents. It is not an open pit.
 - Underground farm features can now paint down to the world's minimum build height.
 - The new underground sites reserve their own farm-grid footprints before field plots are planned, so fields do not paint over their structures.
 
