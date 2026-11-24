@@ -72,8 +72,8 @@ jobs:
       - name: Assemble exact two-file R14.21 development package
         run: |
           mkdir -p r14-21-package
-          cp target/Metropolis_R14_21_Bloomland_Woodland_Polish_DEV.jar r14-18-package/
-          cp Metropolis_R14_21_Bloomland_Woodland_Polish_SOURCE.zip r14-18-package/
+          cp target/Metropolis_R14_21_Bloomland_Woodland_Polish_DEV.jar r14-21-package/
+          cp Metropolis_R14_21_Bloomland_Woodland_Polish_SOURCE.zip r14-21-package/
           (cd r14-21-package && zip -q ../Metropolis_R14_21_Bloomland_Woodland_Polish_DEV_PACKAGE.zip ./*)
       - name: Verify exact R14.21 package contents
         run: |
