@@ -47,11 +47,13 @@ final class FarmBunker extends FarmFeature {
         }
         // Concealed vertical access: the hay bale is the only surface clue.
         int hatchX=this.cx-width/2+2,hatchZ=this.cz;
-        for(int y=floor+1;y<=this.h;y++) {
-            p.set(hatchX,y,hatchZ,FarmPainter.AIR,0);
-            if(y<roof) p.set(hatchX+1,y,hatchZ,FarmPainter.AIR,0);
+        for(int y=floor+1;y<=this.h;y++) p.set(hatchX,y,hatchZ,FarmPainter.AIR,0);
+        // Keep a continuous backing wall beside the one-block access shaft so
+        // every ladder segment remains attached after the chunk is updated.
+        for(int y=floor+1;y<=this.h-1;y++) {
+            p.set(hatchX+1,y,hatchZ,wall,0);
+            p.set(hatchX,y,hatchZ,FarmPainter.LADDER,4);
         }
-        for(int y=floor+1;y<=this.h-1;y++) p.set(hatchX,y,hatchZ,FarmPainter.LADDER,4);
         p.set(hatchX,this.h,hatchZ,96,0);
         p.set(hatchX,this.h+1,hatchZ,FarmPainter.HAY,0);
         p.set(hatchX+1,this.h+1,hatchZ,FarmPainter.HAY,0);
