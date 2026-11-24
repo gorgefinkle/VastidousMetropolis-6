@@ -31,30 +31,40 @@ final class FarmMissileSilo extends FarmFeature {
             }
             p.set(this.cx+dx,bottom-1,this.cz+dz,FarmPainter.STONE,0);
         }
-        // The central missile body is suspended on a service cradle, not an
-        // open pit or a decorative surface rocket. It remains entirely sealed.
-        for(int y=bottom+4;y<=this.h-8;y++) {
-            int radius=y>this.h-14?1:2;
-            for(int dx=-radius;dx<=radius;dx++) for(int dz=-radius;dz<=radius;dz++) {
-                boolean edge=Math.abs(dx)==radius||Math.abs(dz)==radius;
-                p.set(this.cx+dx,y,this.cz+dz,edge?FarmPainter.IRON_BARS:FarmPainter.STONE_BRICK,0);
-            }
-            if(y%6==0) for(int dx=-3;dx<=3;dx++) {
-                p.set(this.cx+dx,y,this.cz-3,FarmPainter.IRON_BARS,0);
-                p.set(this.cx+dx,y,this.cz+3,FarmPainter.IRON_BARS,0);
+        // A suspended three-block-diameter missile leaves a generous
+        // maintenance annulus inside the ten-block shaft. The fuselage is a
+        // narrow circular section, not a square pillar filling the chamber.
+        for(int y=bottom+7;y<=this.h-10;y++) {
+            p.set(this.cx,y,this.cz,FarmPainter.TERRACOTTA,8);
+            p.set(this.cx+1,y,this.cz,FarmPainter.TERRACOTTA,8);
+            p.set(this.cx-1,y,this.cz,FarmPainter.TERRACOTTA,8);
+            p.set(this.cx,y,this.cz+1,FarmPainter.TERRACOTTA,8);
+            p.set(this.cx,y,this.cz-1,FarmPainter.TERRACOTTA,8);
+        }
+        // Four restrained stabilizer fins and an engine skirt sit low in the
+        // shaft, well clear of the silo wall and service cradle.
+        for(int y=bottom+5;y<=bottom+8;y++) {
+            for(int dx=-2;dx<=2;dx++) {
+                p.set(this.cx+dx,y,this.cz,FarmPainter.TERRACOTTA,7);
+                p.set(this.cx,y,this.cz+dx,FarmPainter.TERRACOTTA,7);
             }
         }
-        // Rounded nose and engine skirt, all inside the shaft.
-        for(int y=this.h-7;y<=this.h-3;y++) {
-            int radius=y>=this.h-5?1:2;
-            for(int dx=-radius;dx<=radius;dx++) for(int dz=-radius;dz<=radius;dz++)
-                if(dx*dx+dz*dz<=radius*radius+1)
-                    p.set(this.cx+dx,y,this.cz+dz,FarmPainter.TERRACOTTA,y>=this.h-5?14:8);
-        }
-        for(int dx=-3;dx<=3;dx++) for(int dz=-3;dz<=3;dz++) {
-            if(Math.max(Math.abs(dx),Math.abs(dz))==3) {
-                p.set(this.cx+dx,this.h-2,this.cz+dz,FarmPainter.STONE_BRICK,0);
+        // Tapered nose cone, kept below the closed upper hatch.
+        for(int y=this.h-9;y<=this.h-4;y++) {
+            int radius=y>=this.h-6?0:1;
+            p.set(this.cx,y,this.cz,FarmPainter.TERRACOTTA,14);
+            if(radius==1) {
+                p.set(this.cx+1,y,this.cz,FarmPainter.TERRACOTTA,14);
+                p.set(this.cx-1,y,this.cz,FarmPainter.TERRACOTTA,14);
+                p.set(this.cx,y,this.cz+1,FarmPainter.TERRACOTTA,14);
+                p.set(this.cx,y,this.cz-1,FarmPainter.TERRACOTTA,14);
             }
+        }
+        // Narrow service cradle cross-members are structural, not part of the
+        // missile silhouette.
+        for(int y=bottom+4;y<=bottom+5;y++) for(int dx=-3;dx<=3;dx+=2) {
+            p.set(this.cx+dx,y,this.cz-3,FarmPainter.IRON_BARS,0);
+            p.set(this.cx+dx,y,this.cz+3,FarmPainter.IRON_BARS,0);
         }
         // Heavy, closed surface hatch flush with a weathered concrete pad.
         for(int dx=-6;dx<=6;dx++) for(int dz=-6;dz<=6;dz++) {
