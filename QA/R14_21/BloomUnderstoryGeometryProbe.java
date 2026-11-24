@@ -18,7 +18,7 @@ public final class BloomUnderstoryGeometryProbe {
             long seed=0x424c4f4f4dL+sample*0x9e3779b97f4a7c15L;
             Map<V,String> first=new HashMap<>(),again=new HashMap<>();
             BloomUnderstoryGeometry.Terrain terrain=new BloomUnderstoryGeometry.Terrain() {
-                public int groundAt(int gx,int gz){return 62+Math.floorMod(gx*7+gz*11,5);}
+                public int groundAt(int gx,int gz){return -3+Math.floorMod(gx*7+gz*11,5);}
                 public boolean allows(int gx,int gz){return true;}
             };
             BloomUnderstoryGeometry.grow((a,b,c,state)->first.put(new V(a,b,c),state),terrain,x,z,seed,sample%3);
