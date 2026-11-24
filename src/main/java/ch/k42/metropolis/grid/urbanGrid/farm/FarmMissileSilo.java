@@ -73,5 +73,6 @@ final class FarmMissileSilo extends FarmFeature {
         p.set(this.cx-6,this.h+4,this.cz+2,FarmPainter.SLAB_STONE,5);
         p.set(this.cx+6,this.h+4,this.cz-2,FarmPainter.SLAB_STONE,5);
         p.set(this.cx+7,this.h,this.cz,71,0);
+        p.set(this.cx+7,this.h+1,this.cz,71,8);
     }
 }
