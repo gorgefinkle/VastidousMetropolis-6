@@ -76,6 +76,10 @@ public final class WildBiomeProductionPickerProbe {
          if (karst <= bloom) {
             throw new AssertionError("Bloomlands must remain rarer than Karst for seed " + seed);
          }
+         if (karst > SAMPLES_PER_SEED * 0.20) {
+            throw new AssertionError("Karst expanded beyond its intended rare habitat for seed "
+                    + seed + ": " + karst + "/" + SAMPLES_PER_SEED);
+         }
          if (firstRingHit < 0 || latticeMatches == 0) {
             throw new AssertionError("32-block command scan did not encounter Bloomlands inside the world border for seed " + seed);
          }
