@@ -26,10 +26,29 @@ public final class WildBiomeProductionPickerProbe {
          Random random = new Random(seed ^ 0x4250524f44554354L);
          int bloom = 0;
          int karst = 0;
+         int labelBloom = 0, labelKarst = 0;
+         int sharpBloom = 0, sharpKarst = 0;
+         int rawBloomCore = 0, rawKarstCore = 0;
+         double maxRawBloom = 0.0, maxRawKarst = 0.0;
+         double maxSharpBloom = 0.0, maxSharpKarst = 0.0;
+         double[] raw = new double[WildBiome.ALL.length];
 
          for (int i = 0; i < SAMPLES_PER_SEED; i++) {
             int x = random.nextInt(EXTENT * 2 + 1) - EXTENT;
             int z = random.nextInt(EXTENT * 2 + 1) - EXTENT;
+            int label = field.biomes.label(x,z);
+            if (label == WildBiome.BLOOMLANDS.ordinal()) labelBloom++;
+            if (label == WildBiome.VOLCANIC_BARRENS.ordinal()) labelKarst++;
+            field.biomes.weights(x,z,raw);
+            maxRawBloom = Math.max(maxRawBloom,raw[WildBiome.BLOOMLANDS.ordinal()]);
+            maxRawKarst = Math.max(maxRawKarst,raw[WildBiome.VOLCANIC_BARRENS.ordinal()]);
+            if(raw[WildBiome.BLOOMLANDS.ordinal()]>=0.012)rawBloomCore++;
+            if(raw[WildBiome.VOLCANIC_BARRENS.ordinal()]>=0.028)rawKarstCore++;
+            double[] sharp = field.sharp(x,z);
+            if(WildBiome.ALL[dominant(sharp)]==WildBiome.BLOOMLANDS)sharpBloom++;
+            if(WildBiome.ALL[dominant(sharp)]==WildBiome.VOLCANIC_BARRENS)sharpKarst++;
+            maxSharpBloom=Math.max(maxSharpBloom,sharp[WildBiome.BLOOMLANDS.ordinal()]);
+            maxSharpKarst=Math.max(maxSharpKarst,sharp[WildBiome.VOLCANIC_BARRENS.ordinal()]);
             double roll = ForestTerrain.unit(ForestTerrain.hash(
                     seed ^ 0x464F52455354L, x, z, 41));
             WildBiome picked = field.pick(x, z, roll);
@@ -67,8 +86,10 @@ public final class WildBiomeProductionPickerProbe {
 
          double percent = 100.0 * bloom / SAMPLES_PER_SEED;
          System.out.printf(java.util.Locale.ROOT,
-                 "seed=%d productionBloom=%d (%.3f%%) productionKarst=%d (%.3f%%) firstBloomRing=%d scanSamples=%d%n",
-                 seed, bloom, percent, karst, 100.0 * karst / SAMPLES_PER_SEED, firstRingHit, checked);
+                 "seed=%d labelBloom=%d labelKarst=%d rawBloomCore=%d rawKarstCore=%d maxRawBloom=%.4f maxRawKarst=%.4f sharpBloom=%d sharpKarst=%d maxSharpBloom=%.4f maxSharpKarst=%.4f productionBloom=%d (%.3f%%) productionKarst=%d (%.3f%%) firstBloomRing=%d scanSamples=%d%n",
+                 seed,labelBloom,labelKarst,rawBloomCore,rawKarstCore,maxRawBloom,maxRawKarst,
+                 sharpBloom,sharpKarst,maxSharpBloom,maxSharpKarst,
+                 bloom,percent,karst,100.0*karst/SAMPLES_PER_SEED,firstRingHit,checked);
          if (bloom < 20) {
             throw new AssertionError("production picker collapses Bloomlands for seed "
                     + seed + ": only " + bloom + "/" + SAMPLES_PER_SEED);
@@ -90,6 +111,12 @@ public final class WildBiomeProductionPickerProbe {
       System.out.printf(java.util.Locale.ROOT,
               "WildBiomeProductionPickerProbe: PASS totalBloom=%d totalKarst=%d samples=%d%n",
               totalBloom, totalKarst, (long) SAMPLES_PER_SEED * seeds.length);
+   }
+
+   private static int dominant(double[] weights) {
+      int best=0;
+      for(int i=1;i<weights.length;i++)if(weights[i]>weights[best])best=i;
+      return best;
    }
 
    private static int[] pointAt(int originX,int originZ,int ring,long index,int step) {
