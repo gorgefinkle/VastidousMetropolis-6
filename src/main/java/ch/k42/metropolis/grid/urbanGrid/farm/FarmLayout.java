@@ -208,13 +208,14 @@ final class FarmLayout {
 
    /** Block rectangle {minX, minZ, maxX, maxZ} for the chunk range [a..b] x [c..d] of this cell: where a field's fence (or a farmstead's usable ground) may go. */
    private int[] rectFor(int a, int b, int c, int d) {
+      // West and north strips are owned by this cell. East and south strips
+      // are owned by the neighbouring cell, so only inset the edges that
+      // physically reserve road blocks inside this cell.
       int west = a == 0 && this.ctx.lineExists(true, this.cellX) ? INSET : 1;
-      int east = b == CELL_CHUNKS - 1 && this.ctx.lineExists(true, this.cellX + 1) ? INSET : 1;
       int north = c == 0 && this.ctx.lineExists(false, this.cellZ) ? INSET : 1;
-      int south = d == CELL_CHUNKS - 1 && this.ctx.lineExists(false, this.cellZ + 1) ? INSET : 1;
       return new int[]{
               this.x0 + 16 * a + west, this.z0 + 16 * c + north,
-              this.x0 + 16 * (b + 1) - east - 1, this.z0 + 16 * (d + 1) - south - 1};
+              this.x0 + 16 * (b + 1) - 2, this.z0 + 16 * (d + 1) - 2};
    }
 
    /** Add a site request for the shared dirt spine on the selected cell edge. */
