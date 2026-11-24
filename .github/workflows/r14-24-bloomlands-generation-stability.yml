@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/r14-23-farm-access-and-diversity
+      - feature/r14-24-bloomlands-generation-stability
   pull_request:
     types: [opened, synchronize, reopened, edited]
     branches:
