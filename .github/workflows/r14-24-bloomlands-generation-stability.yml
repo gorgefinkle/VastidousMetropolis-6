@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/r14-23-farm-access-and-diversity
+      - feature/r14-24-validation-head
   pull_request:
     types: [opened, synchronize, reopened, edited]
     branches:
