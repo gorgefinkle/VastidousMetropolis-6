@@ -70,7 +70,7 @@ jobs:
       - name: Verify exact package contents
         run: |
           unzip -Z1 Metropolis_R14_24_Bloomlands_Generation_Stability_DEV_PACKAGE.zip | sort > package-files.txt
-          printf '%s\\n' Metropolis_R14_24_Bloomlands_Generation_Stability_DEV.jar Metropolis_R14_24_Bloomlands_Generation_Stability_SOURCE.zip | sort > expected-files.txt
+          printf '%s\n' Metropolis_R14_24_Bloomlands_Generation_Stability_DEV.jar Metropolis_R14_24_Bloomlands_Generation_Stability_SOURCE.zip | sort > expected-files.txt
           diff -u expected-files.txt package-files.txt
           unzip -t Metropolis_R14_24_Bloomlands_Generation_Stability_DEV_PACKAGE.zip
       - name: Upload release artifacts
