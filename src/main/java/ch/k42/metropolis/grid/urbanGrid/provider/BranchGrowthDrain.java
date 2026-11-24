@@ -254,7 +254,7 @@ public final class BranchGrowthDrain implements Runnable {
                     }
                     boolean allLoaded = true;
                     for (long key : waiting) {
-                        if (!w.isChunkLoaded((int) (key >> 32), (int) key)) {
+                        if (!w.isChunkLoaded((int) (key >> 32), (int) key) || !job.retained.contains(key)) {
                             allLoaded = false;
                             break;
                         }
