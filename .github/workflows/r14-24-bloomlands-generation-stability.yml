@@ -1,0 +1,84 @@
+name: R14.24 Bloomlands grounding, generation stability and farm underground QA
+
+on:
+  push:
+    branches:
+      - feature/r14-23-farm-access-and-diversity
+  pull_request:
+    branches:
+      - integration/morphomos-natural-family-bloomlands
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Maven clean verify
+        run: mvn -B -ntp clean verify
+      - name: Morphomos boundary-family probe
+        run: sh QA/R14_8/run_boundary_family_probe.sh
+      - name: Production biome picker and fungal footprint probe
+        run: sh QA/R14_13/run_wild_biome_production_picker_probe.sh
+      - name: Bloomlands province size probe
+        run: sh QA/R14_14/run_bloomlands_province_size_probe.sh
+      - name: Creek city-origin policy probe
+        run: sh QA/R14_15/run_creek_city_origin_policy_probe.sh
+      - name: Mushroom cap and stalk occlusion probe
+        run: sh QA/R14_16/run_mushroom_cap_stem_probe.sh
+      - name: Branch growth timeout lifecycle probe
+        run: sh QA/R14_17/run_growth_timeout_shutdown_policy_probe.sh
+      - name: Safe branch staging and spatial cache probes
+        run: |
+          sh QA/R14_19/run_safe_branch_staging_probe.sh
+          sh QA/R14_19/run_spatial_cache_probe.sh
+      - name: Mushroom ground contact probe
+        run: sh QA/R14_20/run_mushroom_ground_contact_probe.sh
+      - name: Bloomlands negative-Y and uneven-ground trunk probe
+        run: sh QA/R14_21/run_bloom_understory_probe.sh
+      - name: Mother Willow top-leader junction probe
+        run: sh QA/R14_21/run_mother_willow_junction_probe.sh
+      - name: Smoothstone seam preservation probe
+        run: sh QA/R14_22/run_smoothstone_seam_probe.sh
+      - name: FARM demand-driven road policy probe
+        run: sh QA/R14_23/run_farm_road_route_policy_probe.sh
+      - name: Deferred population async-load regression
+        run: sh QA/R14_24/run_deferred_population_async_probe.sh
+      - name: Disk deferred queue durability probe
+        run: |
+          mkdir -p target/qa-queue
+          javac -d target/qa-queue src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java QA/R14_6/DiskDeferredChunkQueueProbe.java
+          java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
+      - name: Assemble complete source archive
+        run: zip -r Metropolis_R14_24_Bloomlands_Generation_Stability_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
+      - name: Assemble exact two-file development package
+        run: |
+          mkdir -p r14-24-package
+          cp target/Metropolis_R14_24_Bloomlands_Generation_Stability_DEV.jar r14-24-package/
+          cp Metropolis_R14_24_Bloomlands_Generation_Stability_SOURCE.zip r14-24-package/
+          (cd r14-24-package && zip -q ../Metropolis_R14_24_Bloomlands_Generation_Stability_DEV_PACKAGE.zip ./*)
+      - name: Verify exact package contents
+        run: |
+          unzip -Z1 Metropolis_R14_24_Bloomlands_Generation_Stability_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\\n' Metropolis_R14_24_Bloomlands_Generation_Stability_DEV.jar Metropolis_R14_24_Bloomlands_Generation_Stability_SOURCE.zip | sort > expected-files.txt
+          diff -u expected-files.txt package-files.txt
+          unzip -t Metropolis_R14_24_Bloomlands_Generation_Stability_DEV_PACKAGE.zip
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metropolis_R14_24_Bloomlands_Generation_Stability_DEV
+          if-no-files-found: error
+          path: |
+            target/Metropolis_R14_24_Bloomlands_Generation_Stability_DEV.jar
+            Metropolis_R14_24_Bloomlands_Generation_Stability_SOURCE.zip
+            Metropolis_R14_24_Bloomlands_Generation_Stability_DEV_PACKAGE.zip
