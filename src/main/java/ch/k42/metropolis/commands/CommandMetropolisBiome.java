@@ -148,6 +148,7 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
       private final int maxRing;
       private final java.util.Set<Long> candidateChunks = ConcurrentHashMap.newKeySet();
       private final java.util.Set<Long> plannerRejectedChunks = ConcurrentHashMap.newKeySet();
+      private final java.util.Set<Long> coreRejectedChunks = ConcurrentHashMap.newKeySet();
       private final List<Candidate> candidates = new ArrayList<>();
       private int ring;
       private long pointIndex;
@@ -253,11 +254,14 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
             scannedSamples++;
             int chunkX = point[0] >> 4, chunkZ = point[1] >> 4;
             long chunkKey = ((long) chunkX << 32) ^ (chunkZ & 0xffffffffL);
-            if (candidateChunks.contains(chunkKey) || plannerRejectedChunks.contains(chunkKey)) continue;
+            if (candidateChunks.contains(chunkKey) || plannerRejectedChunks.contains(chunkKey)
+                    || coreRejectedChunks.contains(chunkKey)) continue;
             try {
                int score = ForestGenerator.wildBiomeCandidateScore(generator, biome, point[0], point[1]);
                if (score == -2) {
                   plannerRejectedChunks.add(chunkKey);
+               } else if (score == -3) {
+                  coreRejectedChunks.add(chunkKey);
                } else if (score >= 0) {
                   if (candidateChunks.add(chunkKey)) {
                      candidates.add(new Candidate(point[0], point[1], distanceSquared(point[0], point[1])));
@@ -286,10 +290,11 @@ public final class CommandMetropolisBiome implements CommandExecutor, TabComplet
          lastProgressMillis = now;
          player.sendMessage("Still searching for " + MetropolisBiomeTargets.displayName(biome)
                  + "... sampled " + String.format(Locale.ROOT, "%,d", scannedSamples) + " biome-field positions; "
-                 + String.format(Locale.ROOT, "%,d", candidateChunks.size() + plannerRejectedChunks.size())
+                 + String.format(Locale.ROOT, "%,d", candidateChunks.size() + plannerRejectedChunks.size() + coreRejectedChunks.size())
                  + " chunks contain a biome match ("
-                 + String.format(Locale.ROOT, "%,d", candidateChunks.size()) + " planner-owned, "
-                 + String.format(Locale.ROOT, "%,d", plannerRejectedChunks.size()) + " rejected by ownership); "
+                 + String.format(Locale.ROOT, "%,d", candidateChunks.size()) + " broad-core planner-owned, "
+                 + String.format(Locale.ROOT, "%,d", plannerRejectedChunks.size()) + " rejected by ownership, "
+                 + String.format(Locale.ROOT, "%,d", coreRejectedChunks.size()) + " rejected as edge slivers); "
                  + "destinations tested=" + String.format(Locale.ROOT, "%,d", destinationChunksChecked)
                  + ", safe landings=" + String.format(Locale.ROOT, "%,d", safeLandingChunks)
                  + ", no-safe-landing=" + String.format(Locale.ROOT, "%,d", landingRejectedChunks)
