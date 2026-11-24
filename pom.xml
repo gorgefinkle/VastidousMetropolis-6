@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.9-R14.22-Remove-Smoothstone-Seam-DEV</version>
+    <version>0.1.9-R14.23-Farm-Access-Diversity-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.22 Remove Smoothstone Seam)</name>
-    <description>Removes the buried Y=64 smooth-stone terrain seam in new and repainted forest chunks; retains R14.21 Bloomlands woodland polish, safe branch staging, and inherited worldgen fixes</description>
+    <name>Metropolis for Paper 26.2 (R14.23 Farm Access and Diversity)</name>
+    <description>Rebalances FARM site types and connects every placed farmstead and nursery to paved streets through demand-driven shared dirt access roads</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_22_Remove_Smoothstone_Seam_DEV</finalName>
+        <finalName>Metropolis_R14_23_Farm_Access_Diversity_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
