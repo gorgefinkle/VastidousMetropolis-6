@@ -50,6 +50,30 @@ public final class BloomUnderstoryGeometry {
                 }
             }
         }
+        /**
+         * The central bole is rooted independently in every terrain column
+         * beneath its footprint. A sloped valley wall must not clip the lower
+         * bole merely because the tree's centre anchor is lower than adjacent
+         * ground columns.
+         */
+        void groundedTube(P a,P b,double startRadius,double endRadius) {
+            double dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
+            int steps=Math.max(1,(int)Math.ceil(Math.sqrt(dx*dx+dy*dy+dz*dz)*2.2));
+            for(int i=0;i<=steps;i++) {
+                double t=i/(double)steps; P q=lerp(a,b,t);
+                double radius=startRadius+(endRadius-startRadius)*t;
+                int r=(int)Math.ceil(radius);
+                for(int ox=-r;ox<=r;ox++)for(int oz=-r;oz<=r;oz++) {
+                    double remain=radius*radius-ox*ox-oz*oz;
+                    if(remain<-.25)continue;
+                    int wx=(int)Math.round(q.x)+ox,wz=(int)Math.round(q.z)+oz;
+                    if(!terrain.allows(wx,wz))continue;
+                    int top=(int)Math.round(q.y+Math.sqrt(Math.max(0.0,remain)));
+                    int floor=terrain.groundAt(wx,wz)+1;
+                    for(int y=floor;y<=top;y++)sink.set(wx,y,wz,wood+"[axis=y]");
+                }
+            }
+        }
         void tuft(P center,double rx,double ry,double rz,long salt) {
             for(int x=(int)Math.floor(center.x-rx);x<=(int)Math.ceil(center.x+rx);x++)
             for(int z=(int)Math.floor(center.z-rz);z<=(int)Math.ceil(center.z+rz);z++)
@@ -74,7 +98,7 @@ public final class BloomUnderstoryGeometry {
                 P next=new P(x+Math.cos(angle)*lean*t*t+Math.sin(t*4.2+angle)*.42*t,
                         ground+1+(height-1)*t,
                         z+Math.sin(angle)*lean*t*t+Math.cos(t*3.7+angle)*.36*t);
-                tube(previous,next,1.25-.67*t,.58);
+                groundedTube(previous,next,1.25-.67*t,.58);
                 previous=next;
             }
             tuft(top,3.3,2.25,3.0,hash(seed,91));
