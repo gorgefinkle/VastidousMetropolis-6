@@ -25,8 +25,12 @@ import java.util.Set;
  * A few farmsteads are instead a MODERN COMPOUND: a 6 x 5 chunk plot with one
  * very big steel-framed barn (see FarmModernBarn), abandoned but intact, front
  * doors toward the road, with a silage bunker, silos, a machine shed and yard.
- * Some cells also get a NURSERY in a free corner (glasshouses, polytunnels, a
- * potting shed; see FarmGreenhouse), and some fields are overgrown ORCHARDS.
+ * Some farmsteads also receive a small family farmhouse with an optional
+ * earth-sheltered root cellar. Rare cells can contain one of three concealed
+ * survival bunkers or a sealed underground missile silo; those footprints are
+ * reserved before field rectangles are planned. Some cells also get a NURSERY
+ * in a free corner (glasshouses, polytunnels, a potting shed; see FarmGreenhouse),
+ * and some fields are overgrown ORCHARDS.
  * generator.farm.modernBarnPercent, greenhousePercent, orchardShare,
  * roundBarnPercent and outbuildingPercent set how often.
  *
