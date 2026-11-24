@@ -21,7 +21,7 @@ final class FarmHouse extends FarmFeature {
         // 11 x 9 weatherboard house, raised stone footing and a small porch.
         for(int u=0;u<11;u++) for(int v=0;v<9;v++) {
             boolean edge=u==0||u==10||v==0||v==8;
-            set(p,u,v,0,edge?FarmPainter.COBBLE:FarmPainter.PLANKS,edge?0:0);
+            set(p,u,v,0,edge?FarmPainter.COBBLE:FarmPainter.PLANKS,0);
             for(int dy=1;dy<=4;dy++) {
                 if(edge) {
                     boolean door=(u==5&&v==0&&dy<=2);
