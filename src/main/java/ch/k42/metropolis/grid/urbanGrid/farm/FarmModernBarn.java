@@ -466,9 +466,10 @@ final class FarmModernBarn extends FarmFeature {
                      this.put(p, u, v, dy, CONCRETE, 7);
                   }
                } else if (u > 1 && u < len - 2 && this.rnd(u, v, 0, 2070) >= 0.14) {
-                  this.put(p, u, v, 1, FarmPainter.IRON_BARS, 0);            // the feed barrier, a rail or two gone
+                  int rail = Math.floorMod(u, 10) == 5 ? FarmPainter.IRON_BARS : FarmPainter.FENCE;
+                  this.put(p, u, v, 1, rail, 0);                           // timber rails with sparse metal reinforcement
                   if (this.rnd(u, v, 1, 2071) < 0.7) {
-                     this.put(p, u, v, 2, FarmPainter.IRON_BARS, 0);
+                     this.put(p, u, v, 2, rail, 0);
                   }
                }
                continue;
@@ -480,9 +481,10 @@ final class FarmModernBarn extends FarmFeature {
             if (dist >= 7 && dist <= 9 && u > 1 && u < len - 2) {
                if (u % 2 == 0) {
                   if (this.rnd(u, v, 0, 2072) >= 0.10) {
-                     this.put(p, u, v, 1, FarmPainter.IRON_BARS, 0);          // a cubicle partition
+                     int partition = Math.floorMod(u, 6) == 0 ? FarmPainter.IRON_BARS : FarmPainter.FENCE;
+                     this.put(p, u, v, 1, partition, 0);                      // common rails; occasional steel partition
                      if (dist <= 8 && this.rnd(u, v, 1, 2077) < 0.5) {
-                        this.put(p, u, v, 2, FarmPainter.IRON_BARS, 0);
+                        this.put(p, u, v, 2, partition, 0);
                      }
                   }
                } else if (this.rnd(u, v, 0, 2073) < 0.07) {
