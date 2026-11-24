@@ -596,6 +596,18 @@ final class FarmLayout {
 
       int sLoX = ux0 + 3;
       int sLoZ = uz0 + 3;
+      // Farmsteads sometimes include a separate family farmhouse rather than
+      // reading as an all-barn industrial yard. Its root cellar is a further
+      // independent roll, so only a subset receive the earth-sheltered store.
+      if (this.extra.nextInt(100) < 45) {
+         int[] home = this.findSpot(r, 14, 12, 3, sLoX, sLoZ, ux1 - 3 - 13, uz1 - 3 - 11);
+         if (home != null) {
+            boolean cellar = this.extra.nextInt(100) < 42;
+            this.features.add(new FarmHouse(home[0] + 1, home[1] + 1, h, this.seed,
+                    axisX, cellar));
+         }
+      }
+      int sLoZ = uz0 + 3;
       int silos = 1 + r.nextInt(2);
       for (int i = 0; i < silos; i++) {
          int[] s = this.findSpot(r, 7, 7, 3, sLoX, sLoZ, ux1 - 3 - 6, uz1 - 3 - 6);
