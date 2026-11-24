@@ -462,6 +462,7 @@ public class MetropolisGenerator extends ChunkGenerator {
       private static final long SAVE_INTERVAL_MS = 5000;
       private static final long STATS_INTERVAL_MS = 30000;
       private static final long SLOW_POPULATE_MS = 3000;
+      private static final long ASYNC_CHUNK_LOAD_TIMEOUT_TICKS = 600L;
       private static final long STUCK_REPORT_MS = 15000;
       private static final int DIAGNOSTIC_LINES = 40;
 
@@ -636,11 +637,27 @@ public class MetropolisGenerator extends ChunkGenerator {
                   // BlockPopulator callback was deferred. Never synchronously
                   // load it from the server-thread drain: doing so can enter
                   // ChunkTaskScheduler/lighting while a player tick is waiting
-                  // for the same chunk, reproducing the watchdog deadlock.
+                  // for the same chunk, contributing to a server-thread stall.
                   asyncInFlight = true;
                   DiskDeferredChunkQueue.Chunk staged = job;
+                  AtomicBoolean settled = new AtomicBoolean();
+                  Bukkit.getScheduler().runTaskLater(MetropolisGenerator.this.plugin, () -> {
+                     if (!settled.compareAndSet(false, true)) return;
+                     try {
+                        this.deferred.retry(System.nanoTime());
+                        Minions.w("Deferred chunk [%d,%d] async disk staging exceeded %d ticks; durable job returned to retry queue",
+                                staged.x(), staged.z(), ASYNC_CHUNK_LOAD_TIMEOUT_TICKS);
+                     } catch (RuntimeException retryFailure) {
+                        Minions.w("Could not retry timed-out deferred chunk [%d,%d]: %s",
+                                staged.x(), staged.z(), retryFailure);
+                     }
+                     this.reportPending();
+                     this.drainScheduled.set(false);
+                     if (this.deferred.hasPending()) this.scheduleDrain(20L);
+                  }, ASYNC_CHUNK_LOAD_TIMEOUT_TICKS);
                   this.owner.getChunkAtAsync(staged.x(), staged.z(), false, false)
                           .whenComplete((loaded, loadFailure) -> {
+                             if (!settled.compareAndSet(false, true)) return;
                              try {
                                 Bukkit.getScheduler().runTask(MetropolisGenerator.this.plugin,
                                         () -> this.finishDeferredLoad(staged, loaded, loadFailure));
