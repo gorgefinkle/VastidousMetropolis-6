@@ -40,7 +40,7 @@ final class FarmGreenhouse extends FarmFeature {
    private static final int GLASS = 20;
    private static final int WALL = FarmPainter.STONE_BRICK;
 
-   private static final int QUARTZ = 155;
+   private static final int QUARTZ = FarmPainter.TERRACOTTA; // white structural infill; avoids a quartz-heavy survival cost
    private static final int STONE_BRICK_B = 98;      // data 1 mossy, 2 cracked
    private static final int FARMLAND_B = 60;
 
@@ -575,13 +575,17 @@ final class FarmGreenhouse extends FarmFeature {
             }
             this.put(p, u, v0 + 3, 0, FarmPainter.GRAVEL, 0);
          }
-         // the skin: sheeting over the arch, a steel hoop every third block
+         // the skin: sheeting over the arch, a common fence frame every third block and sparse metal reinforcement
          for (int u = 0; u < len; u++) {
             boolean hoop = u % 3 == 0 || u == len - 1;                 // steel hoops every third block
             for (int c = 0; c < HOOP_W; c++) {
                for (int dy = HOOP_LOW[c]; dy <= HOOP_TOP[c]; dy++) {
                   if (hoop) {
-                     this.put(p, u, v0 + c, dy, FarmPainter.IRON_BARS, 0);
+                     // Common fence framing carries most arches; a sparse
+                     // iron-bar rib at the major frames keeps the industrial
+                     // silhouette without making each tunnel an iron sink.
+                     int frame = (u % 12 == 0 || u == len - 1) ? FarmPainter.IRON_BARS : FarmPainter.FENCE;
+                     this.put(p, u, v0 + c, dy, frame, 0);
                   } else {
                      this.glass(p, u, v0 + c, dy);
                   }
