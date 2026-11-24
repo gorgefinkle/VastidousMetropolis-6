@@ -522,8 +522,8 @@ final class FarmGreenhouse extends FarmFeature {
          this.put(p, u, 1, 1, PLANKS, 1);
          this.put(p, u, 1, width - 2, PLANKS, 1);
          if (u % 3 == 0) {
-            this.put(p, u, 2, 1, FarmPainter.CRAFTING_TABLE, 0);
-            this.put(p, u, 2, width - 2, FarmPainter.BOOKSHELF, 0);
+            this.put(p, u, 2, 1, 58, 0);
+            this.put(p, u, 2, width - 2, 47, 0);
          }
       }
       for (int v = half - 2; v <= half + 2; v++) {
@@ -532,8 +532,6 @@ final class FarmGreenhouse extends FarmFeature {
       }
       this.put(p, start + 3, 1, half, FarmPainter.CAULDRON, 3);
       this.put(p, start + 5, 1, half, FarmPainter.TORCH, 5);
-      p.chest(this.wx(len - 2, half), this.groundY + 1, this.wz(len - 2, half),
-              this.axisX ? (this.mirror ? 5 : 4) : (this.mirror ? 3 : 2), 73, FarmPainter.TIER_MID);
    }
 
    /**
@@ -559,8 +557,8 @@ final class FarmGreenhouse extends FarmFeature {
       }
       // Broken roof edges hang down at the transition from the intact bays.
       for (int v = bayStart; v <= bayEnd; v += 3) {
-         this.put(p, start, T + 1, v, PLANKS, 1);
-         if ((v & 1) == 0) this.put(p, start + 1, T, v, PLANKS, 1);
+         this.put(p, start, v, 5, PLANKS, 1);
+         if ((v & 1) == 0) this.put(p, start + 1, v, 4, PLANKS, 1);
       }
    }
 
