@@ -1047,7 +1047,7 @@ final class FarmLayout {
       int bankW = FarmGreenhouse.widthOf(FarmGreenhouse.HOOP, variant, tunnels);
       int fieldW = banks * bankW + (banks - 1) * FIELD_LANE;
       int fieldL = HEAD_LANE + len;
-      int alongC = (fieldL + 10 + 15) / 16;
+      int alongC = (fieldL + 15 + 15) / 16; // includes the west/north boundary inset and service-lane apron
       int acrossC = (fieldW + 10 + 15) / 16;
       int n = CELL_CHUNKS;
       int[] sides = {0, 2}; // west or north: the tunnel mouths face the road-side head lane
@@ -1152,7 +1152,7 @@ final class FarmLayout {
       int variant = x.nextInt(3);
       int len = FarmGreenhouse.lengthOf(FarmGreenhouse.BAYS, variant);
       int wid = FarmGreenhouse.widthOf(FarmGreenhouse.BAYS, variant, bays);
-      int alongC = (HEAD_LANE + len + 10 + 15) / 16;
+      int alongC = (HEAD_LANE + len + 15 + 15) / 16; // account for the boundary inset as well as the road head lane
       int acrossC = (wid + 10 + 15) / 16;
       int n = CELL_CHUNKS;
       int[] sides = {0, 2};
