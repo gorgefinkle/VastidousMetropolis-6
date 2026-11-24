@@ -21,7 +21,7 @@ final class FarmMissileSilo extends FarmFeature {
             boolean outer=d>=6.0, inner=d>=5.0&&d<6.0;
             for(int y=bottom;y<=top;y++) {
                 if(outer) {
-                    int material=((y-bottom)%7==0)?FarmPainter.MOSSY_COBBLE:FarmPainter.STONE_BRICK;
+                    int material=((y-bottom)%7==0 || FarmRandom.unit(this.seed,this.cx+dx,this.cz+dz,y+900)<.035)?FarmPainter.MOSSY_COBBLE:FarmPainter.STONE_BRICK;
                     p.set(this.cx+dx,y,this.cz+dz,material,0);
                 } else if(inner) {
                     p.set(this.cx+dx,y,this.cz+dz,FarmPainter.COBBLE,0);
