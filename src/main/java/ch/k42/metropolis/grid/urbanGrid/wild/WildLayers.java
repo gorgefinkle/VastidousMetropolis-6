@@ -43,6 +43,9 @@ final class WildLayers {
    private final ConcurrentHashMap<Long, Byte> regionMemo = new ConcurrentHashMap<Long, Byte>();
    private int puts;
    private final double[] realised;
+   /** Target-normalized shares for region-scale rare-biome seeding. */
+   private final double bloomlandsCellShare;
+   private final double karstCellShare;
    private double calibrationError;
 
    /**
@@ -67,6 +70,12 @@ final class WildLayers {
       this.warpZ = new Noise2D(this.seed ^ 0x77A2L);
       this.prior = new double[this.n];
       this.realised = new double[this.n];
+      double targetTotal = 0.0;
+      for (double share : target) targetTotal += Math.max(0.0, share);
+      this.bloomlandsCellShare = targetTotal > 0.0
+              ? Math.max(0.0, target[WildBiome.BLOOMLANDS.ordinal()]) / targetTotal : 0.0;
+      this.karstCellShare = targetTotal > 0.0
+              ? Math.max(0.0, target[WildBiome.VOLCANIC_BARRENS.ordinal()]) / targetTotal : 0.0;
       this.calibrate(target);
    }
 
@@ -82,11 +91,20 @@ final class WildLayers {
       long key = ((long) x << 32) ^ (z & 0xffffffffL);
       Byte prior = regionMemo.get(key);
       if (prior != null) return prior & 0xff;
-      int center = this.value(this.levels, x, z);
+      // Special habitats are seeded at the final region lattice rather than
+      // only in the very coarse level-0 grid. With a 520-chunk scale and four
+      // zooms, level-0 cells are over 10,000 blocks wide; a normal 16,000-block
+      // world border often contains only four such cells, making a 1–3% biome
+      // effectively absent from most seeds. A deterministic 2x2 final-cell
+      // province keeps its overall requested share while making local
+      // appearance statistically representative. Each province is about
+      // 1,352 blocks across at the default scale; domain warp still roughens
+      // its edges and the usual majority guard keeps the core intact.
+      int center = this.rareRegionLabel(x, z);
       int[] counts = new int[this.n];
       for (int dz = -1; dz <= 1; ++dz) {
          for (int dx = -1; dx <= 1; ++dx) {
-            counts[this.value(this.levels, x + dx, z + dz)]++;
+            counts[this.rareRegionLabel(x + dx, z + dz)]++;
          }
       }
       int best = center;
@@ -103,6 +121,20 @@ final class WildLayers {
       if (regionMemo.size() > 250000) regionMemo.clear();
       regionMemo.put(key, (byte) label);
       return label;
+   }
+
+   /** The coarse common-biome map with an independent deterministic rare-province overlay. */
+   private int rareRegionLabel(int x, int z) {
+      int base = this.value(this.levels, x, z);
+      double rareTotal = this.bloomlandsCellShare + this.karstCellShare;
+      if (rareTotal <= 0.0) return base;
+      int groupX = Math.floorDiv(x, 2);
+      int groupZ = Math.floorDiv(z, 2);
+      long h = this.hash(0x52415245, groupX, groupZ);
+      double roll = (h >>> 11) * (1.0 / (1L << 53));
+      if (roll < this.bloomlandsCellShare) return WildBiome.BLOOMLANDS.ordinal();
+      if (roll < rareTotal) return WildBiome.VOLCANIC_BARRENS.ordinal();
+      return base;
    }
 
    double[] realisedShares() {
@@ -227,16 +259,28 @@ final class WildLayers {
 
    /** Level 0: a random biome per coarse cell, by the (calibrated) priors. */
    private int start(int x, int z) {
-      double u = (hash(0, x, z) >>> 11) * (1.0 / (1L << 53));
-      double acc = 0.0;
-      int last = 0;
+      // Bloomlands and Karstlands are deliberately omitted from the coarse
+      // source grid; rareRegionLabel() places them at the final region scale.
+      // Renormalize common priors so rare shares are not redistributed to the
+      // last ordinary biome when the coarse map is sampled.
+      double commonTotal = 0.0;
       for (int k = 0; k < this.n; k++) {
+         if (k != WildBiome.BLOOMLANDS.ordinal()
+                 && k != WildBiome.VOLCANIC_BARRENS.ordinal()) {
+            commonTotal += Math.max(0.0, this.prior[k]);
+         }
+      }
+      if (commonTotal <= 0.0) return WildBiome.FOREST.ordinal();
+      double u = (hash(0, x, z) >>> 11) * (1.0 / (1L << 53)) * commonTotal;
+      double acc = 0.0;
+      int last = WildBiome.FOREST.ordinal();
+      for (int k = 0; k < this.n; k++) {
+         if (k == WildBiome.BLOOMLANDS.ordinal()
+                 || k == WildBiome.VOLCANIC_BARRENS.ordinal()) continue;
          if (this.prior[k] > 0.0) {
             last = k;
             acc += this.prior[k];
-            if (u < acc) {
-               return k;
-            }
+            if (u < acc) return k;
          }
       }
       return last;
