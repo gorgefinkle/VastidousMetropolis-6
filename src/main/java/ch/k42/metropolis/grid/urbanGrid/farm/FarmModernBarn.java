@@ -25,7 +25,7 @@ import ch.k42.metropolis.plugin.PluginConfig;
  */
 final class FarmModernBarn extends FarmFeature {
    private static final int CONCRETE = 251;       // data = dye colour: 0 white, 7 gray, 8 silver, 11 blue, 13 green, 14 red, 12 brown
-   private static final int IRON_BLOCK = 42;
+   private static final int RIDGE_CAP = FarmPainter.STONE_BRICK;
    private static final int GLASS = 20;
    private static final int BOOKSHELF = 47;
    private static final int CRAFTING_TABLE = 58;
@@ -388,7 +388,7 @@ final class FarmModernBarn extends FarmFeature {
       }
       this.put(p, u, v, dy, id, data);
       if (ridge) {
-         int cap = IRON_BLOCK;                                              // the ridge vent, standing a block proud of the roof
+         int cap = RIDGE_CAP;                                              // the ridge vent, standing a block proud of the roof
          int cdata = 0;
          if (this.rnd(u, v, 0, 2050) < 0.07) {
             cap = FarmPainter.TERRACOTTA;                                   // rusted through to orange
