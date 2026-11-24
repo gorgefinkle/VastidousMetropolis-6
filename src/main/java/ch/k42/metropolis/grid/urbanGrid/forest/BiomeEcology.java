@@ -471,7 +471,7 @@ public final class BiomeEcology {
                 || m == Material.LEAF_LITTER;
     }
     private static void put(Chunk c,ForestGenerator.TreeSite site,int x,int y,int z,Material mat) {
-        if(!inChunk(c,x,z)||y<=c.getWorld().getMinHeight()||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
+        if(!inChunk(c,x,z)||!validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())||!site.allows(x,z))return;
         Block b=c.getBlock(x&15,y,z&15);
         if(!replaceable(b.getType())) return;
         b.setType(mat,false);
@@ -480,7 +480,7 @@ public final class BiomeEcology {
         }
     }
     private static void log(Chunk c,ForestGenerator.TreeSite site,int x,int y,int z,Material mat,Axis axis) {
-        if(!inChunk(c,x,z)||y<=c.getWorld().getMinHeight()||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
+        if(!inChunk(c,x,z)||!validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())||!site.allows(x,z))return;
         Block b=c.getBlock(x&15,y,z&15);
         // The separately stamped willow limbs must pass through their OWN canopy.
         if(!replaceable(b.getType()) && b.getType()!=Material.OAK_LEAVES
@@ -492,7 +492,7 @@ public final class BiomeEcology {
      * bedrock-family stone. Never tunnel through authored structures, roadways,
      * liquids or another world's edited blocks; TreeSite also owns cell access. */
     private static void willowRoot(Chunk c,ForestGenerator.TreeSite site,int x,int y,int z,Axis axis) {
-        if(!inChunk(c,x,z)||y<=c.getWorld().getMinHeight()||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
+        if(!inChunk(c,x,z)||!validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())||!site.allows(x,z))return;
         if(y>site.groundAt(x,z) || y<site.groundAt(x,z)-24)return;
         Block b=c.getBlock(x&15,y,z&15);
         Material existing=b.getType();
@@ -505,7 +505,7 @@ public final class BiomeEcology {
         if(b.getBlockData() instanceof Orientable d){d.setAxis(axis);b.setBlockData(d,false);}
     }
     private static void fungalStem(Chunk c,ForestGenerator.TreeSite site,int x,int y,int z) {
-        if(!inChunk(c,x,z)||y<=c.getWorld().getMinHeight()||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
+        if(!inChunk(c,x,z)||!validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())||!site.allows(x,z))return;
         Block b=c.getBlock(x&15,y,z&15);
         if(!replaceable(b.getType()))return;
         b.setType(Material.MUSHROOM_STEM,false);
@@ -517,7 +517,7 @@ public final class BiomeEcology {
     }
     private static void mushroom(Chunk c,ForestGenerator.TreeSite site,int cx,int cz,long seed,int family) {
         MushroomGeometry.grow((x,y,z,state)->{
-            if(!inChunk(c,x,z)||y<=c.getWorld().getMinHeight()||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
+            if(!inChunk(c,x,z)||!validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())||!site.allows(x,z))return;
             Block at=c.getBlock(x&15,y,z&15);
             if(!replaceable(at.getType()))return;
             boolean stem=state.startsWith("minecraft:mushroom_stem");
@@ -544,7 +544,7 @@ public final class BiomeEcology {
             @Override public boolean allows(int x, int z) { return site.bloomlands(wild, x, z, worldSeed); }
         };
         BloomUnderstoryGeometry.grow((x, y, z, state) -> {
-            if (!inChunk(c, x, z) || y <= c.getWorld().getMinHeight() || y >= c.getWorld().getMaxHeight() - 2
+            if (!inChunk(c, x, z) || !validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())
                     || !land.allows(x, z)) return;
             Block at = c.getBlock(x & 15, y, z & 15);
             if (!replaceable(at.getType())) return;
@@ -612,7 +612,7 @@ public final class BiomeEcology {
 
     private static void willow(Chunk c,ForestGenerator.TreeSite site,int cx,int cz,long seed) {
         MotherWillowGeometry.growChunk((x,y,z,state)->{
-            if(!inChunk(c,x,z)||y<=c.getWorld().getMinHeight()||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
+            if(!inChunk(c,x,z)||!validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())||!site.allows(x,z))return;
             boolean isWood=state.startsWith("minecraft:oak_log");
             if(isWood) {
                 Axis axis=state.endsWith("axis=x]")?Axis.X:state.endsWith("axis=z]")?Axis.Z:Axis.Y;
@@ -648,7 +648,7 @@ public final class BiomeEcology {
     }
     private static void companion(Chunk c,ForestGenerator.TreeSite site,int cx,int cz,long seed){
         CompanionTreeGeometry.grow((x,y,z,state)->{
-            if(!inChunk(c,x,z)||y<=c.getWorld().getMinHeight()||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
+            if(!inChunk(c,x,z)||!validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())||!site.allows(x,z))return;
             boolean isLog=state.contains("_log[");
             Material mat=state.startsWith("minecraft:spruce")
                 ?(isLog?Material.SPRUCE_LOG:Material.SPRUCE_LEAVES)
@@ -668,7 +668,7 @@ public final class BiomeEcology {
         long h=hash(seed,cx,cz,0x47524f5645L);
         if(unit(h)<.45)return;
         KarstGroveGeometry.growChunk((x,y,z,state)->{
-            if(!inChunk(c,x,z)||y<=c.getWorld().getMinHeight()||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
+            if(!inChunk(c,x,z)||!validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())||!site.allows(x,z))return;
             if(state.startsWith("minecraft:oak_log"))
                 log(c,site,x,y,z,Material.OAK_LOG,state.endsWith("axis=x]")?Axis.X:state.endsWith("axis=z]")?Axis.Z:Axis.Y);
             else put(c,site,x,y,z,Material.AZALEA_LEAVES);
