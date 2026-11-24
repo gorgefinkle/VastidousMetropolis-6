@@ -116,7 +116,7 @@ public final class ForestGenerator {
    }
 
    /** The wilderness fields of one world: which biome is where, and the relief and mesa bands that go with it. */
-   private static final class WildField {
+   static final class WildField {
       final WildBiomes biomes;
       final WildRelief relief;
       final WildGeography geography;
@@ -200,7 +200,8 @@ public final class ForestGenerator {
             for (int sz = 0; sz < sampleSide; sz++) {
                int x = (sx - sampleSide / 2) * sampleStep;
                int z = (sz - sampleSide / 2) * sampleStep;
-               double roll = ForestTerrain.unit(ForestTerrain.hash(seed, x, z, 41));
+               // Match populateChunk exactly: ForestTerrain salts the world seed before hashing its per-column picker roll.
+               double roll = ForestTerrain.unit(ForestTerrain.hash(seed ^ 0x464F52455354L, x, z, 41));
                picked[this.pick(x, z, roll).ordinal()]++;
             }
          }
