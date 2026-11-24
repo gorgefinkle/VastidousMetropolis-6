@@ -85,18 +85,18 @@ final class FarmHouse extends FarmFeature {
         int bottom=this.h-8, ceiling=this.h-2;
         for(int dx=-4;dx<=4;dx++) for(int dz=-3;dz<=3;dz++) {
             boolean wall=Math.abs(dx)==4||Math.abs(dz)==3;
-            p.set(cx+dx,bottom,cz+dz,FarmPainter.COBBLE,0);
-            p.set(cx+dx,ceiling,cz+dz,FarmPainter.LOG,0);
+            cellarSet(p,cx,cz,dx,bottom,dz,FarmPainter.COBBLE,0);
+            cellarSet(p,cx,cz,dx,ceiling,dz,FarmPainter.LOG,0);
             for(int y=bottom+1;y<ceiling;y++)
-                p.set(cx+dx,y,cz+dz,wall?FarmPainter.STONE_BRICK:FarmPainter.AIR,0);
-            if(wall && dx%2==0 && dz==-3) p.set(cx+dx,bottom+2,cz+dz,FarmPainter.PLANKS,1);
+                cellarSet(p,cx,cz,dx,y,dz,wall?FarmPainter.STONE_BRICK:FarmPainter.AIR,0);
+            if(wall && dx%2==0 && dz==-3) cellarSet(p,cx,cz,dx,bottom+2,dz,FarmPainter.PLANKS,1);
         }
         // Shelves, preserves and root vegetables.
         for(int dx=-3;dx<=3;dx+=2) {
-            p.set(cx+dx,bottom+2,cz-2,FarmPainter.PLANKS,1);
-            p.set(cx+dx,bottom+3,cz-2,FarmPainter.CHEST,2);
-            p.set(cx+dx,bottom+2,cz+2,FarmPainter.HAY,0);
-            p.set(cx+dx,bottom+3,cz+2,FarmPainter.PUMPKIN,0);
+            cellarSet(p,cx,cz,dx,bottom+2,-2,FarmPainter.PLANKS,1);
+            cellarSet(p,cx,cz,dx,bottom+3,-2,FarmPainter.CHEST,2);
+            cellarSet(p,cx,cz,dx,bottom+2,2,FarmPainter.HAY,0);
+            cellarSet(p,cx,cz,dx,bottom+3,2,FarmPainter.PUMPKIN,0);
         }
         // Narrow stair/ladder access hidden inside the pantry floor.
         for(int y=bottom+1;y<=this.h-1;y++) {
