@@ -34,9 +34,10 @@ import java.util.concurrent.TimeoutException;
  * column. There is no arbitrary user radius or small fixed search cap.
  */
 public final class CommandMetropolisBiome implements CommandExecutor, TabCompleter {
-   // Four field samples per 16x16 chunk; the field is smoothed at much
-   // larger scales and every candidate chunk is verified column-by-column.
-   private static final int SAMPLE_STEP = 8;
+   // The final wilderness regions are hundreds of blocks across. A 32-block
+   // lattice finds their broad cores without spending most of the search on
+   // redundant samples; every candidate chunk is still verified column-by-column.
+   private static final int SAMPLE_STEP = 32;
    private static final int SAMPLES_PER_TICK = 96;
    /** A stalled Paper chunk future must not hold a rare-biome search forever. */
    private static final long DESTINATION_TIMEOUT_TICKS = 20L * 180L;
