@@ -425,8 +425,36 @@ public final class BiomeEcology {
     private static boolean inChunk(Chunk c,int x,int z) {
         return (x>>4)==c.getX() && (z>>4)==c.getZ();
     }
-    private static boolean replaceable(Material m) {
-        return m.isAir() || m==Material.SHORT_GRASS || m==Material.FERN || m==Material.RED_MUSHROOM || m==Material.BROWN_MUSHROOM || m==Material.VINE || m==Material.MOSS_CARPET || m==Material.AZALEA || m==Material.FLOWERING_AZALEA || m==Material.LEAF_LITTER;
+    /**
+     * Natural ground cover is allowed to yield to trunks and stems. Keep the
+     * list explicit: mushrooms must not overwrite soil/rock, but the forest's
+     * own cover() painter can put any of these single-block plants in the
+     * mushroom's first stem cell. Previously those blocks blocked placement
+     * and left the visible stalk floating one block above the ground.
+     */
+    static boolean replaceable(Material m) {
+        return m.isAir()
+                || m == Material.SHORT_GRASS
+                || m == Material.TALL_GRASS
+                || m == Material.FERN
+                || m == Material.DEAD_BUSH
+                || m == Material.DANDELION
+                || m == Material.POPPY
+                || m == Material.BLUE_ORCHID
+                || m == Material.ALLIUM
+                || m == Material.AZURE_BLUET
+                || m == Material.RED_TULIP
+                || m == Material.ORANGE_TULIP
+                || m == Material.WHITE_TULIP
+                || m == Material.PINK_TULIP
+                || m == Material.OXEYE_DAISY
+                || m == Material.RED_MUSHROOM
+                || m == Material.BROWN_MUSHROOM
+                || m == Material.VINE
+                || m == Material.MOSS_CARPET
+                || m == Material.AZALEA
+                || m == Material.FLOWERING_AZALEA
+                || m == Material.LEAF_LITTER;
     }
     private static void put(Chunk c,ForestGenerator.TreeSite site,int x,int y,int z,Material mat) {
         if(!inChunk(c,x,z)||y<=2||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
