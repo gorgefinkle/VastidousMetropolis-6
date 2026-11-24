@@ -19,6 +19,7 @@
 - Remove the synchronous `World.getChunkAt(x,z)` from the disk-deferred population drain.
 - Stage previously generated deferred chunks with Paper's `getChunkAtAsync(x,z,false,false)`, then return to the server thread to run the population callback.
 - Keep the durable queue's single active job until asynchronous staging and population complete. Failed or unavailable disk loads are retried without acknowledging the durable marker.
+- Bound async staging to 30 seconds; a stalled future returns its job to the durable retry queue instead of leaving the drain permanently single-flight.
 - Add a static regression check that rejects reintroduction of the synchronous deferred-load call.
 
 The supplied watchdog excerpt shows a player tick waiting for a chunk stuck at `initialize_light`. This change removes a confirmed synchronous load from Metropolis's deferred drain, which was a dangerous re-entrant path; it does not by itself prove that this exact call caused the supplied watchdog. The live server test must confirm queue stability and chunk completion.
