@@ -61,13 +61,12 @@ final class FarmContext {
 
    // ---------------------------------------------------------------- dirt roads
    //
-   // Dirt roads run along some of the lines of the farm grid (a cell is
-   // CELL_CHUNKS x CELL_CHUNKS chunks). Each cell owns a 4-wide strip along its west edge
-   // (local x 0..3) and one along its north edge (local z 0..3), so a strip
-   // always sits inside a single chunk column / row. A strip chunk is only
-   // painted when following the line from it, through chunks that are also
-   // farm, reaches an ordinary paved road chunk. That keeps every dirt road
-   // a real connection and avoids pointless dead ends.
+   // Farm boundaries are candidate shared access spines. A boundary is never
+   // painted merely because it exists: FarmLayout records the gate of each
+   // placed farm site, and FarmRoads paints only the interval from that gate
+   // to the nearest ordinary paved street. The neighbouring farm cells share
+   // the same line, so nearby sites share one trunk instead of generating
+   // parallel lanes or empty road stubs.
 
    boolean inRegion(int cx, int cz) {
       return this.grid.getMorphomosRegionAt(cx, cz) == this.region;
@@ -81,7 +80,12 @@ final class FarmContext {
       return !this.inRegion(cx, cz) && this.grid.isPlanStreet(cx, cz);
    }
 
-   /** Whether grid line number idx (x = 64 * idx for vertical lines, z = 64 * idx for horizontal ones) carries a dirt road. */
+   /**
+    * Whether a grid boundary can host a shared access spine. The percentage
+    * remains configurable for operators who deliberately want to restrict
+    * site access, but the shipped default makes every boundary available;
+    * actual road blocks still require a site request and paved-street route.
+    */
    boolean lineExists(boolean vertical, int idx) {
       double roll = vertical ? FarmRandom.unit(this.seed, idx, 0, 801) : FarmRandom.unit(this.seed, 0, idx, 802);
       return roll * 100.0 < PluginConfig.getFarmRoadLinePercent();
