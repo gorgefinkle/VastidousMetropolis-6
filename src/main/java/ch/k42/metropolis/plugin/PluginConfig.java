@@ -429,15 +429,15 @@ public class PluginConfig {
    private static boolean farmGenerate = true;
    private static int farmRuinPercent = 65;
    private static boolean farmFenceCrops = true;
-   private static int farmRoadLinePercent = 70;
+   private static int farmRoadLinePercent = 35;
    private static int farmSurfaceOffset = -2;   // with buildHeight 65 this is y=63, the paved road deck
-   private static int farmFarmsteadPercent = 70;
-   private static int farmPastureShare = 20;
-   private static int farmModernBarn = 22;
-   private static int farmGreenhouse = 30;
-   private static int farmOrchardShare = 16;
-   private static int farmRoundBarn = 21;
-   private static int farmOutbuildings = 78;
+   private static int farmFarmsteadPercent = 65;
+   private static int farmPastureShare = 28;
+   private static int farmModernBarn = 15;
+   private static int farmGreenhouse = 38;
+   private static int farmOrchardShare = 24;
+   private static int farmRoundBarn = 8;
+   private static int farmOutbuildings = 75;
    private static String farmTunnelSkin = "glass";
    private static int farmChestOdds = 90;
    private static int farmLootMinLevel = 1;
