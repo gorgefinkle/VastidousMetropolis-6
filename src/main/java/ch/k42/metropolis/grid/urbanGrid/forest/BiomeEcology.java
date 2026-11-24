@@ -436,7 +436,7 @@ public final class BiomeEcology {
     }
     /** Natural vegetation may occupy every legal world Y, including negative terrain. */
     static boolean validVegetationY(int y,int minHeight,int maxHeight) {
-        return y>minHeight && y<maxHeight-2;
+        return VegetationHeightPolicy.allows(y,minHeight,maxHeight);
     }
     /**
      * Natural ground cover is allowed to yield to trunks and stems. Keep the
