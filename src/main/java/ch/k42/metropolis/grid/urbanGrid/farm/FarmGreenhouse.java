@@ -30,6 +30,10 @@ final class FarmGreenhouse extends FarmFeature {
    static final int GABLED = 0;
    static final int HOOP = 1;
    static final int BAYS = 2;
+   static final int STANDARD = 0;
+   static final int PROPAGATION = 1;
+   static final int RESEARCH = 2;
+   static final int COLLAPSED_WING = 3;
    /** A bay of the commercial glasshouse: eight blocks from furrow to furrow (the gutter column is shared with the next bay). */
    private static final int BAY_W = 8;
 
@@ -46,6 +50,7 @@ final class FarmGreenhouse extends FarmFeature {
    private static final int HOOP_GAP = 2;
 
    private final int style;
+   private final int purpose;
    private final boolean axisX;      // the long axis runs along x
    private final boolean mirror;     // the open/entrance end faces the high-coordinate end
    private final int length;         // along the long axis
@@ -61,13 +66,14 @@ final class FarmGreenhouse extends FarmFeature {
    private final int endId;          // what its closed end is: a vertical wall, the one place a pane suits
    private final int endData;
 
-   private FarmGreenhouse(int ox, int oz, boolean axisX, boolean mirror, int style, int length, int width, int tunnels, int groundY, long seed) {
+   private FarmGreenhouse(int ox, int oz, boolean axisX, boolean mirror, int style, int purpose, int length, int width, int tunnels, int groundY, long seed) {
       super(ox - 1, oz - 1, ox + (axisX ? length : width), oz + (axisX ? width : length));   // one block of margin: vines grow on the outside
       this.ox = ox;
       this.oz = oz;
       this.axisX = axisX;
       this.mirror = mirror;
       this.style = style;
+      this.purpose = purpose;
       this.length = length;
       this.width = width;
       this.tunnels = tunnels;
@@ -120,7 +126,12 @@ final class FarmGreenhouse extends FarmFeature {
    }
 
    static FarmGreenhouse gabled(int ox, int oz, boolean axisX, boolean mirror, int variant, int groundY, long seed) {
-      return new FarmGreenhouse(ox, oz, axisX, mirror, GABLED, lengthOf(GABLED, variant), widthOf(GABLED, variant, 0), 0, groundY, seed);
+      return gabled(ox, oz, axisX, mirror, variant, STANDARD, groundY, seed);
+   }
+
+   static FarmGreenhouse gabled(int ox, int oz, boolean axisX, boolean mirror, int variant, int purpose, int groundY, long seed) {
+      return new FarmGreenhouse(ox, oz, axisX, mirror, GABLED, purpose,
+              lengthOf(GABLED, variant), widthOf(GABLED, variant, 0), 0, groundY, seed);
    }
 
    /** The commercial glasshouse: `bays` gabled bays (3 or 4) under one roof, length by variant 0..2 (36, 42, 48). */
@@ -129,7 +140,12 @@ final class FarmGreenhouse extends FarmFeature {
    }
 
    static FarmGreenhouse bays(int ox, int oz, boolean axisX, boolean mirror, int variant, int bays, int groundY, long seed) {
-      return new FarmGreenhouse(ox, oz, axisX, mirror, BAYS, lengthOf(BAYS, variant), widthOf(BAYS, variant, bays), bays, groundY, seed);
+      return bays(ox, oz, axisX, mirror, variant, bays, STANDARD, groundY, seed);
+   }
+
+   static FarmGreenhouse bays(int ox, int oz, boolean axisX, boolean mirror, int variant, int bays, int purpose, int groundY, long seed) {
+      return new FarmGreenhouse(ox, oz, axisX, mirror, BAYS, purpose,
+              lengthOf(BAYS, variant), widthOf(BAYS, variant, bays), bays, groundY, seed);
    }
 
    static FarmGreenhouse hoops(int ox, int oz, boolean axisX, int variant, int tunnels, int groundY, long seed) {
@@ -137,7 +153,7 @@ final class FarmGreenhouse extends FarmFeature {
    }
 
    static FarmGreenhouse hoops(int ox, int oz, boolean axisX, boolean mirror, int variant, int tunnels, int groundY, long seed) {
-      return new FarmGreenhouse(ox, oz, axisX, mirror, HOOP, lengthOf(HOOP, variant), widthOf(HOOP, variant, tunnels), tunnels, groundY, seed);
+      return new FarmGreenhouse(ox, oz, axisX, mirror, HOOP, STANDARD, lengthOf(HOOP, variant), widthOf(HOOP, variant, tunnels), tunnels, groundY, seed);
    }
 
    // ---- helpers in the building's own frame: u along the long axis, v across it, dy above the ground block
