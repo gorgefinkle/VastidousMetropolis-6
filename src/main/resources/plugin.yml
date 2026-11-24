@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.9-R14.10-Universal-Biome-TP-DEV
+version: 0.1.9-R14.14-Bloomlands-Province-Landmark-Fix-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
