@@ -218,6 +218,27 @@ final class FarmLayout {
               this.x0 + 16 * (b + 1) - 2, this.z0 + 16 * (d + 1) - 2};
    }
 
+   /** True only when a placed site in this cell actually requested this boundary. */
+   private boolean hasRoadRequest(boolean vertical, int line) {
+      for (RoadAccess access : this.roadAccesses) {
+         if (access.vertical == vertical && access.line == line) return true;
+      }
+      return false;
+   }
+
+   /**
+    * Field plots only stand back from an edge when a real site access spine
+    * was requested there. Candidate lines without a site stay available land,
+    * not empty headlands that look like redundant tracks.
+    */
+   private int[] rectForField(int a, int b, int c, int d) {
+      int west = a == 0 && this.hasRoadRequest(true, this.cellX) ? INSET : 1;
+      int north = c == 0 && this.hasRoadRequest(false, this.cellZ) ? INSET : 1;
+      return new int[]{
+              this.x0 + 16 * a + west, this.z0 + 16 * c + north,
+              this.x0 + 16 * (b + 1) - 2, this.z0 + 16 * (d + 1) - 2};
+   }
+
    /** Add a site request for the shared dirt spine on the selected cell edge. */
    private void recordRoadAccess(int side, int alongBlock) {
       if (side < 0 || side > 3) return;
@@ -327,7 +348,7 @@ final class FarmLayout {
             break;
          }
          this.markUsed(used, rc[0], rc[1], rc[2], rc[3]);
-         int[] b = this.rectFor(rc[0], rc[1], rc[2], rc[3]);
+         int[] b = this.rectForField(rc[0], rc[1], rc[2], rc[3]);
          FarmField.Kind kind = this.pickKind(r);
          // some fields (never pasture) are an overgrown orchard instead; rolled from the field's own position, not from r, so every
          // other field and farmstead in the cell comes out exactly as it would without orchards
