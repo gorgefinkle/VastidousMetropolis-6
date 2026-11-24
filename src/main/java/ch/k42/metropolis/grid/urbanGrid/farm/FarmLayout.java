@@ -600,7 +600,7 @@ final class FarmLayout {
       // reading as an all-barn industrial yard. Its root cellar is a further
       // independent roll, so only a subset receive the earth-sheltered store.
       if (this.extra.nextInt(100) < 45) {
-         int[] home = this.findSpot(r, 14, 12, 3, sLoX, sLoZ, ux1 - 3 - 13, uz1 - 3 - 11);
+         int[] home = this.findSpot(this.extra, 14, 12, 3, sLoX, sLoZ, ux1 - 3 - 13, uz1 - 3 - 11);
          if (home != null) {
             boolean cellar = this.extra.nextInt(100) < 42;
             this.features.add(new FarmHouse(home[0] + 1, home[1] + 1, h, this.seed,
