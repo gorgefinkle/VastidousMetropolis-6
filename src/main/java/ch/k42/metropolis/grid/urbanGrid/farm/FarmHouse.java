@@ -7,7 +7,7 @@ final class FarmHouse extends FarmFeature {
     private final boolean axisX, cellar;
 
     FarmHouse(int x, int z, int h, long seed, boolean axisX, boolean cellar) {
-        super(x - 3, z - 3, x + 11, z + 12);
+        super(x - 3, z - 3, x + 12, z + 12);
         this.x=x; this.z=z; this.h=h; this.seed=seed;
         this.axisX=axisX; this.cellar=cellar;
     }
