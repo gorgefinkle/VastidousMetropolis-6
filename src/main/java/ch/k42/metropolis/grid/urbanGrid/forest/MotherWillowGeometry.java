@@ -57,6 +57,13 @@ public final class MotherWillowGeometry {
              u*u*u*start.y+3*u*u*t*c1.y+3*u*t*t*c2.y+t*t*t*end.y,
              u*u*u*start.z+3*u*u*t*c1.z+3*u*t*t*c2.z+t*t*t*end.z);
   }
+  static P leaderSurfaceStart(P boleCenter,P end,double branchRadius) {
+    double ox=end.x-boleCenter.x,oz=end.z-boleCenter.z;
+    double outward=Math.hypot(ox,oz);
+    if(outward<1.0e-9)return boleCenter;
+    double offset=Math.max(1.0,branchRadius*.78);
+    return boleCenter.add(ox/outward*offset,0.0,oz/outward*offset);
+  }
   private static double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
   private static class Maker {
     final Sink out;final Terrain land;final long seed;
@@ -91,12 +98,13 @@ public final class MotherWillowGeometry {
     }
     void segment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,false);}
     void smoothLeaderJunction(P a,P b,P trunkBefore,P trunkAfter,double radA,double radB){
-      // Fuse the take-off into the parent bole with an overlapping collar.
-      // Tangent alignment alone leaves a geometrically narrow point contact.
-      bulb(a,radA+1.35,true,0,"y");
-      P previous=a;double previousT=0.0;
+      // Start the leader at the bole's outer wood, not its hidden centreline.
+      // The root radius overlaps the parent trunk so the two volumes fuse.
+      P surface=leaderSurfaceStart(a,b,radA);
+      bulb(surface,radA+.55,true,0,"y");
+      P previous=surface;double previousT=0.0;
       for(int i=1;i<=14;i++){
-        double t=i/14.0;P next=leaderJunctionPoint(a,b,trunkBefore,trunkAfter,t);
+        double t=i/14.0;P next=leaderJunctionPoint(surface,b,trunkBefore,trunkAfter,t);
         double r0=radA+(radB-radA)*previousT,r1=radA+(radB-radA)*t;
         segment(previous,next,r0,r1);previous=next;previousT=t;
       }
