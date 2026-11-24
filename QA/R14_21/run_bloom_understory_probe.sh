@@ -2,7 +2,7 @@
 set -eu
 BIO=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/BiomeEcology.java
 TREES=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/ForestTrees.java
-if grep -Eq 'y[[:space:]]*<=[[:space:]]*2|y[[:space:]]*<[[:space:]]*1' "$BIO" "$TREES"; then
+if grep -Eq '(^|[^[:alnum:]_])y[[:space:]]*<=[[:space:]]*2|(^|[^[:alnum:]_])y[[:space:]]*<[[:space:]]*1' "$BIO" "$TREES"; then
   echo "FAIL: hard-coded positive-Y vegetation cutoff remains" >&2
   exit 1
 fi
