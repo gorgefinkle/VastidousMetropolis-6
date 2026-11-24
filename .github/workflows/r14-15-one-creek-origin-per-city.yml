@@ -1,4 +1,4 @@
-name: R14.15 Bloomlands provinces and fungal landmarks validation
+name: R14.15 one creek origin per city validation
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
       - name: Rare-biome appearance probe
         run: sh QA/R14_8/run_wild_biome_appearance_probe.sh
       - name: Rare-province physical-size probe
-        run: sh QA/R14_15/run_bloomlands_province_size_probe.sh
+        run: sh QA/R14_14/run_bloomlands_province_size_probe.sh
       - name: Production picker and fungal landmark-footprint probe
         run: sh QA/R14_13/run_wild_biome_production_picker_probe.sh
       - name: BUILD export durability probe
@@ -54,25 +54,25 @@ jobs:
       - name: Underwater marine habitat probe
         run: bash QA/R14_11/run_marine_habitat_probe.sh
       - name: Assemble complete source archive
-        run: zip -r Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
+        run: zip -r Metropolis_R14_15_One_Creek_Origin_Per_City_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
       - name: Assemble exact two-file development package
         run: |
-          mkdir -p r14-14-package
-          cp target/Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_DEV.jar r14-14-package/
-          cp Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_SOURCE.zip r14-14-package/
-          (cd r14-14-package && zip -q ../Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_DEV_PACKAGE.zip ./*)
+          mkdir -p r14-15-package
+          cp target/Metropolis_R14_15_One_Creek_Origin_Per_City_DEV.jar r14-15-package/
+          cp Metropolis_R14_15_One_Creek_Origin_Per_City_SOURCE.zip r14-15-package/
+          (cd r14-15-package && zip -q ../Metropolis_R14_15_One_Creek_Origin_Per_City_DEV_PACKAGE.zip ./*)
       - name: Verify exact package contents
         run: |
-          unzip -Z1 Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_DEV_PACKAGE.zip | sort > package-files.txt
-          printf '%s\n' Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_DEV.jar Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_SOURCE.zip | sort > expected-files.txt
+          unzip -Z1 Metropolis_R14_15_One_Creek_Origin_Per_City_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\n' Metropolis_R14_15_One_Creek_Origin_Per_City_DEV.jar Metropolis_R14_15_One_Creek_Origin_Per_City_SOURCE.zip | sort > expected-files.txt
           diff -u expected-files.txt package-files.txt
-          unzip -t Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_DEV_PACKAGE.zip
+          unzip -t Metropolis_R14_15_One_Creek_Origin_Per_City_DEV_PACKAGE.zip
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_DEV
+          name: Metropolis_R14_15_One_Creek_Origin_Per_City_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_DEV.jar
-            Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_SOURCE.zip
-            Metropolis_R14_15_Bloomlands_Province_Landmark_Fix_DEV_PACKAGE.zip
+            target/Metropolis_R14_15_One_Creek_Origin_Per_City_DEV.jar
+            Metropolis_R14_15_One_Creek_Origin_Per_City_SOURCE.zip
+            Metropolis_R14_15_One_Creek_Origin_Per_City_DEV_PACKAGE.zip
