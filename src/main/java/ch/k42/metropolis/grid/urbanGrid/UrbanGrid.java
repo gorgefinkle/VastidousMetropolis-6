@@ -3717,6 +3717,13 @@ public class UrbanGrid extends Grid implements DistrictHost {
                       (zRiver!=null && zRiver!=receiver && zRiver.isRiverOrBank(x,z)) ||
                       water.baseZoneKind(x,z)==WaterField.Kind.OCEAN;
             }
+            @Override public BoundedRiverSites.CityBounds cityAt(int x,int z) {
+               HighwayNetwork.City city=highway.cityContaining(x,z);
+               if(city==null)return null;
+               return new BoundedRiverSites.CityBounds(
+                       CreekCityOriginPolicy.cityKey(city.a,city.b),
+                       city.x0,city.z0,city.x1,city.z1);
+            }
          });
          BOUNDED_SITE_PROVIDERS.put(generator,sites);
          return sites;
