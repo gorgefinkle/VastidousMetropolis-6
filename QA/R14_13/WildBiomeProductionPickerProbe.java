@@ -84,12 +84,16 @@ public final class WildBiomeProductionPickerProbe {
             if (firstRingHit >= 0) break;
          }
 
+         int giantMushroomSites = countLandmarkSites(field, seed, 72, true, 8);
+         int motherWillowSites = countLandmarkSites(field, seed, 224, false, 2);
          double percent = 100.0 * bloom / SAMPLES_PER_SEED;
          System.out.printf(java.util.Locale.ROOT,
-                 "seed=%d labelBloom=%d labelKarst=%d rawBloomCore=%d rawKarstCore=%d maxRawBloom=%.4f maxRawKarst=%.4f sharpBloom=%d sharpKarst=%d maxSharpBloom=%.4f maxSharpKarst=%.4f productionBloom=%d (%.3f%%) productionKarst=%d (%.3f%%) firstBloomRing=%d scanSamples=%d%n",
+                 "seed=%d labelBloom=%d labelKarst=%d rawBloomCore=%d rawKarstCore=%d maxRawBloom=%.4f maxRawKarst=%.4f sharpBloom=%d sharpKarst=%d maxSharpBloom=%.4f maxSharpKarst=%.4f productionBloom=%d (%.3f%%) productionKarst=%d (%.3f%%) giantMushroomSites=%d motherWillowSites=%d firstBloomRing=%d scanSamples=%d%n",
                  seed,labelBloom,labelKarst,rawBloomCore,rawKarstCore,maxRawBloom,maxRawKarst,
                  sharpBloom,sharpKarst,maxSharpBloom,maxSharpKarst,
-                 bloom,percent,karst,100.0*karst/SAMPLES_PER_SEED,firstRingHit,checked);
+                 bloom,percent,karst,100.0*karst/SAMPLES_PER_SEED,giantMushroomSites,motherWillowSites,firstRingHit,checked);
+         if (giantMushroomSites == 0) throw new AssertionError("No viable giant-mushroom landmark site for seed " + seed);
+         if (motherWillowSites == 0) throw new AssertionError("No viable Mother Willow site for seed " + seed);
          if (bloom < 20) {
             throw new AssertionError("production picker collapses Bloomlands for seed "
                     + seed + ": only " + bloom + "/" + SAMPLES_PER_SEED);
@@ -115,6 +119,23 @@ public final class WildBiomeProductionPickerProbe {
       System.out.printf(java.util.Locale.ROOT,
               "WildBiomeProductionPickerProbe: PASS totalBloom=%d totalKarst=%d samples=%d%n",
               totalBloom, totalKarst, (long) SAMPLES_PER_SEED * seeds.length);
+   }
+
+   private static int countLandmarkSites(ForestGenerator.WildField field,long worldSeed,
+                                         int spacing,boolean mushroom,int stopAfter) {
+      int found=0;
+      int range=(int)Math.ceil(8000.0/spacing)+1;
+      outer:
+      for(int gx=-range;gx<=range;gx++)for(int gz=-range;gz<=range;gz++){
+         int x=BiomeEcology.decorationCellX(worldSeed,gx,gz,spacing);
+         int z=BiomeEcology.decorationCellZ(worldSeed,gx,gz,spacing);
+         if(!BiomeEcology.decorationCellChance(worldSeed,gx,gz,spacing,3,mushroom?.72:.28))continue;
+         boolean fits=mushroom
+               ? BiomeEcology.hasGiantMushroomFootprint(field,x,z,worldSeed)
+               : BiomeEcology.hasMotherWillowFootprint(field,x,z,worldSeed);
+         if(fits && ++found>=stopAfter)break outer;
+      }
+      return found;
    }
 
    private static int dominant(double[] weights) {
