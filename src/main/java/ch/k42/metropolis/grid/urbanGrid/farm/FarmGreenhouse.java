@@ -247,6 +247,8 @@ final class FarmGreenhouse extends FarmFeature {
             for (int dy = 2; dy <= T; dy++) {
                if (post) {
                   this.put(p, u, v, dy, QUARTZ, 0);
+               } else if (this.purpose == RESEARCH && u >= Math.max(7, len - 8)) {
+                  this.put(p, u, v, dy, WALL, 0);
                } else {
                   this.glass(p, u, v, dy);
                }
@@ -269,6 +271,8 @@ final class FarmGreenhouse extends FarmFeature {
                      this.put(p, u, v, dy, QUARTZ, 0);          // the ridge beam
                   } else if (rafter && dy == T + k) {
                      this.put(p, u, v, dy, QUARTZ, 0);
+                  } else if (this.purpose == RESEARCH && u >= Math.max(7, len - 8)) {
+                     this.put(p, u, v, dy, PLANKS, 1);
                   } else {
                      this.glass(p, u, v, dy);
                   }
@@ -284,13 +288,12 @@ final class FarmGreenhouse extends FarmFeature {
             int k = Math.min(v, w - 1 - v);
             int top = T + k - 2;                               // up to just under the roof
             boolean door = end == 0 && Math.abs(v - half) <= 1;
+            boolean solidLabEnd = this.purpose == RESEARCH && end == 1;
             for (int dy = 1; dy <= top; dy++) {
-               if (door && dy <= 3) {
-                  continue;
-               }
+               if (door && dy <= 3) continue;
                boolean frame = v == half || dy == top || (door && dy == 4);
-               if (frame || (dy == 1 && !door)) {
-                  this.put(p, u, v, dy, dy == 1 && !frame ? STONE_BRICK_B : QUARTZ, 0);
+               if (frame || (dy == 1 && !door) || solidLabEnd) {
+                  this.put(p, u, v, dy, solidLabEnd ? WALL : (dy == 1 && !frame ? STONE_BRICK_B : QUARTZ), 0);
                } else {
                   this.glass(p, u, v, dy);
                }
@@ -298,15 +301,16 @@ final class FarmGreenhouse extends FarmFeature {
          }
       }
 
-      // beds either side of the path, grown wild; the planting runs the length of the house but is thinner near the door
-      for (int u = 2; u < len - 1; u++) {
+      // Propagation beds and research trials have their own internal layout.
+      // Research keeps the last eight blocks as an enclosed rear laboratory.
+      int plantingEnd = this.purpose == RESEARCH ? Math.max(7, len - 8) : len - 1;
+      for (int u = 2; u < plantingEnd; u++) {
          for (int v = 1; v <= w - 2; v++) {
-            if (v == half || v == half - 1 || v == half + 1) {
-               continue;                                        // the path and its verge
-            }
+            if (v == half || v == half - 1 || v == half + 1) continue;
             this.bed(p, u, v);
          }
       }
+      if (this.purpose == RESEARCH) this.paintResearchRoom(p, Math.max(7, len - 8), len, w, half);
       // creeper, on the outside and the inside. A vine cannot cling to glass, so it climbs what is solid: three blocks up the quartz
       // posts, and only the one block of plinth between them.
       for (int u = 0; u < len; u++) {
