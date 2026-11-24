@@ -173,15 +173,8 @@ final class FarmRoads {
          }
       }
 
-      for (int site : accessPoints) {
-         if (!farmAlong.contains(site)) continue;
-         int nearestStreet = FarmRoadRoutePolicy.nearestStreet(site, streetEnds, MAX_CONNECT_CHUNKS);
-         if (nearestStreet != Integer.MIN_VALUE
-                 && FarmRoadRoutePolicy.contains(queryAlong, site, nearestStreet)) {
-            return true;
-         }
-      }
-      return false;
+      return FarmRoadRoutePolicy.requestedRouteContains(
+              queryAlong, farmAlong, accessPoints, streetEnds, MAX_CONNECT_CHUNKS);
    }
 
    static void clearCache() {
