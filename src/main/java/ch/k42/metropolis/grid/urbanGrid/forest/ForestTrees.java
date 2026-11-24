@@ -449,7 +449,7 @@ public final class ForestTrees {
          int h = ground.groundAt(x, z);
          // Adjacent logs can touch at a corner, as intended; an elevation
          // jump larger than one would produce a suspended bridge or a gap.
-         if (h < 1 || h >= 249 || (i != 0 && Math.abs(h - previous) > 1)) return false;
+         if (h >= 249 || (i != 0 && Math.abs(h - previous) > 1)) return false;
          previous = h;
       }
       return true;
@@ -537,7 +537,7 @@ public final class ForestTrees {
    }
 
    private boolean vine(int x, int y, int z, int meta) {
-      if (!inChunk(x, z) || y <= this.chunk.getWorld().getMinHeight() || y > 250) {
+      if (!inChunk(x, z) || y <= this.chunk.getWorld().getMinHeight() || y >= this.chunk.getWorld().getMaxHeight() - 2) {
          return true;
       }
       Block b = this.chunk.getBlock(x - this.minX, y, z - this.minZ);
@@ -553,7 +553,7 @@ public final class ForestTrees {
    }
 
    private void leaf(int x, int y, int z, int id, int data) {
-      if (!inChunk(x, z) || y <= this.chunk.getWorld().getMinHeight() || y > 250) {
+      if (!inChunk(x, z) || y <= this.chunk.getWorld().getMinHeight() || y >= this.chunk.getWorld().getMaxHeight() - 2) {
          return;
       }
       Block b = this.chunk.getBlock(x - this.minX, y, z - this.minZ);
@@ -563,7 +563,7 @@ public final class ForestTrees {
    }
 
    private void log(int x, int y, int z, int id, int data) {
-      if (!inChunk(x, z) || y <= this.chunk.getWorld().getMinHeight() || y > 250) {
+      if (!inChunk(x, z) || y <= this.chunk.getWorld().getMinHeight() || y >= this.chunk.getWorld().getMaxHeight() - 2) {
          return;
       }
       Block b = this.chunk.getBlock(x - this.minX, y, z - this.minZ);
