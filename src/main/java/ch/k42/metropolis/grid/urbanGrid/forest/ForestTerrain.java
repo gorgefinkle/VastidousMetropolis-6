@@ -11,6 +11,7 @@ import org.bukkit.util.noise.SimplexOctaveGenerator;
  * answer without reading the world.
  */
 public class ForestTerrain {
+   public static final long WORLD_SEED_SALT = 0x464F52455354L;
    private static final double SIGMA = 0.45;
 
    private final long seed;
@@ -23,7 +24,7 @@ public class ForestTerrain {
    private final double bias;
 
    public ForestTerrain(long worldSeed) {
-      this.seed = worldSeed ^ 0x464F52455354L;
+      this.seed = worldSeed ^ WORLD_SEED_SALT;
       double typeScale = Math.max(32, PluginConfig.getForestTypeScale());
       this.amplitude = PluginConfig.getForestReliefAmplitude();
       this.bias = PluginConfig.getForestReliefBias();

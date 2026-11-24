@@ -388,11 +388,11 @@ generator:
     islandFraction: 0.42          # how much land can rise out of the water near the coast as islands (fraction of the base radius) -- bigger = more and larger islands, reaching further from shore. Never in the deep middle. 0 = no islands.
     seabedReliefFraction: 0.7     # how uneven the sea floor is, as a fraction of the water depth (basins, banks, hollows). Fades to nothing at the shoreline so the shallows stay a smooth slope. 0 = the old perfectly flat bed.
     seabed:                       # only ocean-owned water columns; does not move shoreline or overwrite ports
-      enabled: true               # underwater sediments, seagrass/kelp and sparse natural rock outcrops
-      patchSizeBlocks: 56         # 12..512: size of coherent sand/gravel/clay and plant habitat zones
-      rockPercent: 12             # 0..100: chance of small submerged boulder clusters inside rocky patches
-      seagrassPercent: 17         # 0..100: sparse growth on shallow sediment bottoms
-      kelpPercent: 9              # 0..100: growth in protected deeper water, with boat clearance
+      enabled: true               # varied underwater habitats: meadows, kelp forests, coral reefs, sponge gardens and rare vents
+      patchSizeBlocks: 44         # 12..512: size of coherent sand/gravel/clay and plant habitat zones
+      rockPercent: 18             # 0..100: chance of small submerged boulder clusters inside rocky patches
+      seagrassPercent: 34         # 0..100: sparse growth on shallow sediment bottoms
+      kelpPercent: 28              # 0..100: growth in protected deeper water, with boat clearance
       shelfVariationBlocks: 2.2   # 0..5: LOW, smooth rolling rises/hollows breaking the flat shelf; fades at shoreline
       midVariationBlocks: 2.0     # 0..6: mid-depth hills/hollows; deep ocean keeps existing broad relief
       bedformScaleBlocks: 110     # 24..512: width of the coherent low seabed rises; larger = broader, smoother shelves

@@ -1,0 +1,162 @@
+package ch.k42.metropolis.grid.urbanGrid.forest;
+
+import ch.k42.metropolis.grid.urbanGrid.wild.WildBiome;
+import java.util.Random;
+
+/**
+ * Exercises the exact production WildField picker, including blur, habitat
+ * bias, city/farm keep-away, sharpening, hard borders and the painter's hash.
+ * This is deliberately beyond the discrete WildLayers label-map test.
+ */
+public final class WildBiomeProductionPickerProbe {
+   private static final int SAMPLES_PER_SEED = 20_000;
+   private static final int EXTENT = 8_000;
+
+   public static void main(String[] args) {
+      long[] seeds = {
+         -1482741523194359869L,
+         1750414970189483479L,
+         1414199025253064524L
+      };
+      long totalBloom = 0;
+      long totalKarst = 0;
+
+      for (long seed : seeds) {
+         ForestGenerator.WildField field = new ForestGenerator.WildField(seed, false);
+         Random random = new Random(seed ^ 0x4250524f44554354L);
+         int bloom = 0;
+         int karst = 0;
+         int labelBloom = 0, labelKarst = 0;
+         int sharpBloom = 0, sharpKarst = 0;
+         int rawBloomCore = 0, rawKarstCore = 0;
+         double maxRawBloom = 0.0, maxRawKarst = 0.0;
+         double maxSharpBloom = 0.0, maxSharpKarst = 0.0;
+         double[] raw = new double[WildBiome.ALL.length];
+
+         for (int i = 0; i < SAMPLES_PER_SEED; i++) {
+            int x = random.nextInt(EXTENT * 2 + 1) - EXTENT;
+            int z = random.nextInt(EXTENT * 2 + 1) - EXTENT;
+            int label = field.biomes.label(x,z);
+            if (label == WildBiome.BLOOMLANDS.ordinal()) labelBloom++;
+            if (label == WildBiome.VOLCANIC_BARRENS.ordinal()) labelKarst++;
+            field.biomes.weights(x,z,raw);
+            maxRawBloom = Math.max(maxRawBloom,raw[WildBiome.BLOOMLANDS.ordinal()]);
+            maxRawKarst = Math.max(maxRawKarst,raw[WildBiome.VOLCANIC_BARRENS.ordinal()]);
+            if(raw[WildBiome.BLOOMLANDS.ordinal()]>=0.012)rawBloomCore++;
+            if(raw[WildBiome.VOLCANIC_BARRENS.ordinal()]>=0.028)rawKarstCore++;
+            double[] sharp = field.sharp(x,z);
+            if(WildBiome.ALL[dominant(sharp)]==WildBiome.BLOOMLANDS)sharpBloom++;
+            if(WildBiome.ALL[dominant(sharp)]==WildBiome.VOLCANIC_BARRENS)sharpKarst++;
+            maxSharpBloom=Math.max(maxSharpBloom,sharp[WildBiome.BLOOMLANDS.ordinal()]);
+            maxSharpKarst=Math.max(maxSharpKarst,sharp[WildBiome.VOLCANIC_BARRENS.ordinal()]);
+            double roll = ForestTerrain.unit(ForestTerrain.hash(
+                    seed ^ 0x464F52455354L, x, z, 41));
+            WildBiome picked = field.pick(x, z, roll);
+            if (picked == WildBiome.BLOOMLANDS) bloom++;
+            if (picked == WildBiome.VOLCANIC_BARRENS) karst++;
+         }
+
+         // Mirror the command's square-ring scan from a player near the
+         // default-world spawn, using its 32-block search lattice and border.
+         int originX = -56, originZ = 23, firstRingHit = -1;
+         long firstHitDistance = Long.MAX_VALUE;
+         long latticeMatches = 0;
+         long checked = 0;
+         int searchStep = 128; // deliberately coarser than the production command's 32-block lattice
+         int maxRing = (int)Math.ceil(EXTENT / (double)searchStep) + 1;
+         search:
+         for (int ring = 0; ring <= maxRing; ring++) {
+            long points = ring == 0 ? 1L : 8L * ring;
+            for (long index = 0; index < points; index++) {
+               int[] point = pointAt(originX, originZ, ring, index, searchStep);
+               if (point[0] < 54 - EXTENT || point[0] > 54 + EXTENT
+                       || point[1] < -16 - EXTENT || point[1] > -16 + EXTENT) continue;
+               checked++;
+               double roll = ForestTerrain.unit(ForestTerrain.hash(
+                       seed ^ 0x464F52455354L, point[0], point[1], 41));
+               if (field.pick(point[0], point[1], roll) == WildBiome.BLOOMLANDS) {
+                  latticeMatches++;
+                  long dx = (long)point[0] - originX, dz = (long)point[1] - originZ;
+                  firstHitDistance = Math.min(firstHitDistance, dx * dx + dz * dz);
+                  if (firstRingHit < 0) firstRingHit = ring;
+               }
+            }
+            if (firstRingHit >= 0) break;
+         }
+
+         int giantMushroomSites = countLandmarkSites(field, seed, 72, true, 8);
+         int motherWillowSites = countLandmarkSites(field, seed, 224, false, 2);
+         double percent = 100.0 * bloom / SAMPLES_PER_SEED;
+         System.out.printf(java.util.Locale.ROOT,
+                 "seed=%d labelBloom=%d labelKarst=%d rawBloomCore=%d rawKarstCore=%d maxRawBloom=%.4f maxRawKarst=%.4f sharpBloom=%d sharpKarst=%d maxSharpBloom=%.4f maxSharpKarst=%.4f productionBloom=%d (%.3f%%) productionKarst=%d (%.3f%%) giantMushroomSites=%d motherWillowSites=%d firstBloomRing=%d scanSamples=%d%n",
+                 seed,labelBloom,labelKarst,rawBloomCore,rawKarstCore,maxRawBloom,maxRawKarst,
+                 sharpBloom,sharpKarst,maxSharpBloom,maxSharpKarst,
+                 bloom,percent,karst,100.0*karst/SAMPLES_PER_SEED,giantMushroomSites,motherWillowSites,firstRingHit,checked);
+         if (giantMushroomSites == 0) throw new AssertionError("No viable giant-mushroom landmark site for seed " + seed);
+         if (motherWillowSites == 0) throw new AssertionError("No viable Mother Willow site for seed " + seed);
+         if (bloom < 20) {
+            throw new AssertionError("production picker collapses Bloomlands for seed "
+                    + seed + ": only " + bloom + "/" + SAMPLES_PER_SEED);
+         }
+         if (karst == 0) {
+            throw new AssertionError("Karst has no production-picker coverage for seed " + seed);
+         }
+         if (karst > SAMPLES_PER_SEED * 0.20) {
+            throw new AssertionError("Karst expanded beyond its intended rare habitat for seed "
+                    + seed + ": " + karst + "/" + SAMPLES_PER_SEED);
+         }
+         if (firstRingHit < 0 || latticeMatches == 0) {
+            throw new AssertionError("32-block command scan did not encounter Bloomlands inside the world border for seed " + seed);
+         }
+         totalBloom += bloom;
+         totalKarst += karst;
+      }
+
+      if (totalBloom >= totalKarst) {
+         throw new AssertionError("Bloomlands must remain rarer than Karst across the multi-seed production sample: Bloomlands="
+                 + totalBloom + " Karst=" + totalKarst);
+      }
+      System.out.printf(java.util.Locale.ROOT,
+              "WildBiomeProductionPickerProbe: PASS totalBloom=%d totalKarst=%d samples=%d%n",
+              totalBloom, totalKarst, (long) SAMPLES_PER_SEED * seeds.length);
+   }
+
+   private static int countLandmarkSites(ForestGenerator.WildField field,long worldSeed,
+                                         int spacing,boolean mushroom,int stopAfter) {
+      int found=0;
+      int range=(int)Math.ceil(8000.0/spacing)+1;
+      outer:
+      for(int gx=-range;gx<=range;gx++)for(int gz=-range;gz<=range;gz++){
+         int x=BiomeEcology.decorationCellX(worldSeed,gx,gz,spacing);
+         int z=BiomeEcology.decorationCellZ(worldSeed,gx,gz,spacing);
+         if(!BiomeEcology.decorationCellChance(worldSeed,gx,gz,spacing,3,mushroom?.72:.28))continue;
+         // Most decoration anchors are ordinary forest; reject them with one
+         // centre sample before spending 8/16 more samples on the footprint.
+         if(field.pick(x,z,BiomeEcology.pickerRoll(worldSeed,x,z))!=WildBiome.BLOOMLANDS)continue;
+         boolean fits=mushroom
+               ? BiomeEcology.hasGiantMushroomFootprint(field,x,z,worldSeed)
+               : BiomeEcology.hasMotherWillowFootprint(field,x,z,worldSeed);
+         if(fits && ++found>=stopAfter)break outer;
+      }
+      return found;
+   }
+
+   private static int dominant(double[] weights) {
+      int best=0;
+      for(int i=1;i<weights.length;i++)if(weights[i]>weights[best])best=i;
+      return best;
+   }
+
+   private static int[] pointAt(int originX,int originZ,int ring,long index,int step) {
+      if (ring == 0) return new int[] {originX, originZ};
+      long r = ring;
+      long edge = 2L * r + 1L;
+      long dx, dz;
+      if (index < edge) { dx = -r + index; dz = -r; }
+      else if ((index -= edge) < edge) { dx = -r + index; dz = r; }
+      else if ((index -= edge) < 2L * r - 1L) { dx = -r; dz = -r + 1L + index; }
+      else { index -= 2L * r - 1L; dx = r; dz = -r + 1L + index; }
+      return new int[] {originX + (int)(dx * step), originZ + (int)(dz * step)};
+   }
+
+}

@@ -43,6 +43,8 @@ public final class WaterField implements WorldLayout.Mask {
       /** Negative means the entire containing planning cell, as in legacy planning. */
       default int riverLatticePaddingChunks() { return -1; }
       default boolean protectedDryParkAt(int chunkX, int chunkZ) { return false; }
+      /** Distance from a world-block point to the nearest accepted creek bank, or NaN when none is within the requested radius. */
+      default double nearestBankDistanceBlocks(double blockX, double blockZ, double maxDistanceBlocks) { return Double.NaN; }
    }
    private CreekSource creeks;
 
@@ -208,6 +210,12 @@ public final class WaterField implements WorldLayout.Mask {
    public boolean isCreek(int x, int z) {
       CreekSource c = this.creeks;
       return c != null && c.waterOrBank(x, z);
+   }
+
+   /** Nearest exact accepted creek-bank distance in world blocks; NaN means no creek in range or no creek plan installed. */
+   public double nearestCreekBankDistanceBlocks(double blockX, double blockZ, double maxDistanceBlocks) {
+      CreekSource c = this.creeks;
+      return c == null ? Double.NaN : c.nearestBankDistanceBlocks(blockX, blockZ, maxDistanceBlocks);
    }
 
    /** The river provider whose water or bank covers this chunk, or null. */
