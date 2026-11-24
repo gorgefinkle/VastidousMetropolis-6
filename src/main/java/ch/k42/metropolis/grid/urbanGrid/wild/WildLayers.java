@@ -46,6 +46,9 @@ final class WildLayers {
    /** Target-normalized shares for region-scale rare-biome seeding. */
    private final double bloomlandsCellShare;
    private final double karstCellShare;
+   /** Rare-province macro tile; a 16,384-block sector at the default scale. */
+   private final int rareGroupsPerSide;
+   private final ConcurrentHashMap<Long, byte[]> rareTileMemo = new ConcurrentHashMap<Long, byte[]>();
    private double calibrationError;
 
    /**
@@ -76,6 +79,8 @@ final class WildLayers {
               ? Math.max(0.0, target[WildBiome.BLOOMLANDS.ordinal()]) / targetTotal : 0.0;
       this.karstCellShare = targetTotal > 0.0
               ? Math.max(0.0, target[WildBiome.VOLCANIC_BARRENS.ordinal()]) / targetTotal : 0.0;
+      this.rareGroupsPerSide = Math.max(6, Math.min(32,
+              (int)Math.round(16384.0 / (2.0 * this.cellFinal))));
       this.calibrate(target);
    }
 
@@ -123,18 +128,81 @@ final class WildLayers {
       return label;
    }
 
-   /** The coarse common-biome map with an independent deterministic rare-province overlay. */
+   /** The common map plus a world-seed-stable quota of rare provinces per macro tile. */
    private int rareRegionLabel(int x, int z) {
-      int base = this.value(this.levels, x, z);
-      double rareTotal = this.bloomlandsCellShare + this.karstCellShare;
-      if (rareTotal <= 0.0) return base;
+      int groups = this.rareGroupsPerSide;
+      // Centre the macro grid on world origin. The ordinary 16,000-block
+      // test border (centred near 0,0) therefore fits inside its central tile.
       int groupX = Math.floorDiv(x, 2);
       int groupZ = Math.floorDiv(z, 2);
-      long h = this.hash(0x52415245, groupX, groupZ);
-      double roll = (h >>> 11) * (1.0 / (1L << 53));
-      if (roll < this.bloomlandsCellShare) return WildBiome.BLOOMLANDS.ordinal();
-      if (roll < rareTotal) return WildBiome.VOLCANIC_BARRENS.ordinal();
-      return base;
+      int centeredX = groupX + groups / 2;
+      int centeredZ = groupZ + groups / 2;
+      int tileX = Math.floorDiv(centeredX, groups);
+      int tileZ = Math.floorDiv(centeredZ, groups);
+      int localX = Math.floorMod(centeredX, groups);
+      int localZ = Math.floorMod(centeredZ, groups);
+      long tileKey = ((long)tileX << 32) ^ (tileZ & 0xffffffffL);
+      byte[] plan = this.rareTileMemo.get(tileKey);
+      if (plan == null) {
+         byte[] created = this.buildRareTile(tileX, tileZ);
+         byte[] prior = this.rareTileMemo.putIfAbsent(tileKey, created);
+         plan = prior == null ? created : prior;
+         if (this.rareTileMemo.size() > 4096) this.rareTileMemo.clear();
+      }
+      int rare = plan[localZ * groups + localX];
+      // Store ordinal+1 in the tile plan; zero means use the coarse common map.
+      return rare == 0 ? this.value(this.levels, x, z) : rare - 1;
+   }
+
+   /**
+    * Select deterministic, non-overlapping 2x2 final-cell provinces inside
+    * each macro tile. The quota is rounded stochastically per tile, so the
+    * long-run land share remains the configured target while every normal
+    * 16k world sector receives its expected rare-habitat candidates.
+    */
+   private byte[] buildRareTile(int tileX, int tileZ) {
+      int groups = this.rareGroupsPerSide;
+      byte[] labels = new byte[groups * groups];
+      int margin = 1;
+      int side = Math.max(1, groups - margin * 2);
+      int slots = side * side;
+      boolean[] occupied = new boolean[labels.length];
+      long seedHash = this.hash(0x52415245, tileX, tileZ);
+      int bloomCount = stochasticQuota(this.bloomlandsCellShare * groups * groups,
+              seedHash ^ 0x424c4f4f4dL, slots);
+      int karstCount = stochasticQuota(this.karstCellShare * groups * groups,
+              seedHash ^ 0x4b41525354L, Math.max(0, slots - bloomCount));
+      placeRareGroups(labels, occupied, WildBiome.BLOOMLANDS.ordinal(),
+              bloomCount, tileX, tileZ, side, margin, 0x424c4f4f);
+      placeRareGroups(labels, occupied, WildBiome.VOLCANIC_BARRENS.ordinal(),
+              karstCount, tileX, tileZ, side, margin, 0x4b415253);
+      return labels;
+   }
+
+   private static int stochasticQuota(double expected, long seed, int maximum) {
+      if (maximum <= 0 || expected <= 0.0) return 0;
+      int count = Math.min(maximum, (int)Math.floor(expected));
+      double fraction = expected - Math.floor(expected);
+      double roll = (seed >>> 11) * (1.0 / (1L << 53));
+      if (roll < fraction && count < maximum) count++;
+      return count;
+   }
+
+   private void placeRareGroups(byte[] labels, boolean[] occupied, int biomeOrdinal,
+                                int count, int tileX, int tileZ, int side, int margin, int salt) {
+      if (count <= 0) return;
+      int groups = this.rareGroupsPerSide;
+      int slots = side * side;
+      for (int i = 0; i < count; i++) {
+         int slot = (int)Math.floorMod(this.hash(salt + i, tileX, tileZ), (long)slots);
+         int attempts = 0;
+         while (occupied[slot] && attempts++ < slots) slot = (slot + 1) % slots;
+         if (occupied[slot]) return;
+         occupied[slot] = true;
+         int localX = margin + slot % side;
+         int localZ = margin + slot / side;
+         labels[localZ * groups + localX] = (byte)(biomeOrdinal + 1);
+      }
    }
 
    double[] realisedShares() {
