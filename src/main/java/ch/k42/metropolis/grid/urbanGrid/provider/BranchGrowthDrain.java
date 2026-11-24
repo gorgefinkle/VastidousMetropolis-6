@@ -37,6 +37,9 @@ public final class BranchGrowthDrain implements Runnable {
     private long lastWarningTick;
     private final ArrayDeque<Job> rotation = new ArrayDeque<>();
     private final IdentityHashMap<Object, IdentityHashMap<Object, Job>> jobs = new IdentityHashMap<>();
+    // Bukkit chunk tickets are plugin-scoped, not job-scoped. Reference-count
+    // shared chunks so completing one build cannot release another build's pin.
+    private final IdentityHashMap<World, Map<Long, Integer>> ticketReferences = new IdentityHashMap<>();
     private Method flushMethod;
     private Field pendingField;
     private Field waitingField;
@@ -107,16 +110,38 @@ public final class BranchGrowthDrain implements Runnable {
         return job.world;
     }
 
+    private boolean retainChunk(Job job, World world, long key) {
+        if (job.retained.contains(key)) return true;
+        Map<Long, Integer> refs = ticketReferences.computeIfAbsent(world, ignored -> new HashMap<>());
+        int count = refs.getOrDefault(key, 0);
+        if (count == 0) {
+            int cx = (int) (key >> 32), cz = (int) key;
+            if (!world.addPluginChunkTicket(cx, cz, plugin)) return false;
+        }
+        refs.put(key, count + 1);
+        job.retained.add(key);
+        return true;
+    }
+
     private void release(Job job) {
         if (job.world != null) {
+            Map<Long, Integer> refs = ticketReferences.get(job.world);
             for (Long value : job.retained) {
-                int cx = (int) (value >> 32), cz = (int) (long) value;
-                try {
-                    job.world.removePluginChunkTicket(cx, cz, plugin);
-                } catch (RuntimeException e) {
-                    plugin.getLogger().warning("Branch growth chunk ticket release failed: " + e);
+                if (refs == null) continue;
+                int count = refs.getOrDefault(value, 0);
+                if (count <= 1) {
+                    refs.remove(value);
+                    int cx = (int) (value >> 32), cz = (int) (long) value;
+                    try {
+                        job.world.removePluginChunkTicket(cx, cz, plugin);
+                    } catch (RuntimeException e) {
+                        plugin.getLogger().warning("Branch growth chunk ticket release failed: " + e);
+                    }
+                } else {
+                    refs.put(value, count - 1);
                 }
             }
+            if (refs != null && refs.isEmpty()) ticketReferences.remove(job.world);
         }
         job.retained.clear();
         job.stagingSince = 0L;
@@ -157,7 +182,7 @@ public final class BranchGrowthDrain implements Runnable {
                         warnTicketLimit();
                         return false;
                     }
-                    if (w.addPluginChunkTicket(cx, cz, plugin)) job.retained.add(value);
+                    retainChunk(job, w, value);
                 }
                 continue;
             }
@@ -172,9 +197,8 @@ public final class BranchGrowthDrain implements Runnable {
             job.lastReloadAttempt.put(value, tick);
             loadsRemaining[0]--;
             boolean loaded = w.loadChunk(cx, cz, false);
-            if (loaded && w.isChunkLoaded(cx, cz) && w.addPluginChunkTicket(cx, cz, plugin)) {
+            if (loaded && w.isChunkLoaded(cx, cz) && retainChunk(job, w, value)) {
                 job.lastReloadAttempt.remove(value);
-                job.retained.add(value);
             }
             if (System.nanoTime() >= job.tickDeadlineNanos) return false;
         }
