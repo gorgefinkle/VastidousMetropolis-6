@@ -1,9 +1,10 @@
-name: R14.22 remove smooth-stone terrain seam validation
+name: R14.23 FARM access connectivity and diversity validation
 
 on:
   push:
     branches:
       - feature/r14-17-growth-timeout-shutdown-guard
+      - feature/r14-23-farm-access-and-diversity
   pull_request:
     branches:
       - integration/morphomos-natural-family-bloomlands
@@ -44,8 +45,10 @@ jobs:
         run: sh QA/R14_21/run_mother_willow_junction_probe.sh
       - name: Bloomlands compact understory tree geometry (R14.21)
         run: sh QA/R14_21/run_bloom_understory_probe.sh
-      - name: No buried smooth-stone terrain seam (R14.22)
+      - name: No buried smooth-stone terrain seam (inherited R14.22)
         run: sh QA/R14_22/run_smoothstone_seam_probe.sh
+      - name: FARM site access routes use bounded site-to-street intervals
+        run: sh QA/R14_23/run_farm_road_route_policy_probe.sh
       - name: Branch-growth timeout shutdown lifecycle policy
         run: sh QA/R14_17/run_growth_timeout_shutdown_policy_probe.sh
       - name: Safe asynchronous branch support staging probe
@@ -69,26 +72,26 @@ jobs:
         run: sh QA/R14_10/run_metropolis_biome_target_probe.sh
       - name: Underwater marine habitat probe
         run: bash QA/R14_11/run_marine_habitat_probe.sh
-      - name: Assemble complete R14.22 source archive
-        run: zip -r Metropolis_R14_22_Remove_Smoothstone_Seam_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
-      - name: Assemble exact two-file R14.22 development package
+      - name: Assemble complete R14.23 source archive
+        run: zip -r Metropolis_R14_23_Farm_Access_Diversity_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
+      - name: Assemble exact two-file R14.23 development package
         run: |
-          mkdir -p r14-22-package
-          cp target/Metropolis_R14_22_Remove_Smoothstone_Seam_DEV.jar r14-22-package/
-          cp Metropolis_R14_22_Remove_Smoothstone_Seam_SOURCE.zip r14-22-package/
-          (cd r14-22-package && zip -q ../Metropolis_R14_22_Remove_Smoothstone_Seam_DEV_PACKAGE.zip ./*)
-      - name: Verify exact R14.22 package contents
+          mkdir -p r14-23-package
+          cp target/Metropolis_R14_23_Farm_Access_Diversity_DEV.jar r14-23-package/
+          cp Metropolis_R14_23_Farm_Access_Diversity_SOURCE.zip r14-23-package/
+          (cd r14-23-package && zip -q ../Metropolis_R14_23_Farm_Access_Diversity_DEV_PACKAGE.zip ./*)
+      - name: Verify exact R14.23 package contents
         run: |
-          unzip -Z1 Metropolis_R14_22_Remove_Smoothstone_Seam_DEV_PACKAGE.zip | sort > package-files.txt
-          printf '%s\n' Metropolis_R14_22_Remove_Smoothstone_Seam_DEV.jar Metropolis_R14_22_Remove_Smoothstone_Seam_SOURCE.zip | sort > expected-files.txt
+          unzip -Z1 Metropolis_R14_23_Farm_Access_Diversity_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\n' Metropolis_R14_23_Farm_Access_Diversity_DEV.jar Metropolis_R14_23_Farm_Access_Diversity_SOURCE.zip | sort > expected-files.txt
           diff -u expected-files.txt package-files.txt
-          unzip -t Metropolis_R14_22_Remove_Smoothstone_Seam_DEV_PACKAGE.zip
+          unzip -t Metropolis_R14_23_Farm_Access_Diversity_DEV_PACKAGE.zip
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_22_Remove_Smoothstone_Seam_DEV
+          name: Metropolis_R14_23_Farm_Access_Diversity_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_22_Remove_Smoothstone_Seam_DEV.jar
-            Metropolis_R14_22_Remove_Smoothstone_Seam_SOURCE.zip
-            Metropolis_R14_22_Remove_Smoothstone_Seam_DEV_PACKAGE.zip
+            target/Metropolis_R14_23_Farm_Access_Diversity_DEV.jar
+            Metropolis_R14_23_Farm_Access_Diversity_SOURCE.zip
+            Metropolis_R14_23_Farm_Access_Diversity_DEV_PACKAGE.zip
