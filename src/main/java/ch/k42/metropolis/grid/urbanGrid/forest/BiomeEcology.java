@@ -434,6 +434,9 @@ public final class BiomeEcology {
     private static boolean inChunk(Chunk c,int x,int z) {
         return (x>>4)==c.getX() && (z>>4)==c.getZ();
     }
+    private static boolean validVegetationY(int y,int minHeight,int maxHeight) {
+        return VegetationHeightPolicy.allows(y,minHeight,maxHeight);
+    }
     /**
      * Natural ground cover is allowed to yield to trunks and stems. Keep the
      * list explicit: mushrooms must not overwrite soil/rock, but the forest's
