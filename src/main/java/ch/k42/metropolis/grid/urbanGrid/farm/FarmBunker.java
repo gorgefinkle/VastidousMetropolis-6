@@ -83,7 +83,7 @@ final class FarmBunker extends FarmFeature {
         // A shallow earth cap hides the roof and prevents the farm cover pass
         // from turning the concealed hatch into an obvious open hole.
         for(int dx=-2;dx<=2;dx++) for(int dz=-2;dz<=2;dz++) {
-            if(dx*dx+dz*dz<=5) p.set(this.cx+dx,this.h,this.cz+dz,FarmPainter.DIRT,0);
+            if(dx*dx+dz*dz<=5) p.set(this.cx+dx,this.h,this.cz+dz,FarmPainter.GRASS,0);
         }
         p.set(hatchX,this.h, hatchZ,96,0);
         p.set(hatchX,this.h+1,hatchZ,FarmPainter.HAY,0);
