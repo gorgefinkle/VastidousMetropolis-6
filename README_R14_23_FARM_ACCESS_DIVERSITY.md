@@ -70,12 +70,13 @@ Existing GABLED, BAYS and HOOP families remain the underlying categories. Their 
 - The new industrial facilities use common stone, stone brick, terracotta, gravel, ordinary timber, glass and fences.
 - No iron blocks are used by the new industrial facility styles.
 - The modern barn's continuous iron-block ridge cap has been replaced with ordinary stone brick.
+- Greenhouse support frames use common white terracotta instead of quartz; polytunnel hoops use common fence framing with sparse iron-bar reinforcement.
 - Existing iron bars remain only as small machine railings, ventilation hoops and livestock barriers.
 - The only remaining iron-block accents are the two small gearbox/hub details in the optional outbuilding windmill.
 
 ## Validation
 
-`QA/R14_23/run_farm_road_route_policy_probe.sh` checks nearest-street selection, negative coordinates, bounded gate-to-street intervals, shared trunk behavior and the absence of unused road tails.
+`QA/R14_23/run_farm_road_route_policy_probe.sh` checks nearest-street selection, negative coordinates, bounded gate-to-street intervals, shared trunk behavior, unrequested boundaries, sites outside the connected farm run and the absence of unused road tails.
 
 The R14.23 GitHub Actions workflow runs Java 25 Maven verification and the inherited world-generation regression suite, then packages exactly one current JAR and the complete source archive.
 
