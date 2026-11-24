@@ -459,6 +459,109 @@ final class FarmGreenhouse extends FarmFeature {
       this.put(p, 1, w - 2, 1, FarmPainter.CAULDRON, 3);
       int mid = (bays / 2) * BAY_W + (bays % 2 == 0 ? 0 : BAY_W / 2);
       p.chest(this.wx(len - 2, mid), this.groundY + 1, this.wz(len - 2, mid), this.axisX ? 4 : 2, 71, FarmPainter.TIER_LOW);   // seed and trowels
+      if (this.purpose == COLLAPSED_WING) this.paintCollapsedWing(p, len, w, bays);
+   }
+
+   /**
+    * Propagation houses use raised, accessible seedling benches rather than
+    * ordinary field rows. Two long bench lines flank the central service aisle.
+    */
+   private void propagationBed(FarmPainter p, int u, int v) {
+      if (v != 1 && v != this.width - 2) {
+         // Narrow auxiliary trays between the main benches.
+         if (u % 3 == 1 && (v & 1) == 0) {
+            this.put(p, u, v, 1, PLANKS, 1);
+            this.put(p, u, v, 2, FARMLAND_B, 7);
+            if (this.rnd(u, v, 1, 1761) < 0.78) {
+               this.put(p, u, v, 3, (v & 2) == 0 ? FarmPainter.CARROTS : FarmPainter.WHEAT, 1);
+            }
+         }
+         return;
+      }
+      if (u % 5 == 0) this.put(p, u, v, 1, FarmPainter.FENCE, 0);
+      this.put(p, u, v, 2, PLANKS, 1);
+      this.put(p, u, v, 3, FARMLAND_B, 7);
+      double seedling = this.rnd(u, v, 1, 1762);
+      if (seedling < 0.84) {
+         int crop = (v == 1) ? FarmPainter.CARROTS : FarmPainter.WHEAT;
+         this.put(p, u, v, 4, crop, 1);
+      } else if (seedling < 0.94) {
+         this.put(p, u, v, 4, FarmPainter.TALL_GRASS, 1);
+      }
+      if (u % 6 == 2) this.put(p, u, v, 1, FarmPainter.CAULDRON, 3);
+   }
+
+   /** Separate trial beds with crop rows and occasional sample-marker posts. */
+   private void researchBed(FarmPainter p, int u, int v) {
+      this.put(p, u, v, 0, FARMLAND_B, 7);
+      int trial = Math.floorMod(v + u / 5, 3);
+      int crop = trial == 0 ? FarmPainter.CARROTS
+              : (trial == 1 ? FarmPainter.POTATOES : FarmPainter.BEETROOTS);
+      if (u % 6 == 0 && v % 2 == 1) {
+         this.put(p, u, v, 1, FarmPainter.FENCE, 0);
+         this.put(p, u, v, 2, FarmPainter.TERRACOTTA, trial);
+      } else if (this.rnd(u, v, 1, 1763) < 0.76) {
+         this.put(p, u, v, 1, crop, 1);
+      }
+   }
+
+   /**
+    * Enclosed lab/service room in the rear eight blocks of the research
+    * greenhouse. The exterior envelope is already closed by paintGabled;
+    * this builds an internal divider, work counters and sample storage.
+    */
+   private void paintResearchRoom(FarmPainter p, int start, int len, int width, int half) {
+      int divider = start;
+      for (int v = 1; v < width - 1; v++) {
+         if (Math.abs(v - half) <= 1) continue; // internal double-width access door
+         for (int dy = 1; dy <= 3; dy++) this.put(p, divider, v, dy, WALL, 0);
+      }
+      // Durable work counters along both sides, with sample cabinets and a
+      // clear central aisle. All materials are common blocks.
+      for (int u = start + 1; u < len - 1; u++) {
+         this.put(p, u, 1, 1, PLANKS, 1);
+         this.put(p, u, 1, width - 2, PLANKS, 1);
+         if (u % 3 == 0) {
+            this.put(p, u, 2, 1, FarmPainter.CRAFTING_TABLE, 0);
+            this.put(p, u, 2, width - 2, FarmPainter.BOOKSHELF, 0);
+         }
+      }
+      for (int v = half - 2; v <= half + 2; v++) {
+         if (v == half) continue;
+         this.put(p, start + 2, 1, v, WALL, 0);
+      }
+      this.put(p, start + 3, 1, half, FarmPainter.CAULDRON, 3);
+      this.put(p, start + 5, 1, half, FarmPainter.TORCH, 5);
+      p.chest(this.wx(len - 2, half), this.groundY + 1, this.wz(len - 2, half),
+              this.axisX ? (this.mirror ? 5 : 4) : (this.mirror ? 3 : 2), 73, FarmPainter.TIER_MID);
+   }
+
+   /**
+    * Deliberately collapsed rear wing of the last commercial bay. Missing
+    * glazing is confined by glass(); this adds fallen rafters and clustered
+    * shards without damaging the two still-operational bays.
+    */
+   private void paintCollapsedWing(FarmPainter p, int len, int width, int bays) {
+      int start = (len * 2) / 3;
+      int bayStart = Math.max(1, (bays - 1) * BAY_W + 1);
+      int bayEnd = Math.min(width - 2, bays * BAY_W - 1);
+      for (int u = start; u < len - 1; u += 3) {
+         int v = bayStart + Math.floorMod(u / 3, Math.max(1, bayEnd - bayStart + 1));
+         // One fallen roof member lies diagonally across the crop rows.
+         for (int step = 0; step < 4 && v + step <= bayEnd; step++) {
+            this.put(p, u + Math.min(1, step / 2), v + step, 1 + step / 2, PLANKS, 1);
+         }
+         for (int step = 0; step < 3 && v + step <= bayEnd; step++) {
+            if (this.rnd(u, v + step, 0, 1841) < 0.75) {
+               this.put(p, u + 1, v + step, 1, GLASS, 0);
+            }
+         }
+      }
+      // Broken roof edges hang down at the transition from the intact bays.
+      for (int v = bayStart; v <= bayEnd; v += 3) {
+         this.put(p, start, T + 1, v, PLANKS, 1);
+         if ((v & 1) == 0) this.put(p, start + 1, T, v, PLANKS, 1);
+      }
    }
 
    // ------------------------------------------------------------------------------------------------------------ hoop houses
@@ -541,6 +644,14 @@ final class FarmGreenhouse extends FarmFeature {
 
    /** One bed column, left to itself: dead crops, grass and ferns pushing up, the odd pumpkin or flower. */
    private void bed(FarmPainter p, int u, int v) {
+      if (this.purpose == PROPAGATION) {
+         this.propagationBed(p, u, v);
+         return;
+      }
+      if (this.purpose == RESEARCH) {
+         this.researchBed(p, u, v);
+         return;
+      }
       double r = this.rnd(u, v, 0, 1730);
       if (r < 0.30) {
          this.put(p, u, v, 0, FARMLAND_B, 7);
