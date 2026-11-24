@@ -541,13 +541,27 @@ public final class ForestGenerator {
       WildField wild = wildFor(generator);
       if (wild == null) return -1;
       ForestTerrain terrain = terrainFor(generator);
-      double roll = ForestTerrain.unit(ForestTerrain.hash(terrain.getSeed(), x, z, 41));
-      if (wild.pick(x, z, roll) != biome) return -1;
-
+      if (!wildBiomeMatchesAt(wild, terrain, biome, x, z)) return -1;
       WildBiomeOwner owner = wildBiomeOwner(generator, x >> 4, z >> 4);
-      // -2 means the biome field matched, but the planner does not expose a
-      // forest-owned destination chunk here. -1 means the field did not match.
-      return owner == null ? -2 : 10000;
+      // -2 = no forest planner owner; -3 = a one-off field hit without a sustained core.
+      if (owner == null) return -2;
+      final int radius = 96;
+      final int[][] offsets = {
+            {0, 0}, {radius, 0}, {-radius, 0}, {0, radius}, {0, -radius},
+            {radius, radius}, {radius, -radius}, {-radius, radius}, {-radius, -radius}
+      };
+      for (int[] offset : offsets) {
+         int sx = x + offset[0], sz = z + offset[1];
+         if (!wildBiomeMatchesAt(wild, terrain, biome, sx, sz)) return -3;
+         if (wildBiomeOwner(generator, sx >> 4, sz >> 4) == null) return -2;
+      }
+      return 10000;
+   }
+
+   private static boolean wildBiomeMatchesAt(WildField wild, ForestTerrain terrain,
+                                             WildBiome biome, int x, int z) {
+      double roll = ForestTerrain.unit(ForestTerrain.hash(terrain.getSeed(), x, z, 41));
+      return wild.pick(x, z, roll) == biome;
    }
 
    /** Verify the generated destination chunk and return its nearest safe column {x, feetY, z}. */

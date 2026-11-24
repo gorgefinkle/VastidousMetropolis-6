@@ -29,12 +29,15 @@ final class WildLayers {
    private final int levels;
    private final int edgePasses;
    private static final int MAX_CACHED = 600000;
+   static final double MIN_RARE_CELL_BLOCKS = 512.0;
 
    private final long seed;
    private final int n;
    private final double[] prior;
    private final int[][] rules;
    private final double cellFinal;
+   private final int rareCellDivisor;
+   private final double rareCellBlocks;
    private final double warpBlocks;
    private final Noise2D warpX;
    private final Noise2D warpZ;
@@ -66,8 +69,11 @@ final class WildLayers {
       this.seed = worldSeed ^ 0x4C41594552534CL;
       this.n = target.length;
       this.rules = rules == null ? new int[0][] : rules;
-      double cell0 = Math.max(256.0, scaleChunks * 16.0 * 1.3);
-      this.cellFinal = cell0 / (1 << this.levels);
+      this.cellFinal = commonFinalCellBlocks(scaleChunks, this.levels);
+      // Preserve a physically useful scale for Bloomlands fungi and Karst
+      // formations even when the common biome grid uses its finest settings.
+      this.rareCellDivisor = rareCellDivisor(this.cellFinal);
+      this.rareCellBlocks = this.cellFinal * this.rareCellDivisor;
       this.warpBlocks = Math.min(this.cellFinal * 0.75, 48.0) * (Math.max(0, Math.min(100, warpPercent)) / 100.0);
       this.warpX = new Noise2D(this.seed ^ 0x77A1L);
       this.warpZ = new Noise2D(this.seed ^ 0x77A2L);
@@ -80,8 +86,21 @@ final class WildLayers {
       this.karstCellShare = targetTotal > 0.0
               ? Math.max(0.0, target[WildBiome.VOLCANIC_BARRENS.ordinal()]) / targetTotal : 0.0;
       this.rareGroupsPerSide = Math.max(6, Math.min(32,
-              (int)Math.round(16384.0 / (2.0 * this.cellFinal))));
+              (int)Math.round(16384.0 / (2.0 * this.rareCellBlocks))));
       this.calibrate(target);
+   }
+
+   static double commonFinalCellBlocks(double scaleChunks,int zoomLevels) {
+      int zooms=Math.max(3,Math.min(6,zoomLevels));
+      double cell0=Math.max(256.0,scaleChunks*16.0*1.3);
+      return cell0/(1<<zooms);
+   }
+   static int rareCellDivisor(double commonCellBlocks) {
+      return Math.max(1,(int)Math.ceil(MIN_RARE_CELL_BLOCKS/commonCellBlocks));
+   }
+   static double configuredRareCellBlocks(double scaleChunks,int zoomLevels) {
+      double common=commonFinalCellBlocks(scaleChunks,zoomLevels);
+      return common*rareCellDivisor(common);
    }
 
    /** The biome (a WildBiome ordinal) of the final cell holding the block (x, z). */
@@ -96,15 +115,9 @@ final class WildLayers {
       long key = ((long) x << 32) ^ (z & 0xffffffffL);
       Byte prior = regionMemo.get(key);
       if (prior != null) return prior & 0xff;
-      // Special habitats are seeded at the final region lattice rather than
-      // only in the very coarse level-0 grid. With a 520-chunk scale and four
-      // zooms, level-0 cells are over 10,000 blocks wide; a normal 16,000-block
-      // world border often contains only four such cells, making a 1–3% biome
-      // effectively absent from most seeds. A deterministic 2x2 final-cell
-      // province keeps its overall requested share while making local
-      // appearance statistically representative. Each province is about
-      // 1,352 blocks across at the default scale; domain warp still roughens
-      // its edges and the usual majority guard keeps the core intact.
+      // Special habitats use a separate physical lattice. Each 2x2 rare
+      // province is at least 1,024 blocks across (about 1,352 at defaults),
+      // leaving room for giant fungi and the large Mother Willow footprint.
       int center = this.rareRegionLabel(x, z);
       int[] counts = new int[this.n];
       for (int dz = -1; dz <= 1; ++dz) {
@@ -131,10 +144,11 @@ final class WildLayers {
    /** The common map plus a world-seed-stable quota of rare provinces per macro tile. */
    private int rareRegionLabel(int x, int z) {
       int groups = this.rareGroupsPerSide;
-      // Centre the macro grid on world origin. The ordinary 16,000-block
-      // test border (centred near 0,0) therefore fits inside its central tile.
-      int groupX = Math.floorDiv(x, 2);
-      int groupZ = Math.floorDiv(z, 2);
+      int rareX = Math.floorDiv(x, this.rareCellDivisor);
+      int rareZ = Math.floorDiv(z, this.rareCellDivisor);
+      // Centre the macro grid on world origin.
+      int groupX = Math.floorDiv(rareX, 2);
+      int groupZ = Math.floorDiv(rareZ, 2);
       int centeredX = groupX + groups / 2;
       int centeredZ = groupZ + groups / 2;
       int tileX = Math.floorDiv(centeredX, groups);
@@ -154,8 +168,12 @@ final class WildLayers {
       return rare == 0 ? this.value(this.levels, x, z) : rare - 1;
    }
 
+   double rareCellBlocks() { return this.rareCellBlocks; }
+   double rareProvinceBlocks() { return this.rareCellBlocks * 2.0; }
+   int rareCellDivisor() { return this.rareCellDivisor; }
+
    /**
-    * Select deterministic, non-overlapping 2x2 final-cell provinces inside
+    * Select deterministic, non-overlapping 2x2 rare-cell provinces inside
     * each macro tile. The quota is rounded stochastically per tile, so the
     * long-run land share remains the configured target while every normal
     * 16k world sector receives its expected rare-habitat candidates.

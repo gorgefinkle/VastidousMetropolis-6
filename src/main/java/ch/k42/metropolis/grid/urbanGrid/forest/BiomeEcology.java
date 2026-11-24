@@ -348,14 +348,47 @@ public final class BiomeEcology {
         }
     }
     public static Biome karstBiome() { return ch.k42.metropolis.grid.urbanGrid.wild.BiomeNames.resolve(Biome.FOREST, "FOREST", "LUSH_CAVES"); }
-    private static WildBiome pick(Object wild,int x,int z,long seed) {
+    static double pickerRoll(long worldSeed,int x,int z) {
+        long terrainSeed=worldSeed ^ ForestTerrain.WORLD_SEED_SALT;
+        return ForestTerrain.unit(ForestTerrain.hash(terrainSeed,x,z,41));
+    }
+    static WildBiome pick(Object wild,int x,int z,long worldSeed) {
         try {
             Method m=PICK.computeIfAbsent(wild.getClass(), c -> {
                 try {Method found=c.getDeclaredMethod("pick",int.class,int.class,double.class);found.setAccessible(true);return found;}
                 catch (ReflectiveOperationException e) {throw new IllegalStateException(e);}
             });
-            return (WildBiome)m.invoke(wild,x,z,ForestTerrain.unit(ForestTerrain.hash(seed,x,z,41)));
+            return (WildBiome)m.invoke(wild,x,z,pickerRoll(worldSeed,x,z));
         } catch (ReflectiveOperationException e) {throw new IllegalStateException("Cannot read existing wilderness biome placement",e);}
+    }
+    static int decorationCellX(long seed,int gx,int gz,int spacing) {
+        long h=hash(seed,gx,gz,spacing);
+        return gx*spacing+12+(int)(unit(h)*Math.max(1,spacing-24));
+    }
+    static int decorationCellZ(long seed,int gx,int gz,int spacing) {
+        long h=hash(seed,gx,gz,spacing);
+        return gz*spacing+12+(int)(unit(h+1)*Math.max(1,spacing-24));
+    }
+    static boolean decorationCellChance(long seed,int gx,int gz,int spacing,int salt,double chance) {
+        return unit(hash(seed,gx,gz,spacing)+salt)<chance;
+    }
+    static boolean hasGiantMushroomFootprint(Object wild,int x,int z,long seed) {
+        if(pick(wild,x,z,seed)!=WildBiome.BLOOMLANDS)return false;
+        for(int a=0;a<8;a++){
+            double angle=a*Math.PI/4;
+            int tx=x+(int)Math.round(Math.cos(angle)*38),tz=z+(int)Math.round(Math.sin(angle)*38);
+            if(pick(wild,tx,tz,seed)!=WildBiome.BLOOMLANDS)return false;
+        }
+        return true;
+    }
+    static boolean hasMotherWillowFootprint(Object wild,int x,int z,long seed) {
+        if(pick(wild,x,z,seed)!=WildBiome.BLOOMLANDS)return false;
+        for(int a=0;a<16;a++){
+            double angle=a*Math.PI/8;
+            int tx=x+(int)Math.round(Math.cos(angle)*190),tz=z+(int)Math.round(Math.sin(angle)*190);
+            if(pick(wild,tx,tz,seed)!=WildBiome.BLOOMLANDS)return false;
+        }
+        return true;
     }
     private static boolean inChunk(Chunk c,int x,int z) {
         return (x>>4)==c.getX() && (z>>4)==c.getZ();
@@ -507,29 +540,29 @@ public final class BiomeEcology {
             int minCZ=Math.floorDiv(bz-reach,spacing),maxCZ=Math.floorDiv(bz+15+reach,spacing);
             for(int gx=minCX;gx<=maxCX;gx++)for(int gz=minCZ;gz<=maxCZ;gz++) {
                 long h=hash(seed,gx,gz,spacing);
-                int x=gx*spacing+12+(int)(unit(h)*Math.max(1,spacing-24));
-                int z=gz*spacing+12+(int)(unit(h+1)*Math.max(1,spacing-24));
+                int x=decorationCellX(seed,gx,gz,spacing);
+                int z=decorationCellZ(seed,gx,gz,spacing);
                 if(Math.abs(x-(bx+8))>reach+9||Math.abs(z-(bz+8))>reach+9)continue;
                 if(!site.allows(x,z))continue;
                 WildBiome b=pick(wild,x,z,seed);
-                if(spacing==72 && b==WildBiome.BLOOMLANDS && unit(h+3)<.72) {
-                    // Do not cut monuments abruptly at established biome/urban limits.
-                    boolean room=true;
-                    for(int a=0;a<8;a++){
+                if(spacing==72 && b==WildBiome.BLOOMLANDS
+                        && decorationCellChance(seed,gx,gz,spacing,3,.72)) {
+                    boolean room=hasGiantMushroomFootprint(wild,x,z,seed);
+                    for(int a=0;a<8&&room;a++){
                         double angle=a*Math.PI/4;
                         int tx=x+(int)Math.round(Math.cos(angle)*38),tz=z+(int)Math.round(Math.sin(angle)*38);
-                        if(!site.allows(tx,tz)||pick(wild,tx,tz,seed)!=b){room=false;break;}
+                        if(!site.allows(tx,tz))room=false;
                     }
                     if(room)mushroom(chunk,site,x,z,seed,(int)(unit(h+9)*6));
                 }
-                if(spacing==224 && b==WildBiome.BLOOMLANDS && unit(h+3)<.28) {
-                    // Reject clipped crowns near the build ceiling. A rare
-                    // Mother Willow must remain a complete, living organism.
-                    boolean room=site.groundAt(x,z)+190<chunk.getWorld().getMaxHeight()-3;
+                if(spacing==224 && b==WildBiome.BLOOMLANDS
+                        && decorationCellChance(seed,gx,gz,spacing,3,.28)) {
+                    boolean room=site.groundAt(x,z)+190<chunk.getWorld().getMaxHeight()-3
+                            && hasMotherWillowFootprint(wild,x,z,seed);
                     for(int a=0;a<16&&room;a++){
                         double angle=a*Math.PI/8;
                         int tx=x+(int)Math.round(Math.cos(angle)*190),tz=z+(int)Math.round(Math.sin(angle)*190);
-                        if(!site.allows(tx,tz)||pick(wild,tx,tz,seed)!=b){room=false;break;}
+                        if(!site.allows(tx,tz))room=false;
                     }
                     if(room)willow(chunk,site,x,z,seed);
                 }
