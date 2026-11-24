@@ -25,8 +25,8 @@ public final class MotherWillowGeometry {
   private static P lerp(P a,P b,double t){return p(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,a.z+(b.z-a.z)*t);}
   /**
    * Curved take-off for the highest reiterated leader. Its initial tangent
-   * follows the main bole, then eases back toward the existing mid point.
-   * The mid-to-top segment, terminal shape and crown remain unchanged.
+   * blends the main bole with the outward azimuth, making the branch emerge
+   * visibly from the trunk while preserving the existing mid point and crown.
    */
   static P leaderJunctionPoint(P start,P end,P trunkBefore,P trunkAfter,double t) {
     t=clamp(t,0.0,1.0);
