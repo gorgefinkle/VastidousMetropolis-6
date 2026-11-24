@@ -1886,7 +1886,23 @@ public final class ForestGenerator {
       }
    }
 
+   /**
+    * R14.22: legacy chunks may still contain the old Y=64 smooth-stone
+    * fallback cap. If a raised biome surface buries that exact block,
+    * normalize it to the same stone substrate during this column's regular
+    * paint operation. The actual surface and all other materials are kept.
+    */
+   static Material buriedFallbackCap(Material existing, int surfaceY, int blockY) {
+      return existing == Material.SMOOTH_STONE && blockY == 64 && surfaceY > blockY
+              ? Material.STONE : existing;
+   }
+
    private static void writeColumn(Chunk chunk, int lx, int lz, int x, int z, int h, double[] w, Ctx ctx, WildBiome biome) {
+      if (h > 64) {
+         Material existingCap = chunk.getBlock(lx, 64, lz).getType();
+         Material naturalSubstrate = buriedFallbackCap(existingCap, h, 64);
+         if (naturalSubstrate != existingCap) PAL.set(chunk, lx, 64, lz, WildBlock.STONE);
+      }
       for (int y = h + 1; y <= CLEAR_TOP; y++) {
          PAL.set(chunk, lx, y, lz, WildBlock.AIR);
       }
