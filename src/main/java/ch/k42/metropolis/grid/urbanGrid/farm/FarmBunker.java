@@ -23,7 +23,11 @@ final class FarmBunker extends FarmFeature {
             boolean edge=x==x0-1||x==x0+width||z==z0-1||z==z0+length;
             p.set(x,floor,z,wall,0);
             p.set(x,roof,z,trim,0);
-            for(int y=floor+1;y<roof;y++) p.set(x,y,z,edge?wall:FarmPainter.AIR,0);
+            for(int y=floor+1;y<roof;y++) {
+                int weathered=this.variant==2?wall
+                        :(FarmRandom.unit(this.seed,x,z,y+870)<.12?FarmPainter.MOSSY_COBBLE:wall);
+                p.set(x,y,z,edge?weathered:FarmPainter.AIR,0);
+            }
         }
         // The middle shelter is a two-room refuge; the deep shelter has an
         // airlock, stores and sleeping bay separated by reinforced partitions.
