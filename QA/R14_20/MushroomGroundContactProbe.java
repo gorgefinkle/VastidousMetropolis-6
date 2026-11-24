@@ -52,6 +52,23 @@ public final class MushroomGroundContactProbe {
                             + " sample=" + sample + " ground cover=TALL_GRASS"
                             + " groundY=" + ground + " rootCell=" + foot);
                 }
+                Map<Long,Integer> lowestStem = new HashMap<>();
+                for (Map.Entry<Voxel,String> entry : placed.entrySet()) {
+                    if (!MushroomGeometry.STEM.equals(entry.getValue())) continue;
+                    Voxel voxel = entry.getKey();
+                    long key = ((long) voxel.x() << 32) | (voxel.z() & 0xffffffffL);
+                    lowestStem.merge(key, voxel.y(), Math::min);
+                }
+                for (Map.Entry<Long,Integer> stemColumn : lowestStem.entrySet()) {
+                    int sx = (int) (stemColumn.getKey() >> 32);
+                    int sz = (int) (long) stemColumn.getKey();
+                    int expected = 63 + Math.floorMod(sx * 31 + sz * 17, 9) - 4 + 1;
+                    if (stemColumn.getValue() != expected) {
+                        throw new AssertionError("stalk column does not reach its own uneven ground: variant="
+                                + variant + " sample=" + sample + " at=" + sx + "," + sz
+                                + " lowest=" + stemColumn.getValue() + " expected=" + expected);
+                    }
+                }
                 shapes++;
             }
         }
