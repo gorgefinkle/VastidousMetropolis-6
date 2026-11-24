@@ -20,6 +20,13 @@ public final class BloomUnderstoryGeometryProbe {
             if(!first.equals(again))throw new AssertionError("tree geometry is not deterministic at "+x+","+z);
             String foot=first.get(new V(x,terrain.groundAt(x,z)+1,z));
             if(foot==null||!foot.contains("_log["))throw new AssertionError("small tree lacks a grounded trunk at "+x+","+z);
+            for(int[] offset:new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) {
+                int gx=x+offset[0],gz=z+offset[1];
+                String rooted=first.get(new V(gx,terrain.groundAt(gx,gz)+1,gz));
+                if(rooted==null||!rooted.contains("_log[")) {
+                    throw new AssertionError("basal trunk is clipped above uneven local ground at "+gx+","+gz);
+                }
+            }
             int wood=0,leaves=0,minY=Integer.MAX_VALUE,maxY=Integer.MIN_VALUE;
             for(Map.Entry<V,String> e:first.entrySet()) {
                 V v=e.getKey();
@@ -31,7 +38,7 @@ public final class BloomUnderstoryGeometryProbe {
                 throw new AssertionError("understory tree lacks a compact woody canopy: wood="+wood+" leaves="+leaves);
             totalWood+=wood;totalLeaves+=leaves;
         }
-        System.out.println("BloomUnderstoryGeometryProbe PASS: 80 deterministic compact trees; wood="
+        System.out.println("BloomUnderstoryGeometryProbe PASS: 80 deterministic trees with terrain-following basal roots; wood="
                 +totalWood+" leaves="+totalLeaves);
     }
 }
