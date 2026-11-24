@@ -527,7 +527,8 @@ final class FarmLayout {
       if (round) {
          this.features.add(new FarmRoundBarn(bx, bz, side >= 0 ? side : this.extra.nextInt(4), h, this.seed));
       } else {
-         this.features.add(new FarmBarn(bx, bz, axisX, big, h, this.seed));
+         boolean mirror = side == 1 || side == 3;
+         this.features.add(new FarmBarn(bx, bz, axisX, mirror, big, h, this.seed));
       }
 
       int sLoX = ux0 + 3;
