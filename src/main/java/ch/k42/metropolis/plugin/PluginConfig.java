@@ -429,7 +429,7 @@ public class PluginConfig {
    private static boolean farmGenerate = true;
    private static int farmRuinPercent = 65;
    private static boolean farmFenceCrops = true;
-   private static int farmRoadLinePercent = 35;
+   private static int farmRoadLinePercent = 100;
    private static int farmSurfaceOffset = -2;   // with buildHeight 65 this is y=63, the paved road deck
    private static int farmFarmsteadPercent = 65;
    private static int farmPastureShare = 28;
@@ -2031,7 +2031,7 @@ public class PluginConfig {
       // server values are retained exactly; users who relied on the old
       // defaults receive the new field/site balance on their next reload.
       int configuredFarmRoadLines = cfg.getInt(pathFarmRoadLinePercent, farmRoadLinePercent);
-      if (configuredFarmRoadLines == 70) configuredFarmRoadLines = 35;
+      if (configuredFarmRoadLines == 70 || configuredFarmRoadLines == 35) configuredFarmRoadLines = 100;
       farmRoadLinePercent = Math.max(0, Math.min(100, configuredFarmRoadLines));
       farmSurfaceOffset = cfg.getInt(pathFarmSurfaceOffset, farmSurfaceOffset);
       int configuredFarmsteads = cfg.getInt(pathFarmFarmsteadPercent, farmFarmsteadPercent);
