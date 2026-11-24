@@ -175,20 +175,11 @@ final class FarmRoads {
 
       for (int site : accessPoints) {
          if (!farmAlong.contains(site)) continue;
-         int nearestStreet = Integer.MIN_VALUE;
-         int nearestDistance = Integer.MAX_VALUE;
-         for (int street : streetEnds) {
-            int distance = Math.abs(site - street);
-            if (distance < nearestDistance
-                    || (distance == nearestDistance && street < nearestStreet)) {
-               nearestDistance = distance;
-               nearestStreet = street;
-            }
+         int nearestStreet = FarmRoadRoutePolicy.nearestStreet(site, streetEnds, MAX_CONNECT_CHUNKS);
+         if (nearestStreet != Integer.MIN_VALUE
+                 && FarmRoadRoutePolicy.contains(queryAlong, site, nearestStreet)) {
+            return true;
          }
-         if (nearestStreet == Integer.MIN_VALUE || nearestDistance > MAX_CONNECT_CHUNKS) continue;
-         int lo = Math.min(site, nearestStreet);
-         int hi = Math.max(site, nearestStreet);
-         if (queryAlong >= lo && queryAlong <= hi) return true;
       }
       return false;
    }
