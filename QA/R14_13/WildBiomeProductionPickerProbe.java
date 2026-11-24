@@ -37,16 +37,46 @@ public final class WildBiomeProductionPickerProbe {
             if (picked == WildBiome.VOLCANIC_BARRENS) karst++;
          }
 
+         // Mirror the command's square-ring scan from a player near the
+         // default-world spawn, using its 32-block search lattice and border.
+         int originX = -56, originZ = 23, firstRingHit = -1;
+         long firstHitDistance = Long.MAX_VALUE;
+         long latticeMatches = 0;
+         long checked = 0;
+         int maxRing = (int)Math.ceil(EXTENT / 32.0) + 1;
+         search:
+         for (int ring = 0; ring <= maxRing; ring++) {
+            long points = ring == 0 ? 1L : 8L * ring;
+            for (long index = 0; index < points; index++) {
+               int[] point = pointAt(originX, originZ, ring, index, 32);
+               if (point[0] < -EXTENT || point[0] > EXTENT
+                       || point[1] < -EXTENT || point[1] > EXTENT) continue;
+               checked++;
+               double roll = ForestTerrain.unit(ForestTerrain.hash(
+                       seed ^ 0x464F52455354L, point[0], point[1], 41));
+               if (field.pick(point[0], point[1], roll) == WildBiome.BLOOMLANDS) {
+                  latticeMatches++;
+                  long dx = (long)point[0] - originX, dz = (long)point[1] - originZ;
+                  firstHitDistance = Math.min(firstHitDistance, dx * dx + dz * dz);
+                  if (firstRingHit < 0) firstRingHit = ring;
+               }
+            }
+            if (firstRingHit >= 0) break;
+         }
+
          double percent = 100.0 * bloom / SAMPLES_PER_SEED;
          System.out.printf(java.util.Locale.ROOT,
-                 "seed=%d productionBloom=%d (%.3f%%) productionKarst=%d (%.3f%%)%n",
-                 seed, bloom, percent, karst, 100.0 * karst / SAMPLES_PER_SEED);
+                 "seed=%d productionBloom=%d (%.3f%%) productionKarst=%d (%.3f%%) firstBloomRing=%d scanSamples=%d%n",
+                 seed, bloom, percent, karst, 100.0 * karst / SAMPLES_PER_SEED, firstRingHit, checked);
          if (bloom < 200) {
             throw new AssertionError("production picker collapses Bloomlands for seed "
                     + seed + ": only " + bloom + "/" + SAMPLES_PER_SEED);
          }
          if (karst <= bloom) {
             throw new AssertionError("Bloomlands must remain rarer than Karst for seed " + seed);
+         }
+         if (firstRingHit < 0 || latticeMatches == 0) {
+            throw new AssertionError("32-block command scan did not encounter Bloomlands inside the world border for seed " + seed);
          }
          totalBloom += bloom;
          totalKarst += karst;
@@ -56,4 +86,17 @@ public final class WildBiomeProductionPickerProbe {
               "WildBiomeProductionPickerProbe: PASS totalBloom=%d totalKarst=%d samples=%d%n",
               totalBloom, totalKarst, (long) SAMPLES_PER_SEED * seeds.length);
    }
+
+   private static int[] pointAt(int originX,int originZ,int ring,long index,int step) {
+      if (ring == 0) return new int[] {originX, originZ};
+      long r = ring;
+      long edge = 2L * r + 1L;
+      long dx, dz;
+      if (index < edge) { dx = -r + index; dz = -r; }
+      else if ((index -= edge) < edge) { dx = -r + index; dz = r; }
+      else if ((index -= edge) < 2L * r - 1L) { dx = -r; dz = -r + 1L + index; }
+      else { index -= 2L * r - 1L; dx = r; dz = -r + 1L + index; }
+      return new int[] {originX + (int)(dx * step), originZ + (int)(dz * step)};
+   }
+
 }
