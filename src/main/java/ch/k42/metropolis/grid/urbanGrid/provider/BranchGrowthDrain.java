@@ -53,10 +53,16 @@ public final class BranchGrowthDrain implements Runnable {
     public static void enqueue(Object owner, Object build, Object acc) {
         if (owner == null || build == null || acc == null) return;
         BranchGrowthDrain current = instance;
+        if (current != null && !current.plugin.isEnabled()) {
+            current.shutdown();
+            return;
+        }
         if (current == null) {
             Plugin p = Bukkit.getPluginManager().getPlugin("Metropolis");
+            // A late chunk/timeout callback during shutdown is a no-op, not
+            // a reason to recreate the ticker or throw into the scheduler.
             if (p == null || !p.isEnabled()) {
-                throw new IllegalStateException("Metropolis branching drain needs its active plugin");
+                return;
             }
             current = new BranchGrowthDrain(p);
             instance = current;
