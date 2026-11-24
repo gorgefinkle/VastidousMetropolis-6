@@ -59,6 +59,7 @@ public final class MushroomGroundContactProbe {
                     long key = ((long) voxel.x() << 32) | (voxel.z() & 0xffffffffL);
                     lowestStem.merge(key, voxel.y(), Math::min);
                 }
+                int rootedColumns = 0;
                 for (Map.Entry<Long,Integer> stemColumn : lowestStem.entrySet()) {
                     int sx = (int) (stemColumn.getKey() >> 32);
                     int sz = (int) (long) stemColumn.getKey();
@@ -68,7 +69,9 @@ public final class MushroomGroundContactProbe {
                                 + variant + " sample=" + sample + " at=" + sx + "," + sz
                                 + " lowest=" + stemColumn.getValue() + " expected=" + expected);
                     }
+                    rootedColumns++;
                 }
+                if (rootedColumns == 0) throw new AssertionError("mushroom has no rooted stalk columns");
                 shapes++;
             }
         }
