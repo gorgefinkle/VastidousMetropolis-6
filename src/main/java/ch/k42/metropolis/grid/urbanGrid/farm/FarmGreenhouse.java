@@ -187,7 +187,11 @@ final class FarmGreenhouse extends FarmFeature {
    }
 
    private void glass(FarmPainter p, int u, int v, int dy) {
-      if (!this.broken(u, v, dy)) {
+      boolean collapsedWing = this.style == BAYS && this.purpose == COLLAPSED_WING
+              && u >= (this.length * 2) / 3
+              && v >= Math.max(1, (this.tunnels - 1) * BAY_W + 1)
+              && dy >= 5;
+      if (!collapsedWing && !this.broken(u, v, dy)) {
          if (this.style == HOOP) {
             this.put(p, u, v, dy, this.skinId, this.skinData);
          } else {
