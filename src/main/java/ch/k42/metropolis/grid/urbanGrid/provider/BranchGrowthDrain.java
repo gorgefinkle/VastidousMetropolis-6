@@ -9,7 +9,9 @@ import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -24,7 +26,8 @@ import org.bukkit.scheduler.BukkitTask;
 public final class BranchGrowthDrain implements Runnable {
     private static final int BUILDS_PER_TICK = 24;
     private static final int SCANS_PER_TICK = 256;
-    private static final int CHUNK_LOADS_PER_TICK = 16;
+    private static final int ASYNC_LOAD_REQUESTS_PER_TICK = 16;
+    private static final int MAX_PENDING_LOADS_PER_JOB = 16;
     private static final int MAX_RETAINED_CHUNKS = 128;
     private static final long SOFT_WORK_BUDGET_NS = 12_000_000L;
     private static final long RETRY_TICKS = 20L;
@@ -148,6 +151,8 @@ public final class BranchGrowthDrain implements Runnable {
             if (refs != null && refs.isEmpty()) ticketReferences.remove(job.world);
         }
         job.retained.clear();
+        job.pendingLoads.clear();
+        job.lastReloadAttempt.clear();
         job.stagingSince = 0L;
     }
 
@@ -167,11 +172,16 @@ public final class BranchGrowthDrain implements Runnable {
     }
 
     /**
-     * Acquires tickets for every required support chunk. A shared per-tick
-     * load budget is spread over all queued jobs, so one large build cannot
-     * monopolize staging while every other ready build waits behind it.
+     * Requests disk-backed support chunks asynchronously, but never generates
+     * missing chunks from this drain. Paper completes the future later on the
+     * server thread. A false gen flag means an absent chunk resolves to null
+     * and is left to normal chunk scheduling / Chunky pre-generation.
+     *
+     * Plugin tickets are added only after isChunkLoaded confirms completion.
+     * Paper's addPluginChunkTicket ensures unloaded chunks are loaded, so
+     * calling it before this check would reintroduce a synchronous load path.
      */
-    private boolean advanceStaging(Job job, int[] loadsRemaining) throws ReflectiveOperationException {
+    private boolean advanceStaging(Job job, int[] requestsRemaining) throws ReflectiveOperationException {
         World w = world(job);
         if (w == null) return false;
         Set<Long> waiting = missing(job);
@@ -181,6 +191,8 @@ public final class BranchGrowthDrain implements Runnable {
         for (Long value : waiting) {
             int cx = (int) (value >> 32), cz = (int) (long) value;
             if (w.isChunkLoaded(cx, cz)) {
+                job.pendingLoads.remove(value);
+                job.lastReloadAttempt.remove(value);
                 if (!job.retained.contains(value)) {
                     if (job.retained.size() >= MAX_RETAINED_CHUNKS) {
                         warnTicketLimit();
@@ -190,21 +202,50 @@ public final class BranchGrowthDrain implements Runnable {
                 }
                 continue;
             }
+
+            CompletableFuture<Chunk> pending = job.pendingLoads.get(value);
+            if (pending != null) {
+                if (!pending.isDone()) continue;
+                job.pendingLoads.remove(value);
+                try {
+                    Chunk loaded = pending.isCancelled() || pending.isCompletedExceptionally()
+                            ? null : pending.getNow(null);
+                    if (loaded != null && w.isChunkLoaded(cx, cz)) {
+                        if (job.retained.size() >= MAX_RETAINED_CHUNKS) {
+                            warnTicketLimit();
+                            return false;
+                        }
+                        if (retainChunk(job, w, value)) {
+                            job.lastReloadAttempt.remove(value);
+                            continue;
+                        }
+                    }
+                } catch (RuntimeException failure) {
+                    plugin.getLogger().fine("Async branch support load failed for chunk "
+                            + cx + "," + cz + ": " + failure);
+                }
+                job.lastReloadAttempt.put(value, tick);
+                continue;
+            }
+
             if (job.retained.size() >= MAX_RETAINED_CHUNKS) {
                 warnTicketLimit();
                 return false;
             }
+            if (job.pendingLoads.size() >= MAX_PENDING_LOADS_PER_JOB) continue;
             Long last = job.lastReloadAttempt.get(value);
             if (last != null && tick - last < RETRY_TICKS) continue;
-            if (loadsRemaining[0] <= 0) return false;
+            if (requestsRemaining[0] <= 0) continue;
 
+            requestsRemaining[0]--;
             job.lastReloadAttempt.put(value, tick);
-            loadsRemaining[0]--;
-            boolean loaded = w.loadChunk(cx, cz, false);
-            if (loaded && w.isChunkLoaded(cx, cz) && retainChunk(job, w, value)) {
-                job.lastReloadAttempt.remove(value);
+            try {
+                job.pendingLoads.put(value, w.getChunkAtAsync(cx, cz, false, false));
+            } catch (RuntimeException failure) {
+                job.pendingLoads.remove(value);
+                plugin.getLogger().fine("Could not request existing branch support chunk "
+                        + cx + "," + cz + ": " + failure);
             }
-            if (System.nanoTime() >= job.tickDeadlineNanos) return false;
         }
 
         for (Long value : waiting) {
@@ -230,7 +271,7 @@ public final class BranchGrowthDrain implements Runnable {
         }
 
         long start = System.nanoTime();
-        int[] loadsRemaining = {CHUNK_LOADS_PER_TICK};
+        int[] requestsRemaining = {ASYNC_LOAD_REQUESTS_PER_TICK};
         int built = 0;
         int scans = Math.min(SCANS_PER_TICK, rotation.size());
         for (int i = 0; i < scans && built < BUILDS_PER_TICK; ++i) {
@@ -252,8 +293,7 @@ public final class BranchGrowthDrain implements Runnable {
                 Set<Long> waiting = missing(job);
                 if (!waiting.isEmpty()) {
                     if (tick >= job.retryAt) {
-                        job.tickDeadlineNanos = start + SOFT_WORK_BUDGET_NS;
-                        advanceStaging(job, loadsRemaining);
+                        advanceStaging(job, requestsRemaining);
                         job.retryAt = tick + 1L;
                     }
                     boolean allLoaded = true;
@@ -308,10 +348,10 @@ public final class BranchGrowthDrain implements Runnable {
         final Object acc;
         final Set<Long> retained = new HashSet<>();
         final Map<Long, Long> lastReloadAttempt = new HashMap<>();
+        final Map<Long, CompletableFuture<Chunk>> pendingLoads = new HashMap<>();
         World world;
         long retryAt;
         long stagingSince;
-        long tickDeadlineNanos;
         boolean queued = true;
 
         Job(Object owner, Object build, Object acc) {

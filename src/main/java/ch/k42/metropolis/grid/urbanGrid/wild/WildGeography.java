@@ -62,7 +62,7 @@ public final class WildGeography {
       return ((a * (1 - tx) + b * tx) * (1 - tz)) + ((c * (1 - tx) + d * tx) * tz);
    }
    private double node(int ix, int iz) {
-      long key = ((long) ix << 32) ^ ((long) iz & 0xffffffffL);
+      long key = SpatialCache.key(ix, iz);
       synchronized (riverNodes) {
          Float prev = riverNodes.get(key);
          if (prev != null) return (double) prev;
@@ -93,7 +93,7 @@ public final class WildGeography {
    }
    /** Distance to the nearest ocean, main-river or accepted-creek bank, in world blocks. */
    private double karstWaterDistanceAtNode(int ix,int iz) {
-      long key=((long)ix<<32)^(iz&0xffffffffL);
+      long key=SpatialCache.key(ix, iz);
       Float cached=karstWaterNodes.get(key);
       if(cached!=null)return cached.doubleValue();
       double x=ix*(double)KARST_WATER_NODE,z=iz*(double)KARST_WATER_NODE;
@@ -107,7 +107,7 @@ public final class WildGeography {
       double creek=water.nearestCreekBankDistanceBlocks(x,z,KARST_WATER_SCAN_RADIUS);
       if(Double.isFinite(creek)&&creek>=0.0)nearest=Math.min(nearest,creek);
       float stored=(float)Math.min(KARST_WATER_SCAN_RADIUS*2.0,nearest);
-      if(karstWaterNodes.size()>16384)karstWaterNodes.clear();
+      SpatialCache.prune(karstWaterNodes, 16384, 12288);
       Float prior=karstWaterNodes.putIfAbsent(key,stored);
       return prior==null?(double)stored:prior.doubleValue();
    }
@@ -150,8 +150,8 @@ public final class WildGeography {
       return ((a * (1 - tx) + b * tx) * (1 - tz)) + ((c * (1 - tx) + d * tx) * tz);
    }
    private double[] habitatNode(int ix, int iz) {
-      long key = ((long) ix << 32) ^ ((long) iz & 0xffffffffL);
-      if (habitatNodes.size() > 32768) habitatNodes.clear();
+      long key = SpatialCache.key(ix, iz);
+      SpatialCache.prune(habitatNodes, 32768, 24576);
       return habitatNodes.computeIfAbsent(key, unused -> {
       double[] result = new double[WildBiome.ALL.length];
       int x = ix * 128, z = iz * 128;

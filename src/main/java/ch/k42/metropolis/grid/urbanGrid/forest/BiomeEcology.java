@@ -4,6 +4,7 @@ import ch.k42.metropolis.grid.urbanGrid.wild.WildBiome;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildRelief;
 import java.lang.reflect.Method;
 import java.lang.reflect.Field;
+import java.util.HashMap;
 import org.bukkit.block.BlockFace;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,6 +26,37 @@ import org.bukkit.block.data.type.Leaves;
 public final class BiomeEcology {
     private BiomeEcology() {}
     private static final Map<Class<?>, Method> PICK = new ConcurrentHashMap<>();
+
+    /** Memoizes repeated pure terrain/ownership queries within one chunk's decoration pass. */
+    private static final class CachedTreeSite implements ForestGenerator.TreeSite {
+        private final ForestGenerator.TreeSite delegate;
+        private final Map<Long, Boolean> allowed = new HashMap<>();
+        private final Map<Long, Integer> ground = new HashMap<>();
+        CachedTreeSite(ForestGenerator.TreeSite delegate) { this.delegate = delegate; }
+        private static long key(int x, int z) {
+            return ch.k42.metropolis.grid.urbanGrid.wild.SpatialCache.key(x, z);
+        }
+        @Override public boolean allows(int x, int z) {
+            long key = key(x, z);
+            Boolean cached = allowed.get(key);
+            if (cached != null) return cached;
+            boolean result = delegate.allows(x, z);
+            allowed.put(key, result);
+            return result;
+        }
+        @Override public int groundAt(int x, int z) {
+            long key = key(x, z);
+            Integer cached = ground.get(key);
+            if (cached != null) return cached;
+            int result = delegate.groundAt(x, z);
+            ground.put(key, result);
+            return result;
+        }
+        @Override public double fade(int x, int z) { return delegate.fade(x, z); }
+        @Override public double edgeDistance(int x, int z, int reachChunks) {
+            return delegate.edgeDistance(x, z, reachChunks);
+        }
+    }
     private static long mix(long v) {
         v ^= v >>> 30; v *= 0xbf58476d1ce4e5b9L;
         v ^= v >>> 27; v *= 0x94d049bb133111ebL;
@@ -531,7 +563,8 @@ public final class BiomeEcology {
     }
     /** Uses the already-decided wild biome, never registers or reallocates regions. */
     public static void decorate(Chunk chunk,ForestGenerator.TreeSite site,Object wild,long seed) {
-        if(wild==null)return;
+        if(wild==null || site==null)return;
+        site = new CachedTreeSite(site);
         int bx=chunk.getX()<<4,bz=chunk.getZ()<<4;
         // Each spatial cell owns at most one landmark, and each chunk clips its own voxels.
         for(int spacing:new int[]{72,224,112,48,32}) {

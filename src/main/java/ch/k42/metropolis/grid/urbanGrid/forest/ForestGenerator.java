@@ -25,6 +25,7 @@ import ch.k42.metropolis.grid.urbanGrid.wild.WildBiomes;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildBlock;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildRelief;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildGeography;
+import ch.k42.metropolis.grid.urbanGrid.wild.SpatialCache;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildHabitatBias;
 import ch.k42.metropolis.minions.LegacyBlocks;
 import ch.k42.metropolis.minions.Mats;
@@ -284,7 +285,7 @@ public final class ForestGenerator {
 
       /** The averaged weights at lattice node (i, j): the column itself, and two rings of eight around it at half and full radius. */
       private double[] node(int i, int j) {
-         long key = ((long) i << 32) ^ (j & 0xFFFFFFFFL);
+         long key = SpatialCache.key(i, j);
          double[] known = this.nodes.get(key);
          if (known != null) {
             return known;
@@ -323,10 +324,8 @@ public final class ForestGenerator {
          }
          acc[WildBiome.VOLCANIC_BARRENS.ordinal()] = rareCore[0];
          acc[WildBiome.BLOOMLANDS.ordinal()] = rareCore[1];
-         if (this.nodes.size() > 400000) {
-            this.nodes.clear();      // a bound on memory; any node is simply recomputed when asked for again
-         }
-         this.nodes.put(key, acc);
+         SpatialCache.prune(this.nodes, 400000, 300000);
+         this.nodes.putIfAbsent(key, acc);
          return acc;
       }
 
