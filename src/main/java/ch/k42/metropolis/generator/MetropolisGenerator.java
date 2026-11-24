@@ -655,25 +655,30 @@ public class MetropolisGenerator extends ChunkGenerator {
                      this.drainScheduled.set(false);
                      if (this.deferred.hasPending()) this.scheduleDrain(20L);
                   }, ASYNC_CHUNK_LOAD_TIMEOUT_TICKS);
-                  this.owner.getChunkAtAsync(staged.x(), staged.z(), false, false)
-                          .whenComplete((loaded, loadFailure) -> {
-                             if (!settled.compareAndSet(false, true)) return;
-                             try {
-                                Bukkit.getScheduler().runTask(MetropolisGenerator.this.plugin,
-                                        () -> this.finishDeferredLoad(staged, loaded, loadFailure));
-                             } catch (RuntimeException schedulingFailure) {
+                  try {
+                     this.owner.getChunkAtAsync(staged.x(), staged.z(), false, false)
+                             .whenComplete((loaded, loadFailure) -> {
+                                if (!settled.compareAndSet(false, true)) return;
                                 try {
-                                   this.deferred.retry(System.nanoTime());
-                                } catch (RuntimeException retryFailure) {
-                                   schedulingFailure.addSuppressed(retryFailure);
+                                   Bukkit.getScheduler().runTask(MetropolisGenerator.this.plugin,
+                                           () -> this.finishDeferredLoad(staged, loaded, loadFailure));
+                                } catch (RuntimeException schedulingFailure) {
+                                   try {
+                                      this.deferred.retry(System.nanoTime());
+                                   } catch (RuntimeException retryFailure) {
+                                      schedulingFailure.addSuppressed(retryFailure);
+                                   }
+                                   Minions.w("Could not schedule deferred populate completion for chunk [%d,%d]; job retained: %s",
+                                           staged.x(), staged.z(), schedulingFailure);
+                                   this.reportPending();
+                                   this.drainScheduled.set(false);
+                                   if (this.deferred.hasPending()) this.scheduleDrain(20L);
                                 }
-                                Minions.w("Could not schedule deferred populate completion for chunk [%d,%d]; job retained: %s",
-                                        staged.x(), staged.z(), schedulingFailure);
-                                this.reportPending();
-                                this.drainScheduled.set(false);
-                                if (this.deferred.hasPending()) this.scheduleDrain(20L);
-                             }
-                          });
+                             });
+                  } catch (RuntimeException stagingFailure) {
+                     settled.set(true);
+                     throw stagingFailure;
+                  }
                } catch (IOException | RuntimeException failure) {
                   if (job != null && asyncInFlight) {
                      try { this.deferred.retry(System.nanoTime()); }
