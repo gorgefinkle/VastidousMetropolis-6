@@ -29,17 +29,22 @@ final class FarmBarn extends FarmFeature {
    static int doorWidth(boolean big) { return big ? 5 : 3; }
 
    private final int ox, oz, h;
-   private final boolean axisX, big;
+   private final boolean axisX, mirror, big;
    private final int L, W, T, half, dw, dh, loftY, ladderU;
    private final long seed;
    private final double ruin;
    private final int wall, wallData, alt, altData, trim, trimData, stairs, ridge, ridgeData;
 
    FarmBarn(int ox, int oz, boolean axisX, boolean big, int h, long seed) {
+      this(ox, oz, axisX, false, big, h, seed);
+   }
+
+   FarmBarn(int ox, int oz, boolean axisX, boolean mirror, boolean big, int h, long seed) {
       super(ox - 1, oz - 1, ox + (axisX ? length(big) : width(big)), oz + (axisX ? width(big) : length(big)));
       this.ox = ox;
       this.oz = oz;
       this.axisX = axisX;
+      this.mirror = mirror;
       this.big = big;
       this.h = h;
       this.seed = seed;
@@ -94,8 +99,13 @@ final class FarmBarn extends FarmFeature {
       }
    }
 
-   private int wx(int u, int v) { return this.axisX ? this.ox + u : this.ox + v; }
-   private int wz(int u, int v) { return this.axisX ? this.oz + v : this.oz + u; }
+   private int wx(int u, int v) {
+      return this.axisX ? this.ox + (this.mirror ? this.L - 1 - u : u) : this.ox + v;
+   }
+
+   private int wz(int u, int v) {
+      return this.axisX ? this.oz + v : this.oz + (this.mirror ? this.L - 1 - u : u);
+   }
 
    private void put(FarmPainter p, int u, int v, int dy, int id, int data) {
       p.set(this.wx(u, v), this.h + dy, this.wz(u, v), id, data);
@@ -115,7 +125,10 @@ final class FarmBarn extends FarmFeature {
    private int stairToward(boolean plusV) { return this.axisX ? (plusV ? 2 : 3) : (plusV ? 0 : 1); }
    private int facePlusV()  { return this.axisX ? 3 : 5; }
    private int faceMinusV() { return this.axisX ? 2 : 4; }
-   private int faceMinusU() { return this.axisX ? 4 : 2; }
+   private int faceMinusU() {
+      if (this.axisX) return this.mirror ? 5 : 4;
+      return this.mirror ? 3 : 2;
+   }
 
    private int[] chestCellsLoftU() { return this.big ? new int[]{this.L - 2, this.L - 2} : new int[]{this.L - 2}; }
    private int[] chestCellsLoftV() { return this.big ? new int[]{3, this.W - 4} : new int[]{this.half}; }
