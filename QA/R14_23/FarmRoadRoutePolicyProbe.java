@@ -5,8 +5,8 @@ import java.util.Arrays;
 /** Regression checks for demand-only access intervals and shared-spine trimming. */
 public final class FarmRoadRoutePolicyProbe {
    public static void main(String[] args) {
-      int street = FarmRoadRoutePolicy.nearestStreet(10, Arrays.asList(-20, 22, 80), 20);
-      check(street == -20, "equal-distance tie must resolve to the lower street endpoint");
+      int street = FarmRoadRoutePolicy.nearestStreet(10, Arrays.asList(-2, 22, 80), 20);
+      check(street == -2, "equal-distance tie must resolve to the lower street endpoint");
 
       street = FarmRoadRoutePolicy.nearestStreet(-30, Arrays.asList(-100, -5, 60), 26);
       check(street == -5, "negative-coordinate nearest endpoint");
