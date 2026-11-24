@@ -412,7 +412,7 @@ final class FarmLayout {
          maxZ = centreZ + 1;
       } else if (side == 1) {
          minX = centreX;
-         maxX = this.x0 + CELL - FarmRoads.WIDTH - 1;
+         maxX = this.x0 + CELL - 1;
          minZ = centreZ - 2;
          maxZ = centreZ + 1;
       } else if (side == 2) {
@@ -424,7 +424,7 @@ final class FarmLayout {
          minX = centreX - 2;
          maxX = centreX + 1;
          minZ = centreZ;
-         maxZ = this.z0 + CELL - FarmRoads.WIDTH - 1;
+         maxZ = this.z0 + CELL - 1;
       }
 
       if (minX > maxX || minZ > maxZ) return false;
