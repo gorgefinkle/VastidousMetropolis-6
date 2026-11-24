@@ -489,7 +489,6 @@ final class FarmGreenhouse extends FarmFeature {
       } else if (seedling < 0.94) {
          this.put(p, u, v, 4, FarmPainter.TALL_GRASS, 1);
       }
-      if (u % 6 == 2) this.put(p, u, v, 1, FarmPainter.CAULDRON, 3);
    }
 
    /** Separate trial beds with crop rows and occasional sample-marker posts. */
@@ -529,7 +528,7 @@ final class FarmGreenhouse extends FarmFeature {
       }
       for (int v = half - 2; v <= half + 2; v++) {
          if (v == half) continue;
-         this.put(p, start + 2, 1, v, WALL, 0);
+         this.put(p, start + 2, v, 1, WALL, 0);
       }
       this.put(p, start + 3, 1, half, FarmPainter.CAULDRON, 3);
       this.put(p, start + 5, 1, half, FarmPainter.TORCH, 5);
