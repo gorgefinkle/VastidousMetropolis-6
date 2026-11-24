@@ -15,3 +15,12 @@ This release candidate changes the Karst landform field and its painter handoff.
 The Java 25 Maven build and the existing worldgen probes run in the R14.13 workflow. The Karst profile probe now checks the 95th-percentile height change across 16-block shoulder samples in addition to upland, cut-depth and buildable-area metrics. The landbridge probe checks open clearance, continuous natural floor and central keystone thickness.
 
 These checks validate deterministic fields and painter geometry; a fresh Paper world still needs visual review for massif enclosure, water separation, slope quality, open bridge gaps and geological depth.
+
+## Bloomlands discovery safeguards
+
+- The biome-teleport search uses a 32-block sampling lattice because the final wilderness region cells are hundreds of blocks across. A candidate chunk is still verified column-by-column against the exact production picker and actual safe ground; Bloomlands share and region scale are not changed by this search optimization.
+- A destination chunk request is bounded by a 180-second timeout. If Paper never completes a candidate future, that candidate is counted as a generation failure and the search continues instead of remaining stuck on one request.
+- Search progress/final output distinguishes field matches, planner-owned candidates, ownership rejections, safe landings, unsafe/no-landing chunks and generation failures.
+- The production-picker regression exercises the same WildField.pick() and ForestTerrain per-column hash used by the painter, then checks that a coarser-than-production square-ring search can encounter Bloomlands inside the default world border. The older label-map probe remains as a separate lower-level check.
+
+The new production-picker and full-border tests do not replace an in-game visual test. If the search fails in a live world, its new counters identify whether the remaining blocker is world-plan ownership, destination chunk completion, or safe-surface verification.
