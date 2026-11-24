@@ -34,11 +34,21 @@ public final class MotherWillowGeometry {
     double length=Math.sqrt(tx*tx+ty*ty+tz*tz);
     if(length<1.0e-9){tx=0;ty=1;tz=0;length=1;}
     tx/=length;ty/=length;tz/=length;
+    // The leader must leave the side of the bole, not travel up its centreline
+    // where the first several blocks are completely hidden inside the trunk.
+    // Blend the local bole tangent with the leader's outward azimuth so the
+    // first visible section grows as a fused, oblique branch junction.
+    double ox=end.x-start.x,oz=end.z-start.z;
+    double outward=Math.hypot(ox,oz);
+    if(outward>1.0e-9){ox/=outward;oz/=outward;} else {ox=0;oz=0;}
+    double jx=tx*.78+ox*.62,jy=ty*.78,jz=tz*.78+oz*.62;
+    double jl=Math.sqrt(jx*jx+jy*jy+jz*jz);
+    if(jl>1.0e-9){jx/=jl;jy/=jl;jz/=jl;}
     double chord=Math.sqrt((end.x-start.x)*(end.x-start.x)
                          +(end.y-start.y)*(end.y-start.y)
                          +(end.z-start.z)*(end.z-start.z));
     double handle=Math.min(5.5,chord*.22);
-    P c1=start.add(tx*handle,ty*handle,tz*handle);
+    P c1=start.add(jx*handle,jy*handle,jz*handle);
     P c2=p(end.x-(end.x-start.x)*.24,
            end.y-(end.y-start.y)*.24,
            end.z-(end.z-start.z)*.24);
