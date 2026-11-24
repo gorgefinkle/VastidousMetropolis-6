@@ -30,13 +30,16 @@ final class FarmBunker extends FarmFeature {
         if(this.variant==1) {
             for(int z=z0+1;z<z0+length-1;z++) p.set(this.cx+1,floor+1,z,wall,0);
             p.set(this.cx+1,floor+2,this.cz,71,0);
+            p.set(this.cx+1,floor+3,this.cz,71,8);
         } else if(this.variant==2) {
             for(int z=z0+1;z<z0+length-1;z++) {
                 p.set(this.cx-3,floor+1,z,wall,0);
                 p.set(this.cx+3,floor+1,z,wall,0);
             }
             p.set(this.cx-3,floor+2,this.cz,71,0);
+            p.set(this.cx-3,floor+3,this.cz,71,8);
             p.set(this.cx+3,floor+2,this.cz,71,0);
+            p.set(this.cx+3,floor+3,this.cz,71,8);
         }
         // Concealed vertical access: the hay bale is the only surface clue.
         int hatchX=this.cx-width/2+2,hatchZ=this.cz;
