@@ -10,6 +10,10 @@ on:
       - integration/morphomos-natural-family-bloomlands
   workflow_dispatch:
 
+concurrency:
+  group: r14-24-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
