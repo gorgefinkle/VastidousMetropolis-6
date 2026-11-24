@@ -1,4 +1,4 @@
-name: R14.17 growth timeout shutdown guard validation
+name: R14.18 branch growth throughput validation
 
 on:
   push:
@@ -57,26 +57,26 @@ jobs:
         run: sh QA/R14_10/run_metropolis_biome_target_probe.sh
       - name: Underwater marine habitat probe
         run: bash QA/R14_11/run_marine_habitat_probe.sh
-      - name: Assemble complete source archive
-        run: zip -r Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
-      - name: Assemble exact two-file development package
+      - name: Assemble complete R14.18 source archive
+        run: zip -r Metropolis_R14_18_Branch_Growth_Throughput_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
+      - name: Assemble exact two-file R14.18 development package
         run: |
           mkdir -p r14-17-package
-          cp target/Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_DEV.jar r14-17-package/
-          cp Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_SOURCE.zip r14-17-package/
-          (cd r14-17-package && zip -q ../Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_DEV_PACKAGE.zip ./*)
-      - name: Verify exact package contents
+          cp target/Metropolis_R14_18_Branch_Growth_Throughput_DEV.jar r14-17-package/
+          cp Metropolis_R14_18_Branch_Growth_Throughput_SOURCE.zip r14-17-package/
+          (cd r14-17-package && zip -q ../Metropolis_R14_18_Branch_Growth_Throughput_DEV_PACKAGE.zip ./*)
+      - name: Verify exact R14.18 package contents
         run: |
-          unzip -Z1 Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_DEV_PACKAGE.zip | sort > package-files.txt
-          printf '%s\n' Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_DEV.jar Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_SOURCE.zip | sort > expected-files.txt
+          unzip -Z1 Metropolis_R14_18_Branch_Growth_Throughput_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\n' Metropolis_R14_18_Branch_Growth_Throughput_DEV.jar Metropolis_R14_18_Branch_Growth_Throughput_SOURCE.zip | sort > expected-files.txt
           diff -u expected-files.txt package-files.txt
-          unzip -t Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_DEV_PACKAGE.zip
+          unzip -t Metropolis_R14_18_Branch_Growth_Throughput_DEV_PACKAGE.zip
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_DEV
+          name: Metropolis_R14_18_Branch_Growth_Throughput_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_DEV.jar
-            Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_SOURCE.zip
-            Metropolis_R14_17_Growth_Timeout_Shutdown_Guard_DEV_PACKAGE.zip
+            target/Metropolis_R14_18_Branch_Growth_Throughput_DEV.jar
+            Metropolis_R14_18_Branch_Growth_Throughput_SOURCE.zip
+            Metropolis_R14_18_Branch_Growth_Throughput_DEV_PACKAGE.zip
