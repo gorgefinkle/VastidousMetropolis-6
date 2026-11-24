@@ -81,6 +81,9 @@ public final class MotherWillowGeometry {
     }
     void segment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,false);}
     void smoothLeaderJunction(P a,P b,P trunkBefore,P trunkAfter,double radA,double radB){
+      // Fuse the take-off into the parent bole with an overlapping collar.
+      // Tangent alignment alone leaves a geometrically narrow point contact.
+      bulb(a,radA+1.35,true,0,"y");
       P previous=a;double previousT=0.0;
       for(int i=1;i<=14;i++){
         double t=i/14.0;P next=leaderJunctionPoint(a,b,trunkBefore,trunkAfter,t);
