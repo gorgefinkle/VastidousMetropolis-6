@@ -69,7 +69,7 @@ public final class MotherWillowGeometry {
       int surface=land.groundAt(x,z);
       // Only root wood is allowed to penetrate natural ground, and never
       // farther than a bounded anchor depth. Branches and leaves stay above.
-      if(y<=surface && (!root || !wood || y<Math.max(3,surface-24)))return;
+      if(y<=surface && (!root || !wood || y<surface-24))return;
       long k=key(x,y,z);
       if(wood||!blocks.containsKey(k))blocks.put(k,wood?"minecraft:oak_log[axis="+axis+"]":"minecraft:oak_leaves[persistent=true]");
     }
