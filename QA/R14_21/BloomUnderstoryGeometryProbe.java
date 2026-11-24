@@ -6,10 +6,10 @@ import java.util.Map;
 public final class BloomUnderstoryGeometryProbe {
     private record V(int x,int y,int z) {}
     public static void main(String[] args) {
-        if (!BiomeEcology.validVegetationY(-2, -64, 320)
-                || !BiomeEcology.validVegetationY(0, -64, 320)
-                || BiomeEcology.validVegetationY(-64, -64, 320)
-                || BiomeEcology.validVegetationY(318, -64, 320)) {
+        if (!VegetationHeightPolicy.allows(-2, -64, 320)
+                || !VegetationHeightPolicy.allows(0, -64, 320)
+                || VegetationHeightPolicy.allows(-64, -64, 320)
+                || VegetationHeightPolicy.allows(318, -64, 320)) {
             throw new AssertionError("vegetation placement still clips legal negative-Y terrain");
         }
         int totalWood=0,totalLeaves=0;
