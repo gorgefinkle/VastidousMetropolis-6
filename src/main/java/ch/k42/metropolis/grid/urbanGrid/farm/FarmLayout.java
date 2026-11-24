@@ -3,8 +3,10 @@ package ch.k42.metropolis.grid.urbanGrid.farm;
 import ch.k42.metropolis.plugin.PluginConfig;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * The plan for one cell of the farm grid: CELL_CHUNKS x CELL_CHUNKS chunks
@@ -66,6 +68,20 @@ final class FarmLayout {
    private final long seed;
    private final List<FarmFeature> features = new ArrayList<FarmFeature>();
    private final List<int[]> taken = new ArrayList<int[]>();
+   /** Boundary-road requests made by real farm sites in this cell. */
+   private final List<RoadAccess> roadAccesses = new ArrayList<RoadAccess>();
+
+   private static final class RoadAccess {
+      final boolean vertical;
+      final int line;
+      final int alongChunk;
+
+      RoadAccess(boolean vertical, int line, int alongChunk) {
+         this.vertical = vertical;
+         this.line = line;
+         this.alongChunk = alongChunk;
+      }
+   }
 
    private FarmLayout(FarmContext ctx, int cellX, int cellZ) {
       this.ctx = ctx;
@@ -190,11 +206,36 @@ final class FarmLayout {
 
    /** Block rectangle {minX, minZ, maxX, maxZ} for the chunk range [a..b] x [c..d] of this cell: where a field's fence (or a farmstead's usable ground) may go. */
    private int[] rectFor(int a, int b, int c, int d) {
-      int west = a == 0 ? (this.ctx.lineExists(true, this.cellX) ? INSET : 1) : 1;
-      int north = c == 0 ? (this.ctx.lineExists(false, this.cellZ) ? INSET : 1) : 1;
+      int west = a == 0 && this.ctx.lineExists(true, this.cellX) ? INSET : 1;
+      int east = b == CELL_CHUNKS - 1 && this.ctx.lineExists(true, this.cellX + 1) ? INSET : 1;
+      int north = c == 0 && this.ctx.lineExists(false, this.cellZ) ? INSET : 1;
+      int south = d == CELL_CHUNKS - 1 && this.ctx.lineExists(false, this.cellZ + 1) ? INSET : 1;
       return new int[]{
               this.x0 + 16 * a + west, this.z0 + 16 * c + north,
-              this.x0 + 16 * (b + 1) - 2, this.z0 + 16 * (d + 1) - 2};
+              this.x0 + 16 * (b + 1) - east - 1, this.z0 + 16 * (d + 1) - south - 1};
+   }
+
+   /** Add a site request for the shared dirt spine on the selected cell edge. */
+   private void recordRoadAccess(int side, int alongBlock) {
+      if (side < 0 || side > 3) return;
+      boolean vertical = side < 2;
+      int line = side == 0 ? this.cellX
+              : side == 1 ? this.cellX + 1
+              : side == 2 ? this.cellZ : this.cellZ + 1;
+      this.roadAccesses.add(new RoadAccess(vertical, line, alongBlock >> 4));
+   }
+
+   /**
+    * Exposes only genuine site access gates on the queried grid boundary.
+    * Called by FarmRoads while it builds the minimal shared route to a paved
+    * street; fields and empty boundaries never create road demand.
+    */
+   void collectAccessPoints(boolean vertical, int line, Set<Integer> points) {
+      for (RoadAccess access : this.roadAccesses) {
+         if (access.vertical == vertical && access.line == line) {
+            points.add(access.alongChunk);
+         }
+      }
    }
 
    // ------------------------------------------------------------------ fields
@@ -461,6 +502,7 @@ final class FarmLayout {
          }
          this.taken.add(new int[]{sx0, sz0, sx1, sz1});
          this.features.add(new FarmProps.Driveway(sx0, sz0, sx1, sz1, h, axisX));
+         this.recordRoadAccess(side, centre);
       }
 
       if (round) {
@@ -687,6 +729,7 @@ final class FarmLayout {
          }
          this.taken.add(new int[]{sx0, sz0, sx1, sz1});
          this.features.add(new FarmProps.Driveway(sx0, sz0, sx1, sz1, h, axisX));
+         this.recordRoadAccess(side, centre);
       }
 
       this.features.add(FarmModernBarn.make(bx, bz, axisX, mirror, variant, h, this.seed));
