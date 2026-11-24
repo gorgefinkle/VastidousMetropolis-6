@@ -22,7 +22,14 @@ public final class MotherWillowJunctionProbe {
             throw new AssertionError("leader curve does not start on the trunk node");
         if(Math.abs(pEnd.x-end.x)>1e-9||Math.abs(pEnd.y-end.y)>1e-9||Math.abs(pEnd.z-end.z)>1e-9)
             throw new AssertionError("leader curve moved its existing mid point");
-        if(alignment<.995)throw new AssertionError("leader junction tangent is not trunk-aligned: "+alignment);
-        System.out.println("MotherWillowJunctionProbe PASS: tangent alignment="+alignment+"; endpoint unchanged");
+        double outwardX=end.x-start.x,outwardZ=end.z-start.z;
+        double outwardLength=Math.hypot(outwardX,outwardZ);
+        double outwardAlignment=(dx*outwardX+dz*outwardZ)/(ld*outwardLength);
+        if(alignment<.70||alignment>.92)
+            throw new AssertionError("leader must retain bole continuity while visibly leaving its side: "+alignment);
+        if(outwardAlignment<.30)
+            throw new AssertionError("leader take-off remains hidden along the bole: "+outwardAlignment);
+        System.out.println("MotherWillowJunctionProbe PASS: bole continuity="+alignment
+                +", outward emergence="+outwardAlignment+"; endpoint unchanged");
     }
 }
