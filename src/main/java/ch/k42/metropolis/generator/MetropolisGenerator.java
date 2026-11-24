@@ -339,6 +339,11 @@ public class MetropolisGenerator extends ChunkGenerator {
     * This runs on a world-generation thread: it must not touch the Bukkit
     * World, and doesn't (EnvironmentProvider.checkBlock() only computes).
     */
+   /** Base substrate for a column; normal overworld terrain is stone at every base-fill height. */
+   static Material baseTerrainMaterial(Material environmentOverride) {
+      return environmentOverride != null ? environmentOverride : Material.STONE;
+   }
+
    @Override
    public void generateNoise(WorldInfo worldInfo, Random random, int chunkX, int chunkZ, ChunkData chunkData) {
       this.ensureProviders(worldInfo.getEnvironment(), worldInfo.getSeed());
@@ -355,17 +360,8 @@ public class MetropolisGenerator extends ChunkGenerator {
       for (int x = 0; x < 16; x++) {
          for (int z = 0; z < 16; z++) {
             for (int y = firstY; y < TERRAIN_TOP; y++) {
-               // R30ea parity: pre-paint safety cap over the entire overworld.
-               // It must exist even when a parcel has not populated yet, so
-               // ocean/river-adjacent gaps cannot expose floating grass.
-               // Do not move this to parcel paint time: unpopulated parcels
-               // would miss the cap. Later parcel painters may replace it.
-               if (worldInfo.getEnvironment() == Environment.NORMAL && y == 64) {
-                  CachedChunkWrite.set(chunkData, x, y, z, Material.SMOOTH_STONE);
-               } else {
-                  Material decay = this.natureDecay.checkBlock(this.world, chunkX * 16 + x, y, chunkZ * 16 + z);
-                  CachedChunkWrite.set(chunkData, x, y, z, decay != null ? decay : Material.STONE);
-               }
+               Material decay = this.natureDecay.checkBlock(this.world, chunkX * 16 + x, y, chunkZ * 16 + z);
+               CachedChunkWrite.set(chunkData, x, y, z, baseTerrainMaterial(decay));
             }
          }
       }

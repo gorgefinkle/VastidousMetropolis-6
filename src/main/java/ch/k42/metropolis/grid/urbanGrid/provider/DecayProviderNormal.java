@@ -393,7 +393,7 @@ public class DecayProviderNormal extends DecayProvider {
               this.describeBuild(build), ctx.supportHits.size(), acc.supportHits.size());
 
       int timeoutTicks = PluginConfig.getBranchFlushTimeoutTicks();
-      if (timeoutTicks > 0 && acc.timeoutTask == null) {
+      if (timeoutTicks > 0 && acc.timeoutTask == null && this.mayScheduleTimeout(build)) {
          acc.timeoutTask = Bukkit.getScheduler().runTaskLater(
                  this.generator.getPlugin(), () -> this.flushBuildOnTimeout(build), timeoutTicks);
       }
@@ -461,15 +461,32 @@ public class DecayProviderNormal extends DecayProvider {
          return;
       }
       pending.timeoutTask = null;
+      // This callback may already be in the scheduler's execution queue when
+      // the plugin is disabled. Never let a late timeout revive itself.
+      if (!this.pluginEnabled()) {
+         return;
+      }
       if (!build.isPopulated()) {
-         pending.timeoutTask = Bukkit.getScheduler().runTaskLater(
-                 this.generator.getPlugin(), () -> this.flushBuildOnTimeout(build), 200L);
+         if (this.mayScheduleTimeout(build)) {
+            pending.timeoutTask = Bukkit.getScheduler().runTaskLater(
+                    this.generator.getPlugin(), () -> this.flushBuildOnTimeout(build), 200L);
+         }
          return;
       }
       pending.growthReady = true;
       Minions.dNode("[BUILD][TIMEOUT] %s -- readiness timeout; retaining full growth pool until support chunks are loaded.",
               this.describeBuild(build));
       this.flushBuild(build, pending);
+   }
+
+   private boolean pluginEnabled() {
+      return this.generator != null && this.generator.getPlugin() != null
+              && this.generator.getPlugin().isEnabled();
+   }
+
+   private boolean mayScheduleTimeout(Parcel build) {
+      return BranchGrowthTimeoutLifecyclePolicy.shouldScheduleTimeout(
+              this.pluginEnabled(), this.pendingBuilds.containsKey(build));
    }
 
    private void tryFlushBuild(Parcel build) {
@@ -517,8 +534,11 @@ public class DecayProviderNormal extends DecayProvider {
          pending.timeoutTask.cancel();
          pending.timeoutTask = null;
       }
-      this.pendingBuilds.remove(build);
+      // Keep the accumulator registered until every placement and visibility
+      // refresh has succeeded. If growth throws partway through, the drain can
+      // retry the same cached candidate pool instead of silently losing it.
       if (pending.supportHits.isEmpty()) {
+         this.pendingBuilds.remove(build);
          return;
       }
       Ctx ctx = new Ctx();
@@ -539,6 +559,7 @@ public class DecayProviderNormal extends DecayProvider {
          this.addVines(hit.block, pending.options, hit.decayed);
       }
       this.refreshChunksInBounds(pending.world, ctx);
+      this.pendingBuilds.remove(build);
    }
 
    static Set<Long> missingGrowthChunks(World world, List<SupportHit> supportHits) {

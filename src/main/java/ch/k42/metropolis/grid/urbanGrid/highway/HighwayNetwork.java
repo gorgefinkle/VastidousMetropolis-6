@@ -336,6 +336,24 @@ public final class HighwayNetwork {
       return c;
    }
 
+   /**
+    * The unique generated city box containing a world chunk, or null when the
+    * chunk is outside every present city. Search the jittered site cells around
+    * the chunk's coarse spacing cell; the city boxes are disjoint by construction.
+    */
+   public synchronized City cityContaining(int chunkX,int chunkZ) {
+      if (!(this.spacing > 0.0) || !Double.isFinite(this.spacing)) return null;
+      int a0=(int)Math.floor(chunkX/this.spacing);
+      int b0=(int)Math.floor(chunkZ/this.spacing);
+      for(int a=a0-2;a<=a0+2;a++) {
+         for(int b=b0-2;b<=b0+2;b++) {
+            City candidate=this.city(a,b);
+            if(candidate.boxContains(chunkX,chunkZ)) return candidate;
+         }
+      }
+      return null;
+   }
+
    /** A proposed band either exists completely on dry ocean-safe land or does not exist. */
    private boolean allDry(Rect band) {
       if (this.oceanBlocked == null) return true;
