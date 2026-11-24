@@ -25,6 +25,10 @@ jobs:
           base64 --decode "$RUNNER_TEMP/r14-18.patch.xz.b64" | xz --decompress --stdout > "$RUNNER_TEMP/r14-18.patch"
           git apply --check "$RUNNER_TEMP/r14-18.patch"
           git apply "$RUNNER_TEMP/r14-18.patch"
+          # Publish source, QA and metadata in this workflow-token commit.
+          # The final Actions workflow is added through the repository API
+          # separately because this token lacks workflow-file write scope.
+          git rm -f .github/workflows/r14-18-branch-growth-throughput.yml
           rm -f .github/r14-18.patch.part* .github/r14-18.patch.gz.b64 .github/workflows/r14-18-patch-staging.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
