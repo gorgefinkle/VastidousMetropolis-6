@@ -16,13 +16,37 @@ public final class MotherWillowGeometry {
   private static long mix(long z){z=(z^(z>>>30))*0xbf58476d1ce4e5b9L;z=(z^(z>>>27))*0x94d049bb133111ebL;return z^(z>>>31);}
   private static long hash(long s,long n){return mix(s+0x9e3779b97f4a7c15L*(n+1));}
   private static double rand(long s){return (mix(s)>>>11)*0x1.0p-53;}
-  private static final class P {
+  static final class P {
     final double x,y,z;
     P(double x,double y,double z){this.x=x;this.y=y;this.z=z;}
     P add(double a,double b,double c){return new P(x+a,y+b,z+c);}
   }
   private static P p(double x,double y,double z){return new P(x,y,z);}
   private static P lerp(P a,P b,double t){return p(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,a.z+(b.z-a.z)*t);}
+  /**
+   * Curved take-off for the highest reiterated leader. Its initial tangent
+   * follows the main bole, then eases back toward the existing mid point.
+   * The mid-to-top segment, terminal shape and crown remain unchanged.
+   */
+  static P leaderJunctionPoint(P start,P end,P trunkBefore,P trunkAfter,double t) {
+    t=clamp(t,0.0,1.0);
+    double tx=trunkAfter.x-trunkBefore.x,ty=trunkAfter.y-trunkBefore.y,tz=trunkAfter.z-trunkBefore.z;
+    double length=Math.sqrt(tx*tx+ty*ty+tz*tz);
+    if(length<1.0e-9){tx=0;ty=1;tz=0;length=1;}
+    tx/=length;ty/=length;tz/=length;
+    double chord=Math.sqrt((end.x-start.x)*(end.x-start.x)
+                         +(end.y-start.y)*(end.y-start.y)
+                         +(end.z-start.z)*(end.z-start.z));
+    double handle=Math.min(5.5,chord*.22);
+    P c1=start.add(tx*handle,ty*handle,tz*handle);
+    P c2=p(end.x-(end.x-start.x)*.24,
+           end.y-(end.y-start.y)*.24,
+           end.z-(end.z-start.z)*.24);
+    double u=1.0-t;
+    return p(u*u*u*start.x+3*u*u*t*c1.x+3*u*t*t*c2.x+t*t*t*end.x,
+             u*u*u*start.y+3*u*u*t*c1.y+3*u*t*t*c2.y+t*t*t*end.y,
+             u*u*u*start.z+3*u*u*t*c1.z+3*u*t*t*c2.z+t*t*t*end.z);
+  }
   private static double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
   private static class Maker {
     final Sink out;final Terrain land;final long seed;
@@ -56,6 +80,14 @@ public final class MotherWillowGeometry {
       }
     }
     void segment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,false);}
+    void smoothLeaderJunction(P a,P b,P trunkBefore,P trunkAfter,double radA,double radB){
+      P previous=a;double previousT=0.0;
+      for(int i=1;i<=14;i++){
+        double t=i/14.0;P next=leaderJunctionPoint(a,b,trunkBefore,trunkAfter,t);
+        double r0=radA+(radB-radA)*previousT,r1=radA+(radB-radA)*t;
+        segment(previous,next,r0,r1);previous=next;previousT=t;
+      }
+    }
     void rootSegment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,true);}
     void segmentInternal(P a,P b,double radA,double radB,boolean root){
       String axis=Math.abs(b.y-a.y)>=Math.max(Math.abs(b.x-a.x),Math.abs(b.z-a.z))?"y":Math.abs(b.x-a.x)>=Math.abs(b.z-a.z)?"x":"z";
@@ -286,7 +318,8 @@ public final class MotherWillowGeometry {
       P p0=nodes[attach];double a=wind+i*2.399963+(.5-rand(hash(sh,3)))*.50;
       P mid=p0.add(Math.cos(a)*(10+i*2),24-i*2,Math.sin(a)*(10+i*2));
       P top=mid.add(Math.cos(a+0.28)*(11+i*2),20+rand(hash(sh,4))*11,Math.sin(a+.28)*(11+i*2));
-      m.segment(p0,mid,5.8-i*.56,3.7-i*.35);
+      if(i==3) m.smoothLeaderJunction(p0,mid,nodes[attach-1],nodes[attach+1],5.8-i*.56,3.7-i*.35);
+      else m.segment(p0,mid,5.8-i*.56,3.7-i*.35);
       m.segment(mid,top,3.7-i*.35,1.35);
       // Primary scaffolds arise along the leaders at staggered heights;
       // asymmetric crowding and self-pruning prevent a symmetric umbrella.

@@ -26,7 +26,7 @@ public final class MushroomGroundContactProbe {
                     MushroomGeometry.grow((vx, vy, vz, state) -> {
                         Material existing = (vx == x && vz == z && vy == ground + 1)
                                 ? cover : Material.AIR;
-                        if (BiomeEcology.replaceable(existing)) {
+                        if (existing == Material.AIR || BiomeEcology.replaceable(existing)) {
                             placed.put(new Voxel(vx, vy, vz), state);
                         }
                     }, new MushroomGeometry.Terrain() {

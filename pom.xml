@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.9-R14.20-Mushroom-Ground-Contact-DEV</version>
+    <version>0.1.9-R14.21-Bloomland-Woodland-Polish-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.20 Mushroom Ground Contact)</name>
-    <description>Fixes mushroom stalks blocked by natural ground cover; retains safe branch staging, per-column terrain memoization, incremental spatial-cache pruning, and inherited worldgen fixes</description>
+    <name>Metropolis for Paper 26.2 (R14.21 Bloomland Woodland Polish)</name>
+    <description>Fixes grounded mushroom stalks, smooths the highest Mother Willow leader junction, and adds dense Bloomlands understory woodland; retains safe branch staging, terrain memoization, incremental cache pruning, and inherited worldgen fixes</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_20_Mushroom_Ground_Contact_DEV</finalName>
+        <finalName>Metropolis_R14_21_Bloomland_Woodland_Polish_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

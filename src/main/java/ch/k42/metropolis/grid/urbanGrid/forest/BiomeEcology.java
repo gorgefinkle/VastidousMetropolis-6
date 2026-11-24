@@ -52,6 +52,15 @@ public final class BiomeEcology {
             ground.put(key, result);
             return result;
         }
+        private final Map<Long, Boolean> bloomlands = new HashMap<>();
+        boolean bloomlands(Object wild, int x, int z, long seed) {
+            long key = key(x, z);
+            Boolean cached = bloomlands.get(key);
+            if (cached != null) return cached;
+            boolean result = allows(x, z) && pick(wild, x, z, seed) == WildBiome.BLOOMLANDS;
+            bloomlands.put(key, result);
+            return result;
+        }
         @Override public double fade(int x, int z) { return delegate.fade(x, z); }
         @Override public double edgeDistance(int x, int z, int reachChunks) {
             return delegate.edgeDistance(x, z, reachChunks);
@@ -433,7 +442,8 @@ public final class BiomeEcology {
      * and left the visible stalk floating one block above the ground.
      */
     static boolean replaceable(Material m) {
-        return m.isAir()
+        // Explicit enum comparisons work in offline QA without Bukkit RegistryAccess.
+        return m == Material.AIR || m == Material.CAVE_AIR || m == Material.VOID_AIR
                 || m == Material.SHORT_GRASS
                 || m == Material.TALL_GRASS
                 || m == Material.FERN
@@ -522,6 +532,80 @@ public final class BiomeEcology {
             public boolean allows(int x,int z){return site.allows(x,z);}
         },cx,cz,seed,family);
     }
+    /** Small multi-stem trees in the Bloomlands understory. */
+    private static void bloomUnderstory(Chunk c, CachedTreeSite site, Object wild,
+                                        int cx, int cz, long seed, int variant) {
+        BloomUnderstoryGeometry.Terrain land = new BloomUnderstoryGeometry.Terrain() {
+            @Override public int groundAt(int x, int z) { return site.groundAt(x, z); }
+            @Override public boolean allows(int x, int z) { return site.bloomlands(wild, x, z, seed); }
+        };
+        BloomUnderstoryGeometry.grow((x, y, z, state) -> {
+            if (!inChunk(c, x, z) || y <= 2 || y >= c.getWorld().getMaxHeight() - 2
+                    || !land.allows(x, z)) return;
+            Block at = c.getBlock(x & 15, y, z & 15);
+            if (!replaceable(at.getType())) return;
+            if (state.contains("_log[")) {
+                Material wood = state.startsWith("minecraft:spruce_") ? Material.SPRUCE_LOG
+                        : state.startsWith("minecraft:birch_") ? Material.BIRCH_LOG : Material.OAK_LOG;
+                Axis axis = state.endsWith("axis=x]") ? Axis.X
+                        : state.endsWith("axis=z]") ? Axis.Z : Axis.Y;
+                log(c, site, x, y, z, wood, axis);
+            } else {
+                Material leaves = state.startsWith("minecraft:spruce_") ? Material.SPRUCE_LEAVES
+                        : state.startsWith("minecraft:birch_") ? Material.BIRCH_LEAVES : Material.OAK_LEAVES;
+                put(c, site, x, y, z, leaves);
+            }
+        }, land, cx, cz, seed, variant);
+    }
+
+    /** A loose woodland skirt around each giant mushroom keeps the fungal landmark
+     * grounded in a surrounding forest while leaving its immediate stem clear. */
+    private static void bloomMushroomWoodland(Chunk c, CachedTreeSite site, Object wild,
+                                               int cx, int cz, long seed, long cellHash) {
+        for (int i = 0; i < 9; i++) {
+            long h = hash(seed, cx * 31L + i, cz * 47L - i, 0x554e444552L);
+            double angle = i * 2.399963229728653 + (unit(h) - .5) * .34;
+            double distance = 19.0 + unit(h + 1) * 14.0;
+            int tx = cx + (int) Math.round(Math.cos(angle) * distance);
+            int tz = cz + (int) Math.round(Math.sin(angle) * distance);
+            if (!treeNearChunk(c, tx, tz, 9) || !understoryFootprint(site, wild, tx, tz, seed)) continue;
+            bloomUnderstory(c, site, wild, tx, tz, hash(h, cellHash), (int) (unit(h + 2) * 3));
+        }
+    }
+
+    private static boolean treeNearChunk(Chunk c, int x, int z, int radius) {
+        int x0 = c.getX() << 4, z0 = c.getZ() << 4;
+        return x + radius >= x0 && x - radius <= x0 + 15
+                && z + radius >= z0 && z - radius <= z0 + 15;
+    }
+
+    private static boolean understoryFootprint(CachedTreeSite site, Object wild,
+                                                int x, int z, long seed) {
+        if (!site.bloomlands(wild, x, z, seed)) return false;
+        for (int a = 0; a < 8; a++) {
+            double angle = a * Math.PI / 4.0;
+            int tx = x + (int) Math.round(Math.cos(angle) * 6.0);
+            int tz = z + (int) Math.round(Math.sin(angle) * 6.0);
+            if (!site.bloomlands(wild, tx, tz, seed)) return false;
+        }
+        return true;
+    }
+
+    /** Keep scattered understory trunks from touching the basal stalk of a giant mushroom. */
+    private static boolean nearGiantMushroom(Object wild, long seed, int x, int z) {
+        int gx = Math.floorDiv(x, 72), gz = Math.floorDiv(z, 72);
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            int mxCell = gx + dx, mzCell = gz + dz;
+            if (!decorationCellChance(seed, mxCell, mzCell, 72, 3, .72)) continue;
+            int mx = decorationCellX(seed, mxCell, mzCell, 72);
+            int mz = decorationCellZ(seed, mxCell, mzCell, 72);
+            int ddx = x - mx, ddz = z - mz;
+            if (ddx * ddx + ddz * ddz < 15 * 15
+                    && hasGiantMushroomFootprint(wild, mx, mz, seed)) return true;
+        }
+        return false;
+    }
+
     private static void willow(Chunk c,ForestGenerator.TreeSite site,int cx,int cz,long seed) {
         MotherWillowGeometry.growChunk((x,y,z,state)->{
             if(!inChunk(c,x,z)||y<=2||y>=c.getWorld().getMaxHeight()-2||!site.allows(x,z))return;
@@ -592,11 +676,12 @@ public final class BiomeEcology {
     /** Uses the already-decided wild biome, never registers or reallocates regions. */
     public static void decorate(Chunk chunk,ForestGenerator.TreeSite site,Object wild,long seed) {
         if(wild==null || site==null)return;
-        site = new CachedTreeSite(site);
+        CachedTreeSite cachedSite = new CachedTreeSite(site);
+        site = cachedSite;
         int bx=chunk.getX()<<4,bz=chunk.getZ()<<4;
         // Each spatial cell owns at most one landmark, and each chunk clips its own voxels.
-        for(int spacing:new int[]{72,224,112,48,32}) {
-            int reach=spacing==72?43:spacing==224?190:spacing==112?52:spacing==48?10:26;
+        for(int spacing:new int[]{72,224,112,48,32,28}) {
+            int reach=spacing==72?43:spacing==224?190:spacing==112?52:spacing==48?10:spacing==32?26:20;
             int minCX=Math.floorDiv(bx-reach,spacing),maxCX=Math.floorDiv(bx+15+reach,spacing);
             int minCZ=Math.floorDiv(bz-reach,spacing),maxCZ=Math.floorDiv(bz+15+reach,spacing);
             for(int gx=minCX;gx<=maxCX;gx++)for(int gz=minCZ;gz<=maxCZ;gz++) {
@@ -614,7 +699,10 @@ public final class BiomeEcology {
                         int tx=x+(int)Math.round(Math.cos(angle)*38),tz=z+(int)Math.round(Math.sin(angle)*38);
                         if(!site.allows(tx,tz))room=false;
                     }
-                    if(room)mushroom(chunk,site,x,z,seed,(int)(unit(h+9)*6));
+                    if(room) {
+                        mushroom(chunk,site,x,z,seed,(int)(unit(h+9)*6));
+                        bloomMushroomWoodland(chunk,cachedSite,wild,x,z,seed,h);
+                    }
                 }
                 if(spacing==224 && b==WildBiome.BLOOMLANDS
                         && decorationCellChance(seed,gx,gz,spacing,3,.28)) {
@@ -635,6 +723,12 @@ public final class BiomeEcology {
                         if(!site.allows(tx,tz)||pick(wild,tx,tz,seed)!=b){room=false;break;}
                     }
                     if(room)companion(chunk,site,x,z,seed);
+                }
+                if(spacing==28 && b==WildBiome.BLOOMLANDS && unit(h+3)<.70
+                        && treeNearChunk(chunk,x,z,9)
+                        && !nearGiantMushroom(wild,seed,x,z)
+                        && understoryFootprint(cachedSite,wild,x,z,seed)) {
+                    bloomUnderstory(chunk,cachedSite,wild,x,z,seed,h,(int)(unit(h+8)*3));
                 }
                 if(spacing==48 && b==WildBiome.VOLCANIC_BARRENS)
                     karstBoulder(chunk,site,x,z,seed);

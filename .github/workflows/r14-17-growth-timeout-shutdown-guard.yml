@@ -1,4 +1,4 @@
-name: R14.20 mushroom ground contact validation
+name: R14.21 Bloomlands woodland polish validation
 
 on:
   push:
@@ -40,6 +40,10 @@ jobs:
         run: sh QA/R14_16/run_mushroom_cap_stem_probe.sh
       - name: Mushroom stalk ground-contact regression (R14.20)
         run: sh QA/R14_20/run_mushroom_ground_contact_probe.sh
+      - name: Mother Willow highest-leader junction smoothness (R14.21)
+        run: sh QA/R14_21/run_mother_willow_junction_probe.sh
+      - name: Bloomlands compact understory tree geometry (R14.21)
+        run: sh QA/R14_21/run_bloom_understory_probe.sh
       - name: Branch-growth timeout shutdown lifecycle policy
         run: sh QA/R14_17/run_growth_timeout_shutdown_policy_probe.sh
       - name: Safe asynchronous branch support staging probe
@@ -63,26 +67,26 @@ jobs:
         run: sh QA/R14_10/run_metropolis_biome_target_probe.sh
       - name: Underwater marine habitat probe
         run: bash QA/R14_11/run_marine_habitat_probe.sh
-      - name: Assemble complete R14.20 source archive
-        run: zip -r Metropolis_R14_20_Mushroom_Ground_Contact_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
-      - name: Assemble exact two-file R14.20 development package
+      - name: Assemble complete R14.21 source archive
+        run: zip -r Metropolis_R14_21_Bloomland_Woodland_Polish_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
+      - name: Assemble exact two-file R14.21 development package
         run: |
-          mkdir -p r14-20-package
-          cp target/Metropolis_R14_20_Mushroom_Ground_Contact_DEV.jar r14-18-package/
-          cp Metropolis_R14_20_Mushroom_Ground_Contact_SOURCE.zip r14-18-package/
-          (cd r14-20-package && zip -q ../Metropolis_R14_20_Mushroom_Ground_Contact_DEV_PACKAGE.zip ./*)
-      - name: Verify exact R14.20 package contents
+          mkdir -p r14-21-package
+          cp target/Metropolis_R14_21_Bloomland_Woodland_Polish_DEV.jar r14-18-package/
+          cp Metropolis_R14_21_Bloomland_Woodland_Polish_SOURCE.zip r14-18-package/
+          (cd r14-21-package && zip -q ../Metropolis_R14_21_Bloomland_Woodland_Polish_DEV_PACKAGE.zip ./*)
+      - name: Verify exact R14.21 package contents
         run: |
-          unzip -Z1 Metropolis_R14_20_Mushroom_Ground_Contact_DEV_PACKAGE.zip | sort > package-files.txt
-          printf '%s\n' Metropolis_R14_20_Mushroom_Ground_Contact_DEV.jar Metropolis_R14_20_Mushroom_Ground_Contact_SOURCE.zip | sort > expected-files.txt
+          unzip -Z1 Metropolis_R14_21_Bloomland_Woodland_Polish_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\n' Metropolis_R14_21_Bloomland_Woodland_Polish_DEV.jar Metropolis_R14_21_Bloomland_Woodland_Polish_SOURCE.zip | sort > expected-files.txt
           diff -u expected-files.txt package-files.txt
-          unzip -t Metropolis_R14_20_Mushroom_Ground_Contact_DEV_PACKAGE.zip
+          unzip -t Metropolis_R14_21_Bloomland_Woodland_Polish_DEV_PACKAGE.zip
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_20_Mushroom_Ground_Contact_DEV
+          name: Metropolis_R14_21_Bloomland_Woodland_Polish_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_20_Mushroom_Ground_Contact_DEV.jar
-            Metropolis_R14_20_Mushroom_Ground_Contact_SOURCE.zip
-            Metropolis_R14_20_Mushroom_Ground_Contact_DEV_PACKAGE.zip
+            target/Metropolis_R14_21_Bloomland_Woodland_Polish_DEV.jar
+            Metropolis_R14_21_Bloomland_Woodland_Polish_SOURCE.zip
+            Metropolis_R14_21_Bloomland_Woodland_Polish_DEV_PACKAGE.zip
