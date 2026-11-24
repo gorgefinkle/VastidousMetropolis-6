@@ -2027,15 +2027,34 @@ public class PluginConfig {
       farmGenerate = cfg.getBoolean(pathFarmGenerate, farmGenerate);
       farmRuinPercent = Math.max(0, Math.min(100, cfg.getInt(pathFarmRuinPercent, farmRuinPercent)));
       farmFenceCrops = cfg.getBoolean(pathFarmFenceCrops, farmFenceCrops);
-      farmRoadLinePercent = Math.max(0, Math.min(100, cfg.getInt(pathFarmRoadLinePercent, farmRoadLinePercent)));
+      // Migrate only the historical shipped defaults. Explicitly tuned
+      // server values are retained exactly; users who relied on the old
+      // defaults receive the new field/site balance on their next reload.
+      int configuredFarmRoadLines = cfg.getInt(pathFarmRoadLinePercent, farmRoadLinePercent);
+      if (configuredFarmRoadLines == 70) configuredFarmRoadLines = 35;
+      farmRoadLinePercent = Math.max(0, Math.min(100, configuredFarmRoadLines));
       farmSurfaceOffset = cfg.getInt(pathFarmSurfaceOffset, farmSurfaceOffset);
-      farmFarmsteadPercent = Math.max(0, Math.min(100, cfg.getInt(pathFarmFarmsteadPercent, farmFarmsteadPercent)));
-      farmPastureShare = Math.max(0, Math.min(100, cfg.getInt(pathFarmPastureShare, farmPastureShare)));
-      farmModernBarn = Math.max(0, Math.min(100, cfg.getInt(pathFarmModernBarn, farmModernBarn)));
-      farmGreenhouse = Math.max(0, Math.min(100, cfg.getInt(pathFarmGreenhouse, farmGreenhouse)));
-      farmOrchardShare = Math.max(0, Math.min(100, cfg.getInt(pathFarmOrchardShare, farmOrchardShare)));
-      farmRoundBarn = Math.max(0, Math.min(100, cfg.getInt(pathFarmRoundBarn, farmRoundBarn)));
-      farmOutbuildings = Math.max(0, Math.min(100, cfg.getInt(pathFarmOutbuildings, farmOutbuildings)));
+      int configuredFarmsteads = cfg.getInt(pathFarmFarmsteadPercent, farmFarmsteadPercent);
+      if (configuredFarmsteads == 80 || configuredFarmsteads == 70) configuredFarmsteads = 65;
+      farmFarmsteadPercent = Math.max(0, Math.min(100, configuredFarmsteads));
+      int configuredPasture = cfg.getInt(pathFarmPastureShare, farmPastureShare);
+      if (configuredPasture == 20) configuredPasture = 28;
+      farmPastureShare = Math.max(0, Math.min(100, configuredPasture));
+      int configuredModernBarn = cfg.getInt(pathFarmModernBarn, farmModernBarn);
+      if (configuredModernBarn == 22) configuredModernBarn = 15;
+      farmModernBarn = Math.max(0, Math.min(100, configuredModernBarn));
+      int configuredGreenhouse = cfg.getInt(pathFarmGreenhouse, farmGreenhouse);
+      if (configuredGreenhouse == 30) configuredGreenhouse = 38;
+      farmGreenhouse = Math.max(0, Math.min(100, configuredGreenhouse));
+      int configuredOrchard = cfg.getInt(pathFarmOrchardShare, farmOrchardShare);
+      if (configuredOrchard == 16) configuredOrchard = 24;
+      farmOrchardShare = Math.max(0, Math.min(100, configuredOrchard));
+      int configuredRoundBarn = cfg.getInt(pathFarmRoundBarn, farmRoundBarn);
+      if (configuredRoundBarn == 21) configuredRoundBarn = 8;
+      farmRoundBarn = Math.max(0, Math.min(100, configuredRoundBarn));
+      int configuredOutbuildings = cfg.getInt(pathFarmOutbuildings, farmOutbuildings);
+      if (configuredOutbuildings == 78) configuredOutbuildings = 75;
+      farmOutbuildings = Math.max(0, Math.min(100, configuredOutbuildings));
       String skin = String.valueOf(cfg.getString(pathFarmTunnelSkin, farmTunnelSkin)).trim().toLowerCase();
       farmTunnelSkin = skin.equals("pane") || skin.equals("wool") ? skin : "glass";
       farmChestOdds = Math.max(0, Math.min(100, cfg.getInt(pathFarmChestOdds, farmChestOdds)));
