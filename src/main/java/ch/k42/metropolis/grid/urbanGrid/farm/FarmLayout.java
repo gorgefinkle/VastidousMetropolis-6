@@ -369,7 +369,7 @@ final class FarmLayout {
 
    /** Extremely rare sealed military installation; never replaces a farmstead or greenhouse. */
    private void planMissileSilo(int[][] gy, boolean[][] used) {
-      if (this.extra.nextInt(100) >= 2) return;
+      if (this.extra.nextInt(100) >= 4) return;
       int startX=this.extra.nextInt(CELL_CHUNKS-1), startZ=this.extra.nextInt(CELL_CHUNKS-1);
       for(int n=0;n<(CELL_CHUNKS-1)*(CELL_CHUNKS-1);n++) {
          int a=(startX+n)%(CELL_CHUNKS-1);
