@@ -1,19 +1,69 @@
 package ch.k42.metropolis.grid.urbanGrid.farm;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * Dirt road surface and the pieces built from it: the 4-wide strips along the
- * farm grid lines, and the road-end openings that the paved road chunks cut.
+ * Demand-driven farm access roads.
+ *
+ * The farm grid still supplies shared, four-block-wide access spines, but a
+ * spine is painted only on the intervals between real farm-site access gates
+ * and a real paved street. Empty grid lines and unused continuations stay
+ * grassland. Multiple sites on one boundary share the same route interval.
+ *
+ * The short driveway inside a farm plot is planned by FarmLayout; this class
+ * paints only its shared boundary spine and the matching opening in the paved
+ * street. All decisions are deterministic and chunk-order independent.
  */
 final class FarmRoads {
-   /** Width of a dirt road strip, and so the width of the cutout it asks the paved road for. */
    static final int WIDTH = 4;
-   /** How far into the paved road chunk the cutout reaches; the same depth buildings use for theirs. */
    static final int CUT_DEPTH = 8;
+   private static final int MAX_CONNECT_CHUNKS = 66;
+   private static final int CACHE_LIMIT = 8192;
+   private static final ConcurrentHashMap<RouteKey, Boolean> ROUTE_CACHE =
+           new ConcurrentHashMap<RouteKey, Boolean>();
 
    private FarmRoads() {
    }
 
-   /** One worn-dirt block: coarse dirt, plain dirt and gravel mixed, with the plants above it cleared. */
+   private static final class RouteKey {
+      final Object region;
+      final long seed;
+      final boolean vertical;
+      final int line;
+      final int along;
+
+      RouteKey(FarmContext ctx, boolean vertical, int line, int along) {
+         this.region = ctx.region;
+         this.seed = ctx.seed;
+         this.vertical = vertical;
+         this.line = line;
+         this.along = along;
+      }
+
+      @Override
+      public boolean equals(Object other) {
+         if (!(other instanceof RouteKey)) return false;
+         RouteKey k = (RouteKey) other;
+         return this.region == k.region && this.seed == k.seed
+                 && this.vertical == k.vertical && this.line == k.line
+                 && this.along == k.along;
+      }
+
+      @Override
+      public int hashCode() {
+         int h = System.identityHashCode(this.region);
+         h = 31 * h + (int)(this.seed ^ (this.seed >>> 32));
+         h = 31 * h + (this.vertical ? 1 : 0);
+         h = 31 * h + this.line;
+         return 31 * h + this.along;
+      }
+   }
+
+   /** One worn-dirt block: coarse dirt, plain dirt and gravel mixed. */
    static void surface(FarmPainter p, int x, int y, int z) {
       double r = FarmRandom.unit(p.seed, x, z, 601);
       if (r < 0.58) {
@@ -27,19 +77,22 @@ final class FarmRoads {
       p.set(x, y + 2, z, FarmPainter.AIR, 0);
    }
 
-   /** Paints the dirt road strips of this chunk, if its grid lines carry a road that leads somewhere. */
+   /** Paint only route intervals requested by actual farm sites. */
    static void paintStrips(FarmContext ctx, FarmPainter p) {
       int cx = p.chunk.getX();
       int cz = p.chunk.getZ();
       int y = p.groundY;
-      if (ctx.connected(true, cx, cz)) {
+
+      if (ctx.stripChunkValid(true, cx, cz)
+              && activeLine(ctx, true, Math.floorDiv(cx, FarmLayout.CELL_CHUNKS), cz)) {
          for (int lx = 0; lx < WIDTH; lx++) {
             for (int lz = 0; lz < 16; lz++) {
                stripBlock(p, p.minX + lx, y, p.minZ + lz, lx);
             }
          }
       }
-      if (ctx.connected(false, cx, cz)) {
+      if (ctx.stripChunkValid(false, cx, cz)
+              && activeLine(ctx, false, Math.floorDiv(cz, FarmLayout.CELL_CHUNKS), cx)) {
          for (int lz = 0; lz < WIDTH; lz++) {
             for (int lx = 0; lx < 16; lx++) {
                stripBlock(p, p.minX + lx, y, p.minZ + lz, lz);
@@ -48,44 +101,122 @@ final class FarmRoads {
       }
    }
 
-   /** The two outer columns are ragged, so the road edge is not a ruler line. */
+   /** The verge may reclaim the two outer columns; the wheel-track centre stays continuous. */
    private static void stripBlock(FarmPainter p, int x, int y, int z, int across) {
       boolean edge = across == 0 || across == WIDTH - 1;
       if (edge && FarmRandom.unit(p.seed, x, z, 602) < 0.30) {
-         return;                                           // the verge has crept in
+         return;
       }
       surface(p, x, y, z);
       if (edge && FarmRandom.unit(p.seed, x, z, 605) < 0.10) {
-         p.set(x, y + 1, z, FarmPainter.TALL_GRASS, 1);    // weeds along the rutted edge
+         p.set(x, y + 1, z, FarmPainter.TALL_GRASS, 1);
       }
    }
 
    /**
-    * Where a paved road chunk must open up for the dirt road that meets it,
-    * as {x, z, sizeX, sizeZ} in the cutout convention (a negative size runs
-    * backwards from the start block), or null when no dirt road ends there.
-    *
-    * (fcx, fcz) is the farm chunk, (rcx, rcz) the paved road chunk next to it.
-    * The strip of the farm chunk runs straight into the road chunk, so the
-    * opening is 4 wide, lines up with the strip, and reaches CUT_DEPTH blocks
-    * into the road from the shared edge.
+    * Checks whether this chunk belongs to a minimal access interval. The
+    * interval begins at a recorded site gate and ends at the nearest paved
+    * street in the same continuous farm boundary run.
+    */
+   private static boolean activeLine(FarmContext ctx, boolean vertical, int line, int along) {
+      RouteKey key = new RouteKey(ctx, vertical, line, along);
+      Boolean known = ROUTE_CACHE.get(key);
+      if (known != null) return known.booleanValue();
+
+      boolean active = buildRouteContains(ctx, vertical, line, along);
+      ROUTE_CACHE.put(key, Boolean.valueOf(active));
+      if (ROUTE_CACHE.size() > CACHE_LIMIT) ROUTE_CACHE.clear();
+      return active;
+   }
+
+   private static boolean buildRouteContains(FarmContext ctx, boolean vertical, int line, int queryAlong) {
+      int lineChunk = line * FarmLayout.CELL_CHUNKS;
+      int currentX = vertical ? lineChunk : queryAlong;
+      int currentZ = vertical ? queryAlong : lineChunk;
+      if (!ctx.stripChunkValid(vertical, currentX, currentZ)) return false;
+
+      Set<Integer> farmAlong = new HashSet<Integer>();
+      Set<Integer> streetEnds = new HashSet<Integer>();
+      farmAlong.add(queryAlong);
+
+      for (int dir : new int[]{-1, 1}) {
+         for (int step = 1; step <= MAX_CONNECT_CHUNKS; step++) {
+            int along = queryAlong + dir * step;
+            int cx = vertical ? lineChunk : along;
+            int cz = vertical ? along : lineChunk;
+            if (ctx.stripChunkValid(vertical, cx, cz)) {
+               farmAlong.add(along);
+               continue;
+            }
+            if (ctx.isRoadChunk(cx, cz)) {
+               streetEnds.add(along);
+            }
+            break;
+         }
+      }
+      if (streetEnds.isEmpty()) return false;
+
+      // Each 256-block farm cell touching this spine contributes its own
+      // site gates. Looking up the plans is safe: site planning uses only
+      // FarmContext.connected(), never this demand-aware paint query.
+      Set<Integer> visitedSegments = new HashSet<Integer>();
+      Set<Integer> accessPoints = new HashSet<Integer>();
+      for (int along : farmAlong) {
+         int segment = Math.floorDiv(along, FarmLayout.CELL_CHUNKS);
+         if (!visitedSegments.add(segment)) continue;
+         if (vertical) {
+            FarmLayout.get(ctx, line, segment).collectAccessPoints(true, line, accessPoints);
+            FarmLayout.get(ctx, line - 1, segment).collectAccessPoints(true, line, accessPoints);
+         } else {
+            FarmLayout.get(ctx, segment, line).collectAccessPoints(false, line, accessPoints);
+            FarmLayout.get(ctx, segment, line - 1).collectAccessPoints(false, line, accessPoints);
+         }
+      }
+
+      for (int site : accessPoints) {
+         if (!farmAlong.contains(site)) continue;
+         int nearestStreet = Integer.MIN_VALUE;
+         int nearestDistance = Integer.MAX_VALUE;
+         for (int street : streetEnds) {
+            int distance = Math.abs(site - street);
+            if (distance < nearestDistance
+                    || (distance == nearestDistance && street < nearestStreet)) {
+               nearestDistance = distance;
+               nearestStreet = street;
+            }
+         }
+         if (nearestStreet == Integer.MIN_VALUE || nearestDistance > MAX_CONNECT_CHUNKS) continue;
+         int lo = Math.min(site, nearestStreet);
+         int hi = Math.max(site, nearestStreet);
+         if (queryAlong >= lo && queryAlong <= hi) return true;
+      }
+      return false;
+   }
+
+   static void clearCache() {
+      ROUTE_CACHE.clear();
+   }
+
+   /**
+    * The paved street opens only where an active farm access spine reaches it.
+    * Return the cutout rectangle in the shared building-cutout convention.
     */
    static int[] opening(FarmContext ctx, int fcx, int fcz, int rcx, int rcz) {
-      if (!ctx.isRoadChunk(rcx, rcz)) {
-         return null;
-      }
+      if (!ctx.isRoadChunk(rcx, rcz)) return null;
       int dx = rcx - fcx;
       int dz = rcz - fcz;
-      if (dz != 0 && dx == 0) {                         // road north or south: a vertical strip meets it
-         if (!ctx.stripChunkValid(true, fcx, fcz)) {
+      if (dz != 0 && dx == 0) {
+         if (!ctx.stripChunkValid(true, fcx, fcz)
+                 || !activeLine(ctx, true, Math.floorDiv(fcx, FarmLayout.CELL_CHUNKS), fcz)) {
             return null;
          }
          int x = fcx << 4;
          return dz < 0 ? new int[]{x, (rcz << 4) + 15, WIDTH, -CUT_DEPTH}
                        : new int[]{x, rcz << 4, WIDTH, CUT_DEPTH};
       }
-      if (dx != 0 && dz == 0) {                         // road east or west: a horizontal strip meets it
-         if (!ctx.stripChunkValid(false, fcx, fcz)) {
+      if (dx != 0 && dz == 0) {
+         if (!ctx.stripChunkValid(false, fcx, fcz)
+                 || !activeLine(ctx, false, Math.floorDiv(fcz, FarmLayout.CELL_CHUNKS), fcx)) {
             return null;
          }
          int z = fcz << 4;
