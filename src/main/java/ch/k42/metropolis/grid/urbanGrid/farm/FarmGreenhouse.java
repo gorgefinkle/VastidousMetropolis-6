@@ -47,6 +47,7 @@ final class FarmGreenhouse extends FarmFeature {
 
    private final int style;
    private final boolean axisX;      // the long axis runs along x
+   private final boolean mirror;     // the open/entrance end faces the high-coordinate end
    private final int length;         // along the long axis
    private final int width;          // across it (for HOOP, all the tunnels together)
    private final int tunnels;        // HOOP only
@@ -60,11 +61,12 @@ final class FarmGreenhouse extends FarmFeature {
    private final int endId;          // what its closed end is: a vertical wall, the one place a pane suits
    private final int endData;
 
-   private FarmGreenhouse(int ox, int oz, boolean axisX, int style, int length, int width, int tunnels, int groundY, long seed) {
+   private FarmGreenhouse(int ox, int oz, boolean axisX, boolean mirror, int style, int length, int width, int tunnels, int groundY, long seed) {
       super(ox - 1, oz - 1, ox + (axisX ? length : width), oz + (axisX ? width : length));   // one block of margin: vines grow on the outside
       this.ox = ox;
       this.oz = oz;
       this.axisX = axisX;
+      this.mirror = mirror;
       this.style = style;
       this.length = length;
       this.width = width;
@@ -114,23 +116,39 @@ final class FarmGreenhouse extends FarmFeature {
    }
 
    static FarmGreenhouse gabled(int ox, int oz, boolean axisX, int variant, int groundY, long seed) {
-      return new FarmGreenhouse(ox, oz, axisX, GABLED, lengthOf(GABLED, variant), widthOf(GABLED, variant, 0), 0, groundY, seed);
+      return gabled(ox, oz, axisX, false, variant, groundY, seed);
+   }
+
+   static FarmGreenhouse gabled(int ox, int oz, boolean axisX, boolean mirror, int variant, int groundY, long seed) {
+      return new FarmGreenhouse(ox, oz, axisX, mirror, GABLED, lengthOf(GABLED, variant), widthOf(GABLED, variant, 0), 0, groundY, seed);
    }
 
    /** The commercial glasshouse: `bays` gabled bays (3 or 4) under one roof, length by variant 0..2 (36, 42, 48). */
    static FarmGreenhouse bays(int ox, int oz, boolean axisX, int variant, int bays, int groundY, long seed) {
-      return new FarmGreenhouse(ox, oz, axisX, BAYS, lengthOf(BAYS, variant), widthOf(BAYS, variant, bays), bays, groundY, seed);
+      return bays(ox, oz, axisX, false, variant, bays, groundY, seed);
+   }
+
+   static FarmGreenhouse bays(int ox, int oz, boolean axisX, boolean mirror, int variant, int bays, int groundY, long seed) {
+      return new FarmGreenhouse(ox, oz, axisX, mirror, BAYS, lengthOf(BAYS, variant), widthOf(BAYS, variant, bays), bays, groundY, seed);
    }
 
    static FarmGreenhouse hoops(int ox, int oz, boolean axisX, int variant, int tunnels, int groundY, long seed) {
-      return new FarmGreenhouse(ox, oz, axisX, HOOP, lengthOf(HOOP, variant), widthOf(HOOP, variant, tunnels), tunnels, groundY, seed);
+      return hoops(ox, oz, axisX, false, variant, tunnels, groundY, seed);
+   }
+
+   static FarmGreenhouse hoops(int ox, int oz, boolean axisX, boolean mirror, int variant, int tunnels, int groundY, long seed) {
+      return new FarmGreenhouse(ox, oz, axisX, mirror, HOOP, lengthOf(HOOP, variant), widthOf(HOOP, variant, tunnels), tunnels, groundY, seed);
    }
 
    // ---- helpers in the building's own frame: u along the long axis, v across it, dy above the ground block
 
-   private int wx(int u, int v) { return this.axisX ? this.ox + u : this.ox + v; }
+   private int wx(int u, int v) {
+      return this.axisX ? this.ox + (this.mirror ? this.length - 1 - u : u) : this.ox + v;
+   }
 
-   private int wz(int u, int v) { return this.axisX ? this.oz + v : this.oz + u; }
+   private int wz(int u, int v) {
+      return this.axisX ? this.oz + v : this.oz + (this.mirror ? this.length - 1 - u : u);
+   }
 
    private double rnd(int u, int v, int dy, int salt) {
       return FarmRandom.unit(this.seed, this.wx(u, v) * 131 + dy * 7, this.wz(u, v), salt);
@@ -291,7 +309,7 @@ final class FarmGreenhouse extends FarmFeature {
       // a water barrel by the door, and a chest at the far end among the pots
       this.put(p, 2, 1, 1, FarmPainter.CAULDRON, 3);
       this.put(p, 2, w - 2, 1, FarmPainter.CAULDRON, 0);
-      int chestFacing = this.axisX ? 4 : 2;                    // the lid looks back toward the door
+      int chestFacing = this.axisX ? (this.mirror ? 5 : 4) : (this.mirror ? 3 : 2); // the lid looks back toward the door
       p.chest(this.wx(len - 2, half), this.groundY + 1, this.wz(len - 2, half), chestFacing, 31, FarmPainter.TIER_LOW);   // seed packets and trowels
    }
 
