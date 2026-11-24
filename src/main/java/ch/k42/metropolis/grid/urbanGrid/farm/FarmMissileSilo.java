@@ -1,7 +1,7 @@
 package ch.k42.metropolis.grid.urbanGrid.farm;
 
 /**
- * A sealed, abandoned missile silo: a 13-block internal shaft, roughly
+ * A sealed, abandoned missile silo: a 10-block internal shaft, roughly
  * thirty blocks deep, with a closed heavy hatch and the missile still inside.
  */
 final class FarmMissileSilo extends FarmFeature {
