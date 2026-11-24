@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.9-R14.23-Farm-Access-Diversity-DEV
+version: 0.1.9-R14.24-Bloomlands-Generation-Stability-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
