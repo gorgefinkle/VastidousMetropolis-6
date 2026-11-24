@@ -537,7 +537,7 @@ public final class ForestTrees {
    }
 
    private boolean vine(int x, int y, int z, int meta) {
-      if (!inChunk(x, z) || y < 1 || y > 250) {
+      if (!inChunk(x, z) || y < this.chunk.getWorld().getMinHeight() || y > 250) {
          return true;
       }
       Block b = this.chunk.getBlock(x - this.minX, y, z - this.minZ);
