@@ -7,7 +7,6 @@ on:
       - feature/r14-12-bloomlands-final-calibration-release
       - feature/r14-12-bloomlands-final-field-tested
       - feature/r14-12-bloomlands-ci-release
-      - feature/r14-13-karst-massif-landbridges-geology
   pull_request:
     branches:
       - integration/morphomos-natural-family-bloomlands
