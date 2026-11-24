@@ -112,11 +112,15 @@ public final class BranchGrowthDrain implements Runnable {
 
     private boolean retainChunk(Job job, World world, long key) {
         if (job.retained.contains(key)) return true;
-        Map<Long, Integer> refs = ticketReferences.computeIfAbsent(world, ignored -> new HashMap<>());
-        int count = refs.getOrDefault(key, 0);
+        Map<Long, Integer> refs = ticketReferences.get(world);
+        int count = refs == null ? 0 : refs.getOrDefault(key, 0);
         if (count == 0) {
             int cx = (int) (key >> 32), cz = (int) key;
             if (!world.addPluginChunkTicket(cx, cz, plugin)) return false;
+        }
+        if (refs == null) {
+            refs = new HashMap<>();
+            ticketReferences.put(world, refs);
         }
         refs.put(key, count + 1);
         job.retained.add(key);
