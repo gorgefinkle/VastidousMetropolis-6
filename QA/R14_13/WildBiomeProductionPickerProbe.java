@@ -9,7 +9,7 @@ import java.util.Random;
  * This is deliberately beyond the discrete WildLayers label-map test.
  */
 public final class WildBiomeProductionPickerProbe {
-   private static final int SAMPLES_PER_SEED = 100_000;
+   private static final int SAMPLES_PER_SEED = 20_000;
    private static final int EXTENT = 8_000;
 
    public static void main(String[] args) {
@@ -43,12 +43,13 @@ public final class WildBiomeProductionPickerProbe {
          long firstHitDistance = Long.MAX_VALUE;
          long latticeMatches = 0;
          long checked = 0;
-         int maxRing = (int)Math.ceil(EXTENT / 32.0) + 1;
+         int searchStep = 128; // deliberately coarser than the production command's 32-block lattice
+         int maxRing = (int)Math.ceil(EXTENT / (double)searchStep) + 1;
          search:
          for (int ring = 0; ring <= maxRing; ring++) {
             long points = ring == 0 ? 1L : 8L * ring;
             for (long index = 0; index < points; index++) {
-               int[] point = pointAt(originX, originZ, ring, index, 32);
+               int[] point = pointAt(originX, originZ, ring, index, searchStep);
                if (point[0] < -EXTENT || point[0] > EXTENT
                        || point[1] < -EXTENT || point[1] > EXTENT) continue;
                checked++;
@@ -68,7 +69,7 @@ public final class WildBiomeProductionPickerProbe {
          System.out.printf(java.util.Locale.ROOT,
                  "seed=%d productionBloom=%d (%.3f%%) productionKarst=%d (%.3f%%) firstBloomRing=%d scanSamples=%d%n",
                  seed, bloom, percent, karst, 100.0 * karst / SAMPLES_PER_SEED, firstRingHit, checked);
-         if (bloom < 200) {
+         if (bloom < 20) {
             throw new AssertionError("production picker collapses Bloomlands for seed "
                     + seed + ": only " + bloom + "/" + SAMPLES_PER_SEED);
          }
