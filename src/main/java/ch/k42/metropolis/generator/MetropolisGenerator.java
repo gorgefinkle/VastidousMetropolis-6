@@ -450,16 +450,16 @@ public class MetropolisGenerator extends ChunkGenerator {
       //   put in a queue and run later from the top of the stack, within a time
       //   budget per tick, so a long chain turns into a queue instead of
       //   recursion and never holds the main thread for long;
-      // - the queue is saved to disk (world folder, metropolis/deferred-
-      //   populates.tsv) and reloaded at the next start. This matters: the
-      //   legacy populate hook fires ONCE per chunk, so a chunk that was deferred
-      //   and then lost to a shutdown or a watchdog kill would stay unpopulated
-      //   -- a hole in the city -- forever;
+      // - deferred jobs are saved to disk and reloaded at the next start;
+      // - the drain stages already-generated chunks asynchronously from disk,
+      //   then runs one population callback on the server thread. It never
+      //   synchronously loads a queued chunk from inside the drain. This matters:
+      //   synchronous loading can re-enter chunk generation/lighting while a
+      //   player tick is itself waiting for chunk completion.
       // - nested starts, slow populates and stuck populates are logged (the
       //   stuck one with the main thread's stack), plus a summary line every 30 s
       //   saying how much main-thread time populating is costing.
       private static final int MAX_NESTED_POPULATES = 3;
-      private static final long DRAIN_BUDGET_NANOS = 25_000_000L;
       private static final long SAVE_INTERVAL_MS = 5000;
       private static final long STATS_INTERVAL_MS = 30000;
       private static final long SLOW_POPULATE_MS = 3000;
@@ -601,10 +601,10 @@ public class MetropolisGenerator extends ChunkGenerator {
       }
 
       /**
-       * Runs queued chunks from a scheduler task, for at most DRAIN_BUDGET_NANOS
-       * per tick (at least one chunk), then reschedules itself. The old rule was
-       * a fixed two chunks per tick, however long they took, which let one drain
-       * hold the main thread for over a minute under a Chunky pregeneration.
+       * Stages one durable job at a time with Paper's non-generating async
+       * disk-load path. Population itself remains on the server thread, but
+       * chunk retrieval no longer blocks that thread or recursively generates
+       * a support chunk from inside the deferred queue drain.
        */
       private void scheduleDrain() {
          this.scheduleDrain(1L);
