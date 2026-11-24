@@ -138,6 +138,11 @@ public final class ForestGenerator {
       private final java.util.concurrent.ConcurrentHashMap<Long, double[]> nodes = new java.util.concurrent.ConcurrentHashMap<Long, double[]>();
 
       WildField(long seed) {
+         this(seed, true);
+      }
+
+      /** Offline QA constructor; it builds the identical field but suppresses Bukkit logger access. */
+      WildField(long seed, boolean reportToServerLog) {
          this.smoothBlocks = PluginConfig.getWildSmoothBlocks();
          this.mergeBlocks = PluginConfig.getWildMesaDesertMerge();
          this.mergeX = new Noise2D(seed ^ 0x4D45524745584CL);
@@ -147,8 +152,10 @@ public final class ForestGenerator {
          this.awayNoise = new Noise2D(seed ^ 0x41574159L);
          java.util.List<String> ruleProblems = new java.util.ArrayList<String>();
          int[][] rules = WildBiomes.parseTransitions(PluginConfig.getWildTransitions(), ruleProblems);
-         for (String problem : ruleProblems) {
-            Minions.w("generator.wilderness.transitions: " + problem);
+         if (reportToServerLog) {
+            for (String problem : ruleProblems) {
+               Minions.w("generator.wilderness.transitions: " + problem);
+            }
          }
          // Retired biome: correct the actual seed distribution before any
          // WildLayers labels are assigned. A late presentation-only filter
@@ -172,7 +179,7 @@ public final class ForestGenerator {
                     .append(Math.round(wantTotal > 0.0 ? 100.0 * wantShares[b.ordinal()] / wantTotal : 0.0)).append("% wanted / ")
                     .append(Math.round(100.0 * placed[b.ordinal()])).append("% placed");
          }
-         Minions.i("Wilderness biomes: " + report);
+         if (reportToServerLog) Minions.i("Wilderness biomes: " + report);
          this.relief = new WildRelief(seed, PluginConfig.getForestMountainHeight(), PluginConfig.getWildMesaTerraceHeight(), PluginConfig.getWildMesaTerraces(), PluginConfig.getWildDuneScale() / 100.0, PluginConfig.getMountainKindShares());
          this.bands = new MesaBands(seed);
          this.geography = new WildGeography(seed, this.relief, PluginConfig.getWildWetlandReachChunks(),
@@ -193,28 +200,30 @@ public final class ForestGenerator {
          // sharpening and the production picker. The old WildLayers
          // calibration only measured an intermediate zoom level and could
          // conceal a rare-biome collapse later in the actual field pipeline.
-         final int sampleSide = 96;
-         final int sampleStep = 128;
-         int[] picked = new int[WildBiome.ALL.length];
-         for (int sx = 0; sx < sampleSide; sx++) {
-            for (int sz = 0; sz < sampleSide; sz++) {
-               int x = (sx - sampleSide / 2) * sampleStep;
-               int z = (sz - sampleSide / 2) * sampleStep;
-               // Match populateChunk exactly: ForestTerrain salts the world seed before hashing its per-column picker roll.
-               double roll = ForestTerrain.unit(ForestTerrain.hash(seed ^ 0x464F52455354L, x, z, 41));
-               picked[this.pick(x, z, roll).ordinal()]++;
+         if (reportToServerLog) {
+            final int sampleSide = 96;
+            final int sampleStep = 128;
+            int[] picked = new int[WildBiome.ALL.length];
+            for (int sx = 0; sx < sampleSide; sx++) {
+               for (int sz = 0; sz < sampleSide; sz++) {
+                  int x = (sx - sampleSide / 2) * sampleStep;
+                  int z = (sz - sampleSide / 2) * sampleStep;
+                  // Match populateChunk exactly: ForestTerrain salts the world seed before hashing its per-column picker roll.
+                  double roll = ForestTerrain.unit(ForestTerrain.hash(seed ^ 0x464F52455354L, x, z, 41));
+                  picked[this.pick(x, z, roll).ordinal()]++;
+               }
             }
+            StringBuilder finalField = new StringBuilder();
+            for (WildBiome biome : WildBiome.ALL) {
+               int count = picked[biome.ordinal()];
+               if (count == 0 && biome != WildBiome.BLOOMLANDS) continue;
+               finalField.append(finalField.length() == 0 ? "" : ", ")
+                       .append(biome.key()).append(' ')
+                       .append(String.format(java.util.Locale.ROOT, "%.2f%%", 100.0 * count / (sampleSide * sampleSide)));
+            }
+            Minions.i("Wilderness final picker sample (" + (sampleSide * sampleSide)
+                    + " points): " + finalField);
          }
-         StringBuilder finalField = new StringBuilder();
-         for (WildBiome biome : WildBiome.ALL) {
-            int count = picked[biome.ordinal()];
-            if (count == 0 && biome != WildBiome.BLOOMLANDS) continue;
-            finalField.append(finalField.length() == 0 ? "" : ", ")
-                    .append(biome.key()).append(' ')
-                    .append(String.format(java.util.Locale.ROOT, "%.2f%%", 100.0 * count / (sampleSide * sampleSide)));
-         }
-         Minions.i("Wilderness final picker sample (" + (sampleSide * sampleSide)
-                 + " points): " + finalField);
       }
 
       /**
