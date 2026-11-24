@@ -913,14 +913,7 @@ final class FarmLayout {
       this.taken.add(new int[]{ox - 1, oz - 1,
               ox + (axisX ? len : wid), oz + (axisX ? wid : len)});
 
-      // A modest attached service yard and optional tool shed make the
-      // greenhouse read as an operating nursery rather than a lone glass box.
-      this.features.add(new FarmProps.Yard(
-              Math.max(u[0], (axisX ? (mirror ? doorAlong - 5 : doorAlong - 1) : ox) - 2),
-              Math.max(u[1], (axisX ? oz : (mirror ? doorAlong - 5 : doorAlong - 1)) - 2),
-              Math.min(u[2], (axisX ? (mirror ? doorAlong + 1 : doorAlong + 5) : ox + wid) + 2),
-              Math.min(u[3], (axisX ? oz + wid : (mirror ? doorAlong + 1 : doorAlong + 5)) + 2),
-              h, this.seed));
+      // Keep the four-wide entrance lane clear of the greenhouse floor.
 
       if (x.nextInt(100) < 70) {
          boolean shedAxisX = x.nextBoolean();
