@@ -534,8 +534,11 @@ public class DecayProviderNormal extends DecayProvider {
          pending.timeoutTask.cancel();
          pending.timeoutTask = null;
       }
-      this.pendingBuilds.remove(build);
+      // Keep the accumulator registered until every placement and visibility
+      // refresh has succeeded. If growth throws partway through, the drain can
+      // retry the same cached candidate pool instead of silently losing it.
       if (pending.supportHits.isEmpty()) {
+         this.pendingBuilds.remove(build);
          return;
       }
       Ctx ctx = new Ctx();
@@ -556,6 +559,7 @@ public class DecayProviderNormal extends DecayProvider {
          this.addVines(hit.block, pending.options, hit.decayed);
       }
       this.refreshChunksInBounds(pending.world, ctx);
+      this.pendingBuilds.remove(build);
    }
 
    static Set<Long> missingGrowthChunks(World world, List<SupportHit> supportHits) {
