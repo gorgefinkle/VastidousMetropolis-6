@@ -394,50 +394,7 @@ final class FarmLayout {
       }
    }
 
-   /**
-    * Reserves a clean four-wide entrance lane through a nursery plot before
-    * placing any greenhouse buildings. The road terminates in the working
-    * yard; subsequent structures are placed around it, never across it.
-    */
-   private boolean addNurseryAccess(int side, int h, int[] bounds) {
-      int centreX = (bounds[0] + bounds[2]) / 2;
-      int centreZ = (bounds[1] + bounds[3]) / 2;
-      int gate = side < 2 ? centreZ : centreX;
-      if (!this.sideConnected(side, gate)) return false;
 
-      int minX, minZ, maxX, maxZ;
-      boolean alongX = side < 2;
-      if (side == 0) {
-         minX = this.x0 + FarmRoads.WIDTH;
-         maxX = centreX;
-         minZ = centreZ - 2;
-         maxZ = centreZ + 1;
-      } else if (side == 1) {
-         minX = centreX;
-         maxX = this.x0 + CELL - 1;
-         minZ = centreZ - 2;
-         maxZ = centreZ + 1;
-      } else if (side == 2) {
-         minX = centreX - 2;
-         maxX = centreX + 1;
-         minZ = this.z0 + FarmRoads.WIDTH;
-         maxZ = centreZ;
-      } else {
-         minX = centreX - 2;
-         maxX = centreX + 1;
-         minZ = centreZ;
-         maxZ = this.z0 + CELL - 1;
-      }
-
-      if (minX > maxX || minZ > maxZ) return false;
-      this.taken.add(new int[]{minX, minZ, maxX, maxZ});
-      this.features.add(new FarmProps.Driveway(minX, minZ, maxX, maxZ, h, alongX));
-      this.features.add(new FarmProps.Yard(
-              Math.max(bounds[0], centreX - 3), Math.max(bounds[1], centreZ - 3),
-              Math.min(bounds[2], centreX + 3), Math.min(bounds[3], centreZ + 3), h, this.seed));
-      this.recordRoadAccess(side, gate);
-      return true;
-   }
 
    private void planFarmstead(Random r, int[][] gy, boolean[][] used) {
       int n = CELL_CHUNKS;
@@ -902,26 +859,78 @@ final class FarmLayout {
    private boolean buildNursery(int h, int a0, int c0, int side) {
       Random x = this.extra;
       int[] u = this.rectFor(a0, a0 + BLOCK - 1, c0, c0 + BLOCK - 1);
-      if (!this.addNurseryAccess(side, h, u)) return false;
+      boolean axisX = side < 2;
+      boolean mirror = side == 1 || side == 3;
+      int variant = x.nextInt(3);
+      int len = FarmGreenhouse.lengthOf(FarmGreenhouse.GABLED, variant);
+      int wid = FarmGreenhouse.widthOf(FarmGreenhouse.GABLED, variant, 0);
+      int acrossCentre = axisX ? (u[1] + u[3]) / 2 : (u[0] + u[2]) / 2;
+      int acrossStart = acrossCentre - wid / 2;
+      int doorAlong = side == 0 ? this.x0 + 10
+              : side == 1 ? this.x0 + CELL - 11
+              : side == 2 ? this.z0 + 10 : this.z0 + CELL - 11;
+      if (!this.sideConnected(side, acrossCentre)) return false;
 
-      boolean placed;
-      if (x.nextBoolean()) {
-         placed = this.placeGlasshouse(x, 2, h, u);
-         if (placed) this.placeGlasshouse(x, 0, h, u);
+      int ox, oz;
+      if (axisX) {
+         ox = mirror ? doorAlong - len + 1 : doorAlong;
+         oz = acrossStart;
       } else {
-         placed = this.placeGlasshouseAndBank(x, h, u);
+         ox = acrossStart;
+         oz = mirror ? doorAlong - len + 1 : doorAlong;
       }
-      if (!placed) return false;
+
+      // A four-wide driveway meets the actual open gable end, not just an
+      // arbitrary point in the nursery yard.
+      int minX, minZ, maxX, maxZ;
+      if (side == 0) {
+         minX = this.x0 + FarmRoads.WIDTH;
+         maxX = doorAlong - 1;
+         minZ = acrossCentre - 2;
+         maxZ = acrossCentre + 1;
+      } else if (side == 1) {
+         minX = doorAlong + 1;
+         maxX = this.x0 + CELL - 1;
+         minZ = acrossCentre - 2;
+         maxZ = acrossCentre + 1;
+      } else if (side == 2) {
+         minX = acrossCentre - 2;
+         maxX = acrossCentre + 1;
+         minZ = this.z0 + FarmRoads.WIDTH;
+         maxZ = doorAlong - 1;
+      } else {
+         minX = acrossCentre - 2;
+         maxX = acrossCentre + 1;
+         minZ = doorAlong + 1;
+         maxZ = this.z0 + CELL - 1;
+      }
+      if (minX > maxX || minZ > maxZ) return false;
+
+      this.taken.add(new int[]{minX, minZ, maxX, maxZ});
+      this.features.add(new FarmProps.Driveway(minX, minZ, maxX, maxZ, h, axisX));
+      this.recordRoadAccess(side, acrossCentre);
+      this.features.add(FarmGreenhouse.gabled(ox, oz, axisX, mirror, variant, h, this.seed));
+      this.taken.add(new int[]{ox - 1, oz - 1,
+              ox + (axisX ? len : wid), oz + (axisX ? wid : len)});
+
+      // A modest attached service yard and optional tool shed make the
+      // greenhouse read as an operating nursery rather than a lone glass box.
+      this.features.add(new FarmProps.Yard(
+              Math.max(u[0], (axisX ? (mirror ? doorAlong - 5 : doorAlong - 1) : ox) - 2),
+              Math.max(u[1], (axisX ? oz : (mirror ? doorAlong - 5 : doorAlong - 1)) - 2),
+              Math.min(u[2], (axisX ? (mirror ? doorAlong + 1 : doorAlong + 5) : ox + wid) + 2),
+              Math.min(u[3], (axisX ? oz + wid : (mirror ? doorAlong + 1 : doorAlong + 5)) + 2),
+              h, this.seed));
 
       if (x.nextInt(100) < 70) {
-         boolean ax = x.nextBoolean();
-         int len = FarmOutbuildings.Shed.lengthOf(FarmOutbuildings.Shed.TOOL);
-         int wid = FarmOutbuildings.Shed.widthOf(FarmOutbuildings.Shed.TOOL);
-         int bw = (ax ? len : wid) + 2;
-         int bd = (ax ? wid : len) + 2;
+         boolean shedAxisX = x.nextBoolean();
+         int shedLength = FarmOutbuildings.Shed.lengthOf(FarmOutbuildings.Shed.TOOL);
+         int shedWidth = FarmOutbuildings.Shed.widthOf(FarmOutbuildings.Shed.TOOL);
+         int bw = (shedAxisX ? shedLength : shedWidth) + 2;
+         int bd = (shedAxisX ? shedWidth : shedLength) + 2;
          int[] s = this.findSpot(x, bw, bd, 2, u[0] + 2, u[1] + 2, u[2] - 2 - bw + 1, u[3] - 2 - bd + 1);
          if (s != null) {
-            this.features.add(new FarmOutbuildings.Shed(s[0] + 1, s[1] + 1, ax, FarmOutbuildings.Shed.TOOL, h, this.seed));
+            this.features.add(new FarmOutbuildings.Shed(s[0] + 1, s[1] + 1, shedAxisX, FarmOutbuildings.Shed.TOOL, h, this.seed));
          }
       }
       return true;
