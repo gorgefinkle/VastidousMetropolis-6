@@ -130,6 +130,9 @@ public final class WildBiomeProductionPickerProbe {
          int x=BiomeEcology.decorationCellX(worldSeed,gx,gz,spacing);
          int z=BiomeEcology.decorationCellZ(worldSeed,gx,gz,spacing);
          if(!BiomeEcology.decorationCellChance(worldSeed,gx,gz,spacing,3,mushroom?.72:.28))continue;
+         // Most decoration anchors are ordinary forest; reject them with one
+         // centre sample before spending 8/16 more samples on the footprint.
+         if(field.pick(x,z,BiomeEcology.pickerRoll(worldSeed,x,z))!=WildBiome.BLOOMLANDS)continue;
          boolean fits=mushroom
                ? BiomeEcology.hasGiantMushroomFootprint(field,x,z,worldSeed)
                : BiomeEcology.hasMotherWillowFootprint(field,x,z,worldSeed);
