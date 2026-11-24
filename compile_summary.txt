@@ -1,13 +1,11 @@
-R14.10 DEV — Universal Biome Teleport
+R14.14 DEV — Bloomlands Province and Landmark Fix
 Java target: 25
 Paper API: 26.2.build.129-stable
 
-R14.10 retains the R14.9 queue/backpressure, Morphomos, Karst mountain and open-landbridge implementation, and adds:
-- /metrobiome tp <biome> for all active WildBiome catalog entries.
-- Planner-backed candidate checks using the same deterministic field and forest ownership as world generation.
-- Incremental asynchronous outward search with no arbitrary radius cap; candidate destination chunks are loaded only after a planner hit.
-- Generated-terrain verification and safe landing selection before teleport.
-- /metrobiome list, /metrobiome cancel, aliases for karst / dry-forest / old-growth / coastal-dunes.
-- Removed the standalone /bloomlands command; use /metrobiome tp bloomlands.
+R14.14 retains the R14.13 inland Karst, open landbridge, deep geology, queue/backpressure, Morphomos and ocean ecology work, and corrects:
+- Bloomlands and Karst use a dedicated rare-habitat lattice with a minimum 512-block rare cell (at least 1,024 blocks across each 2x2 province), independent of the common wilderness scale/zoom settings.
+- Giant-mushroom, companion-tree and Mother Willow placement now sample the same salted per-column biome hash as the terrain painter. Previously the biome decorator queried a different field and rejected most valid Bloomlands landmarks.
+- /metrobiome tp candidates now require a sustained 192-block field-and-planner-owned core, rejecting isolated boundary slivers before loading a destination chunk.
+- QA covers every supported wilderness scale/zoom combination and the exact production picker/giant-mushroom/Mother Willow footprint tests.
 
-Build/test results are recorded by the R14.10 GitHub Actions run associated with this commit.
+Build and full QA results are recorded by the R14.14 GitHub Actions run associated with this commit. The package remains a DEV build pending visual in-world verification.
