@@ -534,10 +534,10 @@ public final class BiomeEcology {
     }
     /** Small multi-stem trees in the Bloomlands understory. */
     private static void bloomUnderstory(Chunk c, CachedTreeSite site, Object wild,
-                                        int cx, int cz, long seed, int variant) {
+                                        int cx, int cz, long worldSeed, long treeSeed, int variant) {
         BloomUnderstoryGeometry.Terrain land = new BloomUnderstoryGeometry.Terrain() {
             @Override public int groundAt(int x, int z) { return site.groundAt(x, z); }
-            @Override public boolean allows(int x, int z) { return site.bloomlands(wild, x, z, seed); }
+            @Override public boolean allows(int x, int z) { return site.bloomlands(wild, x, z, worldSeed); }
         };
         BloomUnderstoryGeometry.grow((x, y, z, state) -> {
             if (!inChunk(c, x, z) || y <= 2 || y >= c.getWorld().getMaxHeight() - 2
@@ -555,7 +555,7 @@ public final class BiomeEcology {
                         : state.startsWith("minecraft:birch_") ? Material.BIRCH_LEAVES : Material.OAK_LEAVES;
                 put(c, site, x, y, z, leaves);
             }
-        }, land, cx, cz, seed, variant);
+        }, land, cx, cz, treeSeed, variant);
     }
 
     /** A loose woodland skirt around each giant mushroom keeps the fungal landmark
@@ -569,7 +569,7 @@ public final class BiomeEcology {
             int tx = cx + (int) Math.round(Math.cos(angle) * distance);
             int tz = cz + (int) Math.round(Math.sin(angle) * distance);
             if (!treeNearChunk(c, tx, tz, 9) || !understoryFootprint(site, wild, tx, tz, seed)) continue;
-            bloomUnderstory(c, site, wild, tx, tz, mix(h ^ cellHash), (int) (unit(h + 2) * 3));
+            bloomUnderstory(c, site, wild, tx, tz, seed, mix(h ^ cellHash), (int) (unit(h + 2) * 3));
         }
     }
 
@@ -728,7 +728,7 @@ public final class BiomeEcology {
                         && treeNearChunk(chunk,x,z,9)
                         && !nearGiantMushroom(wild,seed,x,z)
                         && understoryFootprint(cachedSite,wild,x,z,seed)) {
-                    bloomUnderstory(chunk,cachedSite,wild,x,z,mix(seed ^ h),(int)(unit(h+8)*3));
+                    bloomUnderstory(chunk,cachedSite,wild,x,z,seed,mix(seed ^ h),(int)(unit(h+8)*3));
                 }
                 if(spacing==48 && b==WildBiome.VOLCANIC_BARRENS)
                     karstBoulder(chunk,site,x,z,seed);
