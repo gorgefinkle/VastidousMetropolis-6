@@ -218,22 +218,32 @@ final class FarmLayout {
               this.x0 + 16 * (b + 1) - 2, this.z0 + 16 * (d + 1) - 2};
    }
 
-   /** True only when a placed site in this cell actually requested this boundary. */
-   private boolean hasRoadRequest(boolean vertical, int line) {
-      for (RoadAccess access : this.roadAccesses) {
-         if (access.vertical == vertical && access.line == line) return true;
+   /**
+    * A boundary is a possible shared road spine only where its continuous
+    * farm run reaches a genuine paved street. Checking the whole field edge
+    * segment also sees access requests made by the neighbouring cell, whose
+    * west/north-owned strip is painted on this side of the shared boundary.
+    */
+   private boolean connectedBoundary(boolean vertical, int line, int alongStart, int alongEnd) {
+      for (int along = alongStart; along <= alongEnd; along++) {
+         int cx = vertical ? line * CELL_CHUNKS : along;
+         int cz = vertical ? along : line * CELL_CHUNKS;
+         if (this.ctx.connected(vertical, cx, cz)) return true;
       }
       return false;
    }
 
    /**
-    * Field plots only stand back from an edge when a real site access spine
-    * was requested there. Candidate lines without a site stay available land,
-    * not empty headlands that look like redundant tracks.
+    * Field plots stand back only from boundary segments that can actually
+    * carry a site-to-street route. Empty candidate boundaries remain usable
+    * land, while shared roads requested by either adjacent cell cannot cut
+    * through an already planned field.
     */
    private int[] rectForField(int a, int b, int c, int d) {
-      int west = a == 0 && this.hasRoadRequest(true, this.cellX) ? INSET : 1;
-      int north = c == 0 && this.hasRoadRequest(false, this.cellZ) ? INSET : 1;
+      int west = a == 0 && this.connectedBoundary(true, this.cellX, this.cellZ * CELL_CHUNKS + c,
+              this.cellZ * CELL_CHUNKS + d) ? INSET : 1;
+      int north = c == 0 && this.connectedBoundary(false, this.cellZ, this.cellX * CELL_CHUNKS + a,
+              this.cellX * CELL_CHUNKS + b) ? INSET : 1;
       return new int[]{
               this.x0 + 16 * a + west, this.z0 + 16 * c + north,
               this.x0 + 16 * (b + 1) - 2, this.z0 + 16 * (d + 1) - 2};
