@@ -27,8 +27,11 @@ final class FarmHouse extends FarmFeature {
                     boolean door=(u==5&&v==0&&dy<=2);
                     boolean window=(dy==2&&((u==2||u==8)&&(v==0||v==8)));
                     if(door||window) set(p,u,v,dy,FarmPainter.AIR,0);
-                    else set(p,u,v,dy,((u+v+dy)%7==0)?FarmPainter.TERRACOTTA:FarmPainter.PLANKS,
-                            ((u+v)%3==0)?1:0);
+                    else {
+                        boolean faded=FarmRandom.unit(this.seed,this.x+u,this.z+v,800+dy)<.16;
+                        set(p,u,v,dy,faded?FarmPainter.TERRACOTTA:FarmPainter.PLANKS,
+                                faded?0:((u+v)%3==0?1:0));
+                    }
                 } else set(p,u,v,dy,FarmPainter.AIR,0);
             }
         }
