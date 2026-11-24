@@ -2,7 +2,7 @@ package ch.k42.metropolis.grid.urbanGrid.farm;
 
 /**
  * A sealed, abandoned missile silo: a 10-block internal shaft, roughly
- * thirty blocks deep, with a closed heavy hatch and the missile still inside.
+ * thirty-four blocks deep, with a closed heavy hatch and the missile still inside.
  */
 final class FarmMissileSilo extends FarmFeature {
     private final int cx,cz,h;
@@ -58,11 +58,14 @@ final class FarmMissileSilo extends FarmFeature {
         }
         // Heavy, closed surface hatch flush with a weathered concrete pad.
         for(int dx=-6;dx<=6;dx++) for(int dz=-6;dz<=6;dz++) {
-            if(dx*dx+dz*dz<=42) p.set(this.cx+dx,this.h,this.cz+dz,FarmPainter.COBBLE,0);
+            if(dx*dx+dz*dz<=42 && (dx!=0||dz!=0))
+                p.set(this.cx+dx,this.h,this.cz+dz,FarmPainter.COBBLE,0);
         }
+        // Raised reinforced collar surrounds the flush, closed hatch.
         for(int dx=-3;dx<=3;dx++) for(int dz=-3;dz<=3;dz++)
-            p.set(this.cx+dx,this.h+1,this.cz+dz,FarmPainter.STONE_BRICK,0);
-        p.set(this.cx,this.h+1,this.cz,167,0); // closed iron trapdoor over the shaft
+            if(Math.max(Math.abs(dx),Math.abs(dz))==3)
+                p.set(this.cx+dx,this.h+1,this.cz+dz,FarmPainter.STONE_BRICK,0);
+        p.set(this.cx,this.h,this.cz,167,0); // closed iron trapdoor directly over the shaft
         p.set(this.cx-5,this.h+1,this.cz-5,FarmPainter.IRON_BARS,0);
         p.set(this.cx+5,this.h+1,this.cz+5,FarmPainter.IRON_BARS,0);
         // Two capped ventilation risers and a sealed service access door.
