@@ -35,6 +35,8 @@ jobs:
         run: sh QA/R14_8/run_boundary_family_probe.sh
       - name: Rare-biome appearance probe
         run: sh QA/R14_8/run_wild_biome_appearance_probe.sh
+      - name: Full production Bloomlands picker probe
+        run: sh QA/R14_13/run_wild_biome_production_picker_probe.sh
       - name: BUILD export durability probe
         run: sh QA/R14_8/run_build_flag_exporter_probe.sh
       - name: Disk deferred queue probe
