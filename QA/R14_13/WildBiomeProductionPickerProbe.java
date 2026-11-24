@@ -50,8 +50,8 @@ public final class WildBiomeProductionPickerProbe {
             long points = ring == 0 ? 1L : 8L * ring;
             for (long index = 0; index < points; index++) {
                int[] point = pointAt(originX, originZ, ring, index, searchStep);
-               if (point[0] < -EXTENT || point[0] > EXTENT
-                       || point[1] < -EXTENT || point[1] > EXTENT) continue;
+               if (point[0] < 54 - EXTENT || point[0] > 54 + EXTENT
+                       || point[1] < -16 - EXTENT || point[1] > -16 + EXTENT) continue;
                checked++;
                double roll = ForestTerrain.unit(ForestTerrain.hash(
                        seed ^ 0x464F52455354L, point[0], point[1], 41));
