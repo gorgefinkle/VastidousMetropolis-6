@@ -109,8 +109,11 @@ final class FarmHouse extends FarmFeature {
         p.set(cx,this.h+2,cz+4,FarmPainter.AIR,0);
         // The rounded mound doorway is a real second entrance: a narrow
         // ladder shaft drops behind the arch and opens through the cellar wall.
+        // The doorway passes through the cellar's front wall into the mound.
+        // The ladder occupies the open shaft column and attaches to its solid
+        // side wall; the adjacent clear column gives a player room to climb.
         for(int y=bottom+1;y<=this.h+1;y++) p.set(cx,y,cz+4,FarmPainter.AIR,0);
-        for(int y=bottom+1;y<=this.h;y++) p.set(cx+1,y,cz+4,FarmPainter.LADDER,4);
-        for(int y=bottom+1;y<=bottom+3;y++) p.set(cx,y,cz+3,FarmPainter.AIR,0);
+        for(int y=bottom+1;y<=ceiling-1;y++) p.set(cx,y,cz+3,FarmPainter.AIR,0);
+        for(int y=bottom+1;y<=this.h;y++) p.set(cx,y,cz+4,FarmPainter.LADDER,4);
     }
 }
