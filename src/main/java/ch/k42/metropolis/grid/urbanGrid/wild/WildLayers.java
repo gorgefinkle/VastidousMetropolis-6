@@ -29,12 +29,15 @@ final class WildLayers {
    private final int levels;
    private final int edgePasses;
    private static final int MAX_CACHED = 600000;
+   static final double MIN_RARE_CELL_BLOCKS = 512.0;
 
    private final long seed;
    private final int n;
    private final double[] prior;
    private final int[][] rules;
    private final double cellFinal;
+   private final int rareCellDivisor;
+   private final double rareCellBlocks;
    private final double warpBlocks;
    private final Noise2D warpX;
    private final Noise2D warpZ;
@@ -43,6 +46,12 @@ final class WildLayers {
    private final ConcurrentHashMap<Long, Byte> regionMemo = new ConcurrentHashMap<Long, Byte>();
    private int puts;
    private final double[] realised;
+   /** Target-normalized shares for region-scale rare-biome seeding. */
+   private final double bloomlandsCellShare;
+   private final double karstCellShare;
+   /** Rare-province macro tile; a 16,384-block sector at the default scale. */
+   private final int rareGroupsPerSide;
+   private final ConcurrentHashMap<Long, byte[]> rareTileMemo = new ConcurrentHashMap<Long, byte[]>();
    private double calibrationError;
 
    /**
@@ -60,14 +69,38 @@ final class WildLayers {
       this.seed = worldSeed ^ 0x4C41594552534CL;
       this.n = target.length;
       this.rules = rules == null ? new int[0][] : rules;
-      double cell0 = Math.max(256.0, scaleChunks * 16.0 * 1.3);
-      this.cellFinal = cell0 / (1 << this.levels);
+      this.cellFinal = commonFinalCellBlocks(scaleChunks, this.levels);
+      // Preserve a physically useful scale for Bloomlands fungi and Karst
+      // formations even when the common biome grid uses its finest settings.
+      this.rareCellDivisor = rareCellDivisor(this.cellFinal);
+      this.rareCellBlocks = this.cellFinal * this.rareCellDivisor;
       this.warpBlocks = Math.min(this.cellFinal * 0.75, 48.0) * (Math.max(0, Math.min(100, warpPercent)) / 100.0);
       this.warpX = new Noise2D(this.seed ^ 0x77A1L);
       this.warpZ = new Noise2D(this.seed ^ 0x77A2L);
       this.prior = new double[this.n];
       this.realised = new double[this.n];
+      double targetTotal = 0.0;
+      for (double share : target) targetTotal += Math.max(0.0, share);
+      this.bloomlandsCellShare = targetTotal > 0.0
+              ? Math.max(0.0, target[WildBiome.BLOOMLANDS.ordinal()]) / targetTotal : 0.0;
+      this.karstCellShare = targetTotal > 0.0
+              ? Math.max(0.0, target[WildBiome.VOLCANIC_BARRENS.ordinal()]) / targetTotal : 0.0;
+      this.rareGroupsPerSide = Math.max(6, Math.min(32,
+              (int)Math.round(16384.0 / (2.0 * this.rareCellBlocks))));
       this.calibrate(target);
+   }
+
+   static double commonFinalCellBlocks(double scaleChunks,int zoomLevels) {
+      int zooms=Math.max(3,Math.min(6,zoomLevels));
+      double cell0=Math.max(256.0,scaleChunks*16.0*1.3);
+      return cell0/(1<<zooms);
+   }
+   static int rareCellDivisor(double commonCellBlocks) {
+      return Math.max(1,(int)Math.ceil(MIN_RARE_CELL_BLOCKS/commonCellBlocks));
+   }
+   static double configuredRareCellBlocks(double scaleChunks,int zoomLevels) {
+      double common=commonFinalCellBlocks(scaleChunks,zoomLevels);
+      return common*rareCellDivisor(common);
    }
 
    /** The biome (a WildBiome ordinal) of the final cell holding the block (x, z). */
@@ -82,11 +115,14 @@ final class WildLayers {
       long key = ((long) x << 32) ^ (z & 0xffffffffL);
       Byte prior = regionMemo.get(key);
       if (prior != null) return prior & 0xff;
-      int center = this.value(this.levels, x, z);
+      // Special habitats use a separate physical lattice. Each 2x2 rare
+      // province is at least 1,024 blocks across (about 1,352 at defaults),
+      // leaving room for giant fungi and the large Mother Willow footprint.
+      int center = this.rareRegionLabel(x, z);
       int[] counts = new int[this.n];
       for (int dz = -1; dz <= 1; ++dz) {
          for (int dx = -1; dx <= 1; ++dx) {
-            counts[this.value(this.levels, x + dx, z + dz)]++;
+            counts[this.rareRegionLabel(x + dx, z + dz)]++;
          }
       }
       int best = center;
@@ -103,6 +139,141 @@ final class WildLayers {
       if (regionMemo.size() > 250000) regionMemo.clear();
       regionMemo.put(key, (byte) label);
       return label;
+   }
+
+   /** The common map plus a world-seed-stable quota of rare provinces per macro tile. */
+   private int rareRegionLabel(int x, int z) {
+      int groups = this.rareGroupsPerSide;
+      int rareX = Math.floorDiv(x, this.rareCellDivisor);
+      int rareZ = Math.floorDiv(z, this.rareCellDivisor);
+      // Centre the macro grid on world origin.
+      int groupX = Math.floorDiv(rareX, 2);
+      int groupZ = Math.floorDiv(rareZ, 2);
+      int centeredX = groupX + groups / 2;
+      int centeredZ = groupZ + groups / 2;
+      int tileX = Math.floorDiv(centeredX, groups);
+      int tileZ = Math.floorDiv(centeredZ, groups);
+      int localX = Math.floorMod(centeredX, groups);
+      int localZ = Math.floorMod(centeredZ, groups);
+      long tileKey = ((long)tileX << 32) ^ (tileZ & 0xffffffffL);
+      byte[] plan = this.rareTileMemo.get(tileKey);
+      if (plan == null) {
+         byte[] created = this.buildRareTile(tileX, tileZ);
+         byte[] prior = this.rareTileMemo.putIfAbsent(tileKey, created);
+         plan = prior == null ? created : prior;
+         if (this.rareTileMemo.size() > 4096) this.rareTileMemo.clear();
+      }
+      int rare = plan[localZ * groups + localX];
+      // Store ordinal+1 in the tile plan; zero means use the coarse common map.
+      return rare == 0 ? this.value(this.levels, x, z) : rare - 1;
+   }
+
+   double rareCellBlocks() { return this.rareCellBlocks; }
+   double rareProvinceBlocks() { return this.rareCellBlocks * 2.0; }
+   int rareCellDivisor() { return this.rareCellDivisor; }
+
+   /**
+    * Select deterministic, non-overlapping 2x2 rare-cell provinces inside
+    * each macro tile. The quota is rounded stochastically per tile, so the
+    * long-run land share remains the configured target while every normal
+    * 16k world sector receives its expected rare-habitat candidates.
+    */
+   private byte[] buildRareTile(int tileX, int tileZ) {
+      int groups = this.rareGroupsPerSide;
+      byte[] labels = new byte[groups * groups];
+      int margin = 1;
+      int side = Math.max(1, groups - margin * 2);
+      int slots = side * side;
+      boolean[] occupied = new boolean[labels.length];
+      long seedHash = this.hash(0x52415245, tileX, tileZ);
+      int bloomCount = stochasticQuota(this.bloomlandsCellShare * groups * groups,
+              seedHash ^ 0x424c4f4f4dL, slots);
+      int karstCount = stochasticQuota(this.karstCellShare * groups * groups,
+              seedHash ^ 0x4b41525354L, Math.max(0, slots - bloomCount));
+      placeRareGroups(labels, occupied, WildBiome.BLOOMLANDS.ordinal(),
+              bloomCount, tileX, tileZ, side, margin, 0x424c4f4f);
+      placeKarstGroupsWithMountainRing(labels, occupied, karstCount, tileX, tileZ, groups);
+      return labels;
+   }
+
+   private static int stochasticQuota(double expected, long seed, int maximum) {
+      if (maximum <= 0 || expected <= 0.0) return 0;
+      int count = Math.min(maximum, (int)Math.floor(expected));
+      double fraction = expected - Math.floor(expected);
+      double roll = (seed >>> 11) * (1.0 / (1L << 53));
+      if (roll < fraction && count < maximum) count++;
+      return count;
+   }
+
+   /**
+    * A Karstlands province is a basin inside a mountain range, not an exposed
+    * biome that relies on a city-distance exclusion radius. Reserve its full
+    * eight-neighbour ring as mountains on the same physical rare-province
+    * lattice. The two-cell-wide Karst core is therefore enclosed on the north,
+    * south, east, west and all four diagonal sides by a complete mountain belt.
+    *
+    * The ring is accepted atomically: if any of its eight mountain cells or
+    * the central Karst cell is already reserved by another rare province, try
+    * another deterministic slot rather than emitting a broken/partial range.
+    */
+   private void placeKarstGroupsWithMountainRing(byte[] labels, boolean[] occupied,
+                                                  int count, int tileX, int tileZ, int groups) {
+      final int margin = 2; // one empty macro-cell beyond the mountain ring at every sector edge
+      final int side = Math.max(1, groups - margin * 2);
+      final int slots = side * side;
+      for (int i = 0; i < count; i++) {
+         int start = (int) Math.floorMod(this.hash(0x4b415253 + i, tileX, tileZ), (long) slots);
+         boolean placed = false;
+         for (int attempt = 0; attempt < slots; attempt++) {
+            int slot = (start + attempt) % slots;
+            int localX = margin + slot % side;
+            int localZ = margin + slot / side;
+            int center = localZ * groups + localX;
+            boolean free = !occupied[center];
+            for (int dz = -1; dz <= 1 && free; dz++) {
+               for (int dx = -1; dx <= 1; dx++) {
+                  if (dx == 0 && dz == 0) continue;
+                  int neighbour = (localZ + dz) * groups + localX + dx;
+                  if (occupied[neighbour]) {
+                     free = false;
+                     break;
+                  }
+               }
+            }
+            if (!free) continue;
+
+            occupied[center] = true;
+            labels[center] = (byte) (WildBiome.VOLCANIC_BARRENS.ordinal() + 1);
+            for (int dz = -1; dz <= 1; dz++) {
+               for (int dx = -1; dx <= 1; dx++) {
+                  if (dx == 0 && dz == 0) continue;
+                  int neighbour = (localZ + dz) * groups + localX + dx;
+                  occupied[neighbour] = true;
+                  labels[neighbour] = (byte) (WildBiome.MOUNTAINS.ordinal() + 1);
+               }
+            }
+            placed = true;
+            break;
+         }
+         if (!placed) return; // no partial Karst range if the tile is saturated
+      }
+   }
+
+   private void placeRareGroups(byte[] labels, boolean[] occupied, int biomeOrdinal,
+                                int count, int tileX, int tileZ, int side, int margin, int salt) {
+      if (count <= 0) return;
+      int groups = this.rareGroupsPerSide;
+      int slots = side * side;
+      for (int i = 0; i < count; i++) {
+         int slot = (int)Math.floorMod(this.hash(salt + i, tileX, tileZ), (long)slots);
+         int attempts = 0;
+         while (occupied[slot] && attempts++ < slots) slot = (slot + 1) % slots;
+         if (occupied[slot]) return;
+         occupied[slot] = true;
+         int localX = margin + slot % side;
+         int localZ = margin + slot / side;
+         labels[localZ * groups + localX] = (byte)(biomeOrdinal + 1);
+      }
    }
 
    double[] realisedShares() {
@@ -135,25 +306,33 @@ final class WildLayers {
          goal[i] /= total;
          this.prior[i] = goal[i];
       }
-      final int level = 2;
-      final int window = 256;
+      // Calibrate the exact final map, not level 2 of the zoom stack. The
+      // old intermediate-level estimate could report the requested rare-biome
+      // share even when the final zoom, domain warp and 3x3 region protection
+      // produced a materially different distribution.
+      final int samples = 4096;
       double[] real = new double[this.n];
-      for (int it = 0; it < 30; it++) {
+      for (int it = 0; it < 16; it++) {
          this.memo.clear();
+         this.regionMemo.clear();
          java.util.Arrays.fill(real, 0.0);
-         for (int i = 0; i < window; i++) {
-            for (int j = 0; j < window; j++) {
-               real[this.value(level, i - window / 2 + 311, j - window / 2 - 187)] += 1.0;
-            }
+         for (int sample = 0; sample < samples; sample++) {
+            // Use independent hash-distributed world coordinates. A regular
+            // lattice can alias the zoom cells and domain warp, making a
+            // rare habitat appear to occupy most of the calibration sample
+            // even when a uniform random survey shows it is uncommon.
+            int x = (int) Math.floorMod(this.hash(91 + it, sample, 311), 600001L) - 300000;
+            int z = (int) Math.floorMod(this.hash(173 + it, sample, -187), 600001L) - 300000;
+            real[this.label(x, z)] += 1.0;
          }
          double err = 0.0;
          for (int b = 0; b < this.n; b++) {
-            real[b] /= (double) window * window;
+            real[b] /= (double) samples;
             err = Math.max(err, Math.abs(real[b] - goal[b]));
             this.realised[b] = real[b];
          }
          this.calibrationError = err;
-         if (err < 0.008) {
+         if (err < 0.006) {
             break;
          }
          double sum = 0.0;
@@ -219,16 +398,28 @@ final class WildLayers {
 
    /** Level 0: a random biome per coarse cell, by the (calibrated) priors. */
    private int start(int x, int z) {
-      double u = (hash(0, x, z) >>> 11) * (1.0 / (1L << 53));
-      double acc = 0.0;
-      int last = 0;
+      // Bloomlands and Karstlands are deliberately omitted from the coarse
+      // source grid; rareRegionLabel() places them at the final region scale.
+      // Renormalize common priors so rare shares are not redistributed to the
+      // last ordinary biome when the coarse map is sampled.
+      double commonTotal = 0.0;
       for (int k = 0; k < this.n; k++) {
+         if (k != WildBiome.BLOOMLANDS.ordinal()
+                 && k != WildBiome.VOLCANIC_BARRENS.ordinal()) {
+            commonTotal += Math.max(0.0, this.prior[k]);
+         }
+      }
+      if (commonTotal <= 0.0) return WildBiome.FOREST.ordinal();
+      double u = (hash(0, x, z) >>> 11) * (1.0 / (1L << 53)) * commonTotal;
+      double acc = 0.0;
+      int last = WildBiome.FOREST.ordinal();
+      for (int k = 0; k < this.n; k++) {
+         if (k == WildBiome.BLOOMLANDS.ordinal()
+                 || k == WildBiome.VOLCANIC_BARRENS.ordinal()) continue;
          if (this.prior[k] > 0.0) {
             last = k;
             acc += this.prior[k];
-            if (u < acc) {
-               return k;
-            }
+            if (u < acc) return k;
          }
       }
       return last;

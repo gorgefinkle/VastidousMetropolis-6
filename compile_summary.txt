@@ -1,13 +1,11 @@
-R14.10 DEV — Universal Biome Teleport
-Java target: 25
-Paper API: 26.2.build.129-stable
+R14.18 DEV — Branch Growth Throughput and Karst Mountain Enclosure
 
-R14.10 retains the R14.9 queue/backpressure, Morphomos, Karst mountain and open-landbridge implementation, and adds:
-- /metrobiome tp <biome> for all active WildBiome catalog entries.
-- Planner-backed candidate checks using the same deterministic field and forest ownership as world generation.
-- Incremental asynchronous outward search with no arbitrary radius cap; candidate destination chunks are loaded only after a planner hit.
-- Generated-terrain verification and safe landing selection before teleport.
-- /metrobiome list, /metrobiome cancel, aliases for karst / dry-forest / old-growth / coastal-dunes.
-- Removed the standalone /bloomlands command; use /metrobiome tp bloomlands.
+R14.18 removes the artificial one-build-per-tick and one-generated-chunk-load-per-tick limits from the branch-growth drain. Work is advanced in a fair rotating queue with explicit per-tick scan, completion, chunk-load and elapsed-time budgets. Large support footprints move through bounded 128-chunk ticket windows rather than waiting indefinitely for every support chunk to be loaded at once. Failed chunk loads enter a retry cooldown, while natural/player chunk-load notifications wake affected builds.
 
-Build/test results are recorded by the R14.10 GitHub Actions run associated with this commit.
+The branch cache now stores packed support coordinates rather than retaining Bukkit Block wrappers. Candidate scanning is batched by support chunk, but raw candidates are collected and evaluated as one complete building before the per-building fairness sampler and growth budget run. Readiness notifications use a per-UrbanGrid pending-build index rather than copying every pending build in the world. Chunky queue pressure now includes both deferred-populate jobs and pending branch-growth builds, so it pauses generation when either work queue accumulates.
+
+Karstlands are placed as central rare provinces surrounded on all eight neighbouring sides by reserved MOUNTAINS provinces on the same deterministic physical lattice. The Karstlands-specific city keep-away is disabled; the mountain enclosure is the geographic buffer. Watercourse separation remains an independent geographic suitability rule. The R14.18 QA includes deterministic multi-seed mountain-ring checks.
+
+R14.18 retains all R14.17 changes, including the shutdown-safe branch-growth timeout guard, R14.16 mushroom cap/stem occlusion correction, R14.15 one creek origin per city, R14.14 Bloomlands province sizing/picker corrections, and inherited Karst, bridge, marine, and Morphomos fixes.
+
+Run the R14.18 workflow with Java 25 and `mvn -B -ntp clean verify`. Local source probes are under `QA/R14_18/`.

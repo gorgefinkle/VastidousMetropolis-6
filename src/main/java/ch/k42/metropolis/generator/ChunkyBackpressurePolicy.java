@@ -18,6 +18,11 @@ public final class ChunkyBackpressurePolicy {
 
     private ChunkyBackpressurePolicy() {}
 
+    public static int combinedQueueSize(int deferredPopulateJobs, int branchGrowthBuilds) {
+        long total = (long) Math.max(0, deferredPopulateJobs) + Math.max(0, branchGrowthBuilds);
+        return (int) Math.min(Integer.MAX_VALUE, total);
+    }
+
     public static boolean hasStableHeadroom(double usage, long remaining, long max) {
         return max > 0L && usage <= STABLE_RESUME_MAX
                 && remaining >= MIN_FREE_PROBE

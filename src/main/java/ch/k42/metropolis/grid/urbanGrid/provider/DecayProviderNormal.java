@@ -70,15 +70,6 @@ public class DecayProviderNormal extends DecayProvider {
            .addAll(Mats.STAINED_GLASS_PANES)
            .build();
 
-   static final class SupportHit {
-      final Block block;
-      final boolean decayed;
-      SupportHit(Block block, boolean decayed) {
-         this.block = block;
-         this.decayed = decayed;
-      }
-   }
-
    static final class GNode {
       final int x, y, z;
       GNode(int x, int y, int z) {
@@ -89,7 +80,7 @@ public class DecayProviderNormal extends DecayProvider {
    }
 
    static final class Ctx {
-      final List<SupportHit> supportHits = new ArrayList<>();
+      final PackedSupportHitBuffer supportHits = new PackedSupportHitBuffer(128);
       int boundsMinX, boundsMaxX, boundsMinY, boundsMaxY, boundsMinZ, boundsMaxZ;
       int footprintChunks = 1;
       UrbanGrid grid;
@@ -100,6 +91,16 @@ public class DecayProviderNormal extends DecayProvider {
    public DecayProviderNormal(MetropolisGenerator generator, Random random) {
       super(generator, random);
       this.branchGrower = new DecayProviderBranch(this, random);
+   }
+
+   @Override
+   public int pendingGrowthWorkCount() {
+      return this.pendingBuilds.size();
+   }
+
+   private void reportPendingGrowthWork() {
+      ch.k42.metropolis.generator.ChunkyMemoryValve.growthPending(
+              this.generator != null ? this.generator.getWorld() : null, this.pendingBuilds.size());
    }
 
    Block safeRelative(Block block, int dx, int dy, int dz) {
@@ -270,7 +271,7 @@ public class DecayProviderNormal extends DecayProvider {
                   // or slime under the sea) -- same as the water-touching
                   // blocks skipped above.
                   if (!submerged && this.isSupporting(block)) {
-                     ctx.supportHits.add(new SupportHit(block, decayed));
+                     ctx.supportHits.add(block.getX(), block.getY(), block.getZ(), decayed);
                   }
                }
             }
@@ -287,8 +288,9 @@ public class DecayProviderNormal extends DecayProvider {
          // on).
          Minions.dNode("[BUILD][FALLBACK] no grid/parcel identity for this decay pass -- running its growth immediately instead of caching it.");
          this.branchGrower.generateGrowth(world, options, ctx);
-         for (SupportHit hit : ctx.supportHits) {
-            this.addVines(hit.block, options, hit.decayed);
+         for (int i = 0; i < ctx.supportHits.size(); i++) {
+            this.addVines(world.getBlockAt(ctx.supportHits.x(i), ctx.supportHits.y(i), ctx.supportHits.z(i)),
+                    options, ctx.supportHits.decayed(i));
          }
          this.refreshChunksInBounds(world, ctx);
          return;
@@ -308,8 +310,14 @@ public class DecayProviderNormal extends DecayProvider {
     * DistrictAccumulator/TileAccumulator -- same shape, but there's only
     * ever one of these per BUILD now, never per district or per tile.
     */
-   private static final class PendingBuild {
-      final List<SupportHit> supportHits = new ArrayList<>();
+   static final class PendingBuild {
+      // One packed coordinate buffer is filled while the parcel is being
+      // painted, then split by support chunk when it becomes growth-ready.
+      PackedSupportHitBuffer supportHits = new PackedSupportHitBuffer();
+      final Map<Long, PackedSupportHitBuffer> supportByChunk = new java.util.LinkedHashMap<>();
+      final Map<Long, PackedSupportHitBuffer> growthByChunk = new java.util.LinkedHashMap<>();
+      final PackedSupportHitBuffer rawGrowthCandidates = new PackedSupportHitBuffer(256, true);
+      int supportHitCount;
       int chunkArea = 0;
       World world;
       DecayOption options;
@@ -319,7 +327,9 @@ public class DecayProviderNormal extends DecayProvider {
       int boundsMinZ = Integer.MAX_VALUE, boundsMaxZ = Integer.MIN_VALUE;
       BukkitTask timeoutTask;
       boolean growthReady;
-      final Set<Long> waitingChunks = new HashSet<>();
+      boolean batchesPrepared;
+      boolean candidatesGenerated;
+      final Set<Long> waitingChunks = new java.util.LinkedHashSet<>();
    }
 
    // IdentityHashMap-backed: Parcel doesn't override equals()/hashCode(),
@@ -328,6 +338,9 @@ public class DecayProviderNormal extends DecayProvider {
    // explicit -- see District.assignDistrictMembership()'s old note about
    // exactly this hazard with multi-chunk buildings.
    private final Map<Parcel, PendingBuild> pendingBuilds = new IdentityHashMap<>();
+   // Readiness notifications are local to the grid that received the placement.
+   // This prevents each parcel paste from snapshotting every pending build in the world.
+   private final Map<UrbanGrid, Set<Parcel>> pendingBuildsByGrid = new IdentityHashMap<>();
    // R30ea's reverse dependency index (still strongly retains pending builds;
    // NOT the future durable ledger). Only the unchanged R30ea semantics are
    // restored here; the world-key collision risk is tracked in R07 QA.
@@ -377,12 +390,24 @@ public class DecayProviderNormal extends DecayProvider {
     * to be ready doesn't sit cached for no reason.
     */
    private void cacheBuildGrowth(Parcel build, Ctx ctx, World world, DecayOption options) {
-      PendingBuild acc = this.pendingBuilds.computeIfAbsent(build, b -> new PendingBuild());
-      acc.supportHits.addAll(ctx.supportHits);
+      PendingBuild acc = this.pendingBuilds.get(build);
+      if (acc == null) {
+         acc = new PendingBuild();
+         this.pendingBuilds.put(build, acc);
+      }
+      for (int i = 0; i < ctx.supportHits.size(); i++) {
+         acc.supportHits.add(ctx.supportHits.x(i), ctx.supportHits.y(i), ctx.supportHits.z(i),
+                 ctx.supportHits.decayed(i));
+      }
+      acc.supportHitCount += ctx.supportHits.size();
       acc.chunkArea += ctx.footprintChunks;
       acc.world = world;
       acc.options = options;
       acc.grid = ctx.grid;
+      if (ctx.grid != null) {
+         this.pendingBuildsByGrid.computeIfAbsent(ctx.grid,
+                 ignored -> Collections.newSetFromMap(new IdentityHashMap<>())).add(build);
+      }
       acc.boundsMinX = Math.min(acc.boundsMinX, ctx.boundsMinX);
       acc.boundsMaxX = Math.max(acc.boundsMaxX, ctx.boundsMaxX);
       acc.boundsMinY = Math.min(acc.boundsMinY, ctx.boundsMinY);
@@ -390,10 +415,11 @@ public class DecayProviderNormal extends DecayProvider {
       acc.boundsMinZ = Math.min(acc.boundsMinZ, ctx.boundsMinZ);
       acc.boundsMaxZ = Math.max(acc.boundsMaxZ, ctx.boundsMaxZ);
       Minions.dNodeVerbose("[BUILD][CACHE] %s -- +%d supportHits (total now %d)",
-              this.describeBuild(build), ctx.supportHits.size(), acc.supportHits.size());
+              this.describeBuild(build), ctx.supportHits.size(), acc.supportHitCount);
+      this.reportPendingGrowthWork();
 
       int timeoutTicks = PluginConfig.getBranchFlushTimeoutTicks();
-      if (timeoutTicks > 0 && acc.timeoutTask == null) {
+      if (timeoutTicks > 0 && acc.timeoutTask == null && this.mayScheduleTimeout(build)) {
          acc.timeoutTask = Bukkit.getScheduler().runTaskLater(
                  this.generator.getPlugin(), () -> this.flushBuildOnTimeout(build), timeoutTicks);
       }
@@ -420,15 +446,18 @@ public class DecayProviderNormal extends DecayProvider {
     */
    @Override
    public void onNeighbourPlaced(UrbanGrid grid, Parcel placed) {
-      if (placed == null || this.pendingBuilds.isEmpty()) {
+      if (placed == null || grid == null) {
          return;
       }
-      // Snapshot the keys -- tryFlushBuild()/flushBuild() removes entries
-      // from pendingBuilds mid-sweep, which would otherwise throw a
-      // ConcurrentModificationException iterating the live map here.
-      for (Parcel build : new ArrayList<>(this.pendingBuilds.keySet())) {
+      Set<Parcel> gridBuilds = this.pendingBuildsByGrid.get(grid);
+      if (gridBuilds == null || gridBuilds.isEmpty()) {
+         return;
+      }
+      // Only this grid's own pending builds are candidates. Snapshotting the
+      // local set is safe because a successful flush removes its build mid-sweep.
+      for (Parcel build : new ArrayList<>(gridBuilds)) {
          PendingBuild acc = this.pendingBuilds.get(build);
-         if (acc != null && acc.grid == grid &&
+         if (acc != null && !acc.growthReady &&
                  (PluginConfig.getBranchFlushTimeoutTicks() == 0 ||
                   this.withinReadinessEventReach(build, placed))) {
             this.tryFlushBuild(build);
@@ -461,15 +490,32 @@ public class DecayProviderNormal extends DecayProvider {
          return;
       }
       pending.timeoutTask = null;
+      // This callback may already be in the scheduler's execution queue when
+      // the plugin is disabled. Never let a late timeout revive itself.
+      if (!this.pluginEnabled()) {
+         return;
+      }
       if (!build.isPopulated()) {
-         pending.timeoutTask = Bukkit.getScheduler().runTaskLater(
-                 this.generator.getPlugin(), () -> this.flushBuildOnTimeout(build), 200L);
+         if (this.mayScheduleTimeout(build)) {
+            pending.timeoutTask = Bukkit.getScheduler().runTaskLater(
+                    this.generator.getPlugin(), () -> this.flushBuildOnTimeout(build), 200L);
+         }
          return;
       }
       pending.growthReady = true;
       Minions.dNode("[BUILD][TIMEOUT] %s -- readiness timeout; retaining full growth pool until support chunks are loaded.",
               this.describeBuild(build));
       this.flushBuild(build, pending);
+   }
+
+   private boolean pluginEnabled() {
+      return this.generator != null && this.generator.getPlugin() != null
+              && this.generator.getPlugin().isEnabled();
+   }
+
+   private boolean mayScheduleTimeout(Parcel build) {
+      return BranchGrowthTimeoutLifecyclePolicy.shouldScheduleTimeout(
+              this.pluginEnabled(), this.pendingBuilds.containsKey(build));
    }
 
    private void tryFlushBuild(Parcel build) {
@@ -491,38 +537,128 @@ public class DecayProviderNormal extends DecayProvider {
       BranchGrowthDrain.enqueue(this, build, pending);
    }
 
-   /** Called by BranchGrowthDrain through reflection; restored R30ea semantics. */
-   private void flushBuildNow(Parcel build, PendingBuild pending) {
+   /** Called by the typed BranchGrowthDrain when one support-chunk batch is resident. */
+   private boolean flushBuildNow(Parcel build, PendingBuild pending) {
       if (!pending.growthReady || pending.world == null) {
-         return;
+         return false;
       }
-      Set<Long> missing = missingGrowthChunks(pending.world, pending.supportHits);
-      if (!missing.isEmpty()) {
-         this.clearGrowthWait(build, pending);
-         for (long chunkKey : missing) {
-            pending.waitingChunks.add(chunkKey);
-            this.growthWaitingForChunk.computeIfAbsent(chunkKey, ignored ->
-                  Collections.newSetFromMap(new IdentityHashMap<>())).add(build);
+      if (!pending.batchesPrepared) {
+         this.prepareGrowthBatches(build, pending);
+      }
+
+      Set<Long> ready = new java.util.LinkedHashSet<>();
+      for (long key : pending.waitingChunks) {
+         if (pending.world.isChunkLoaded((int) (key >> 32), (int) key)) {
+            ready.add(key);
+            if (ready.size() >= BranchGrowthDrainBatchPolicy.MAX_CHUNKS_PER_BATCH) break; // bounded, deterministic batch
          }
+      }
+
+      if (!pending.candidatesGenerated) {
+         for (long key : ready) {
+            PackedSupportHitBuffer chunkHits = pending.growthByChunk.get(key);
+            if (chunkHits == null || chunkHits.isEmpty()) continue;
+            this.branchGrower.collectRawGrowthCandidates(pending.world, chunkHits,
+                    pending.rawGrowthCandidates);
+         }
+         this.removeProcessedChunks(build, pending, ready);
+         if (pending.waitingChunks.isEmpty()) {
+            Ctx wholeBuild = contextForPending(pending);
+            this.branchGrower.generateGrowthFromPackedCandidates(pending.world, pending.options,
+                    wholeBuild, pending.rawGrowthCandidates);
+            pending.rawGrowthCandidates.clear();
+            pending.growthByChunk.clear();
+            pending.candidatesGenerated = true;
+            // The original order was branch/slime growth first, vines second.
+            // Revisit support chunks in bounded batches for the vine pass so
+            // that no >128-chunk build needs all its chunks loaded together.
+            pending.waitingChunks.addAll(pending.supportByChunk.keySet());
+            this.registerGrowthWait(build, pending);
+            Minions.dNodeVerbose("[BUILD][CANDIDATES] %s -- complete support scan; starting vine pass across %d chunks.",
+                    this.describeBuild(build), pending.waitingChunks.size());
+         }
+         return !ready.isEmpty() || pending.waitingChunks.isEmpty();
+      }
+
+      for (long key : ready) {
+         PackedSupportHitBuffer chunkHits = pending.supportByChunk.get(key);
+         if (chunkHits == null) continue;
+         for (int i = 0; i < chunkHits.size(); i++) {
+            int x = chunkHits.x(i), y = chunkHits.y(i), z = chunkHits.z(i);
+            this.addVines(pending.world.getBlockAt(x, y, z), pending.options, chunkHits.decayed(i));
+         }
+      }
+      this.removeProcessedChunks(build, pending, ready);
+      if (pending.waitingChunks.isEmpty()) {
+         Ctx wholeBuild = contextForPending(pending);
+         Minions.dNode("[BUILD][FLUSH] %s -- supportHits=%d chunkArea=%d",
+                 this.describeBuild(build), pending.supportHitCount, pending.chunkArea);
+         this.refreshChunksInBounds(pending.world, wholeBuild);
          if (pending.timeoutTask != null) {
             pending.timeoutTask.cancel();
             pending.timeoutTask = null;
          }
-         Minions.dNodeVerbose("[BUILD][DEFER] %s -- %d support chunks unloaded; preserving all %d candidates.",
-                 this.describeBuild(build), missing.size(), pending.supportHits.size());
-         return;
+         this.removePendingBuild(build, pending);
       }
-      this.clearGrowthWait(build, pending);
-      if (pending.timeoutTask != null) {
-         pending.timeoutTask.cancel();
-         pending.timeoutTask = null;
+      return !ready.isEmpty();
+   }
+
+   /** Split the original insertion-ordered coordinate stream into chunk batches once. */
+   private void prepareGrowthBatches(Parcel build, PendingBuild pending) {
+      boolean street = Parcel.isStreet(build);
+      double keepChance = PluginConfig.getStreetBranchSeedChancePercent() / 100.0;
+      for (int i = 0; i < pending.supportHits.size(); i++) {
+         int x = pending.supportHits.x(i), y = pending.supportHits.y(i), z = pending.supportHits.z(i);
+         boolean decayed = pending.supportHits.decayed(i);
+         long key = growthChunkKey(x >> 4, z >> 4);
+         PackedSupportHitBuffer all = pending.supportByChunk.computeIfAbsent(key,
+                 ignored -> new PackedSupportHitBuffer(32, true));
+         all.add(x, y, z, decayed, i);
       }
-      this.pendingBuilds.remove(build);
-      if (pending.supportHits.isEmpty()) {
-         return;
+      if (!street || keepChance >= 1.0) {
+         // The branch scan and vine pass share the same packed chunk buffers;
+         // do not duplicate every support point for ordinary buildings.
+         pending.growthByChunk.putAll(pending.supportByChunk);
+      } else if (keepChance > 0.0) {
+         // Keep the original one-time random street thinning in insertion order.
+         for (int i = 0; i < pending.supportHits.size(); i++) {
+            if (this.random.nextDouble() >= keepChance) continue;
+            int x = pending.supportHits.x(i), y = pending.supportHits.y(i), z = pending.supportHits.z(i);
+            long key = growthChunkKey(x >> 4, z >> 4);
+            PackedSupportHitBuffer growth = pending.growthByChunk.computeIfAbsent(key,
+                    ignored -> new PackedSupportHitBuffer(32, true));
+            growth.add(x, y, z, pending.supportHits.decayed(i), i);
+         }
       }
+      pending.supportHits = null; // release the one-shot staging array after chunk partitioning
+      pending.waitingChunks.addAll(pending.growthByChunk.keySet());
+      pending.batchesPrepared = true;
+      this.registerGrowthWait(build, pending);
+   }
+
+   private void registerGrowthWait(Parcel build, PendingBuild pending) {
+      for (long key : pending.waitingChunks) {
+         int cx = (int) (key >> 32), cz = (int) key;
+         if (!pending.world.isChunkLoaded(cx, cz)) {
+            this.growthWaitingForChunk.computeIfAbsent(key, ignored ->
+                    Collections.newSetFromMap(new IdentityHashMap<>())).add(build);
+         }
+      }
+   }
+
+   private void removeProcessedChunks(Parcel build, PendingBuild pending, Set<Long> processed) {
+      for (long key : processed) {
+         pending.waitingChunks.remove(key);
+         Set<Parcel> waiting = this.growthWaitingForChunk.get(key);
+         if (waiting != null) {
+            waiting.remove(build);
+            if (waiting.isEmpty()) this.growthWaitingForChunk.remove(key);
+         }
+      }
+   }
+
+   private static Ctx contextForPending(PendingBuild pending) {
       Ctx ctx = new Ctx();
-      ctx.supportHits.addAll(loadedSupportHits(pending.world, pending.supportHits));
       ctx.footprintChunks = Math.max(1, pending.chunkArea);
       ctx.grid = pending.grid;
       ctx.boundsMinX = pending.boundsMinX;
@@ -531,51 +667,57 @@ public class DecayProviderNormal extends DecayProvider {
       ctx.boundsMaxY = pending.boundsMaxY;
       ctx.boundsMinZ = pending.boundsMinZ;
       ctx.boundsMaxZ = pending.boundsMaxZ;
-      Minions.dNode("[BUILD][FLUSH] %s -- supportHits=%d chunkArea=%d",
-              this.describeBuild(build), ctx.supportHits.size(), pending.chunkArea);
-      Ctx growthCtx = Parcel.isStreet(build) ? this.thinStreetGrowthCandidates(ctx) : ctx;
-      this.branchGrower.generateGrowth(pending.world, pending.options, growthCtx);
-      for (SupportHit hit : ctx.supportHits) {
-         this.addVines(hit.block, pending.options, hit.decayed);
-      }
-      this.refreshChunksInBounds(pending.world, ctx);
+      return ctx;
    }
 
-   static Set<Long> missingGrowthChunks(World world, List<SupportHit> supportHits) {
-      Set<Long> missing = new HashSet<>();
-      if (world == null) {
-         return missing;
-      }
-      Set<Long> examined = new HashSet<>();
-      for (SupportHit hit : supportHits) {
-         if (hit == null || hit.block == null) {
-            continue;
-         }
-         int chunkX = hit.block.getX() >> 4;
-         int chunkZ = hit.block.getZ() >> 4;
-         long key = growthChunkKey(chunkX, chunkZ);
-         if (examined.add(key) && !world.isChunkLoaded(chunkX, chunkZ)) {
-            missing.add(key);
-         }
-      }
-      return missing;
+   boolean isPendingForDrain(Parcel build, PendingBuild pending) {
+      return this.pendingBuilds.get(build) == pending;
    }
 
-   static List<SupportHit> loadedSupportHits(World world, List<SupportHit> supportHits) {
-      List<SupportHit> loaded = new ArrayList<>(supportHits.size());
-      if (world == null) {
-         return loaded;
-      }
-      for (SupportHit hit : supportHits) {
-         if (hit == null || hit.block == null) {
-            continue;
-         }
-         int x = hit.block.getX(), y = hit.block.getY(), z = hit.block.getZ();
-         if (world.isChunkLoaded(x >> 4, z >> 4)) {
-            loaded.add(new SupportHit(world.getBlockAt(x, y, z), hit.decayed));
+   World worldForDrain(PendingBuild pending) {
+      return pending.world;
+   }
+
+   Set<Long> waitingChunksForDrain(PendingBuild pending) {
+      return pending.waitingChunks;
+   }
+
+   int loadedWaitingChunkCount(PendingBuild pending) {
+      if (pending.world == null) return 0;
+      int loaded = 0;
+      for (long key : pending.waitingChunks) {
+         if (pending.world.isChunkLoaded((int) (key >> 32), (int) key)) {
+            loaded++;
+            if (loaded >= BranchGrowthDrainBatchPolicy.MAX_CHUNKS_PER_BATCH) break;
          }
       }
       return loaded;
+   }
+
+   boolean flushBuildFromDrain(Parcel build, PendingBuild pending) {
+      return this.flushBuildNow(build, pending);
+   }
+
+   private void removePendingBuild(Parcel build, PendingBuild pending) {
+      if (this.pendingBuilds.get(build) != pending) {
+         return;
+      }
+      this.clearGrowthWait(build, pending);
+      this.pendingBuilds.remove(build);
+      this.reportPendingGrowthWork();
+      pending.supportByChunk.clear();
+      pending.growthByChunk.clear();
+      pending.rawGrowthCandidates.clear();
+      pending.waitingChunks.clear();
+      if (pending.grid != null) {
+         Set<Parcel> gridBuilds = this.pendingBuildsByGrid.get(pending.grid);
+         if (gridBuilds != null) {
+            gridBuilds.remove(build);
+            if (gridBuilds.isEmpty()) {
+               this.pendingBuildsByGrid.remove(pending.grid);
+            }
+         }
+      }
    }
 
    /**
@@ -608,11 +750,15 @@ public class DecayProviderNormal extends DecayProvider {
 
       double keepChance = PluginConfig.getStreetBranchSeedChancePercent() / 100.0;
       if (keepChance >= 1.0) {
-         thinned.supportHits.addAll(source.supportHits);
+         for (int i = 0; i < source.supportHits.size(); i++) {
+            thinned.supportHits.add(source.supportHits.x(i), source.supportHits.y(i),
+                    source.supportHits.z(i), source.supportHits.decayed(i));
+         }
       } else if (keepChance > 0.0) {
-         for (SupportHit hit : source.supportHits) {
+         for (int i = 0; i < source.supportHits.size(); i++) {
             if (this.random.nextDouble() < keepChance) {
-               thinned.supportHits.add(hit);
+               thinned.supportHits.add(source.supportHits.x(i), source.supportHits.y(i),
+                       source.supportHits.z(i), source.supportHits.decayed(i));
             }
          }
       }

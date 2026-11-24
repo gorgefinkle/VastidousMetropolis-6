@@ -1,12 +1,10 @@
 name: R14.10 universal biome teleport, queue, backpressure and karst verification
 
 on:
-  pull_request:
-    branches:
-      - integration/morphomos-natural-family-bloomlands
+  # This historical R14.10 pipeline is retained for its own feature branch.
+  # R14.13 supersedes it on the integration PR and owns the current package name.
   push:
     branches:
-      - integration/morphomos-natural-family-bloomlands
       - feature/r14-10-universal-biome-teleport
   workflow_dispatch:
 

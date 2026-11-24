@@ -9,8 +9,7 @@ public final class OceanSeabed {
 
     public static int maximumFeatureHeight(int depth) {
         if (!OceanConfig.isOceanSeabedDetailsEnabled() || depth < 3) return 0;
-        if (depth < 13) return 1;
-        return Math.min(6, Math.max(1, depth - 5));
+        return MarineEcology.maximumFeatureHeight(depth);
     }
 
     private static long mix(long h) {
@@ -94,24 +93,9 @@ public final class OceanSeabed {
                 }
             }
         }
-        double floraPatch = patch(seed,x,z,scale*1.2,1262832720L);
-        if (depth >= 13 && depth <= 23 && shoreDistance > 18.0 && rocks > 0.45
-                && floraPatch > 0.52
-                && cell(seed,x,z,1263685452L) < OceanConfig.getOceanSeabedKelpPercent()/100.0) {
-            int len = Math.min(depth-5,2 + (int)(cell(seed,x,z,1263028040L)*5.0));
-            if (len > 0) {
-                for (int dy=1;dy<len;dy++) {
-                    world.getBlockAt(x,floorY+dy,z).setType(Material.KELP_PLANT,false);
-                }
-                world.getBlockAt(x,floorY+len,z).setType(Material.KELP,false);
-            }
-        } else if (depth >= 3 && depth <= 18 && shoreDistance > 5.0 && rocks < 0.66
-                && bottomPatch < 0.74 && !isRock
-                && patch(seed,x,z,scale*0.75,1196573011L)>0.45
-                && cell(seed,x,z,1397049170L)
-                   < OceanConfig.getOceanSeabedSeagrassPercent()/100.0) {
-            world.getBlockAt(x,floorY+1,z).setType(Material.SEAGRASS,false);
-        }
+        // Habitat-specific plants and formations are painted by one deterministic
+        // ecological model so meadow, kelp, reef, sponge and vent patches stay
+        // coherent instead of competing as independent per-column rolls.
         MarineEcology.paint(world,seed,x,z,floorY,seaY,depth,shoreDistance);
     }
 }

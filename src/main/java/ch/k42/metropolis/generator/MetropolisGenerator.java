@@ -586,7 +586,11 @@ public class MetropolisGenerator extends ChunkGenerator {
 
       /** Queues a chunk whose populate would nest too deeply; it runs later from the top of the stack. */
       private void reportPending() {
-         ChunkyMemoryValve.pending(this.owner, (int) Math.min(Integer.MAX_VALUE, this.deferred.pending()));
+         int deferred = (int) Math.min(Integer.MAX_VALUE, this.deferred.pending());
+         int growth = MetropolisGenerator.this.decayProvider != null
+                 ? MetropolisGenerator.this.decayProvider.pendingGrowthWorkCount() : 0;
+         ChunkyMemoryValve.pending(this.owner, deferred);
+         ChunkyMemoryValve.growthPending(this.owner, growth);
       }
 
       private void defer(Chunk chunk) {

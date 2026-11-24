@@ -39,6 +39,16 @@ public final class ChunkyBackpressurePolicyProbe {
         check(!ChunkyBackpressurePolicy.shouldPause(0.75, 0, false, true),
                 "a 30-second recovery probe must not immediately re-pause at 75%");
 
+        int combinedAtHighWater = ChunkyBackpressurePolicy.combinedQueueSize(700, 324);
+        check(combinedAtHighWater == ChunkyBackpressurePolicy.QUEUE_PAUSE,
+                "deferred populate and branch-growth cache queues must share the 1,024 pause threshold");
+        check(ChunkyBackpressurePolicy.shouldPause(0.50, combinedAtHighWater, false, false),
+                "combined work backlog must pause Chunky even with low heap usage");
+        check(ChunkyBackpressurePolicy.combinedQueueSize(80, 48) == ChunkyBackpressurePolicy.QUEUE_RESUME,
+                "combined work backlog must be allowed to resume at 128");
+        check(ChunkyBackpressurePolicy.combinedQueueSize(-10, Integer.MAX_VALUE) == Integer.MAX_VALUE,
+                "combined backlog must clamp negative input and saturate without overflow");
+
         // Ordinary recovery below 68% does not wait for the 30-second dwell.
         check(ChunkyBackpressurePolicy.canResume(128, 0.68, (long)(max * .32), max,
                 0L, now), "normal <=68% recovery must be immediate");

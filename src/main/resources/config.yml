@@ -143,7 +143,7 @@ generator:
       oldGrowth: 7                        # humid old conifer forest with mossy earth and mature canopy
       deciduous: 9                        # broadleaf woodland with oak and birch; gentle slopes
       coastalDunes: 4                     # coastal land only, within duneInlandBlocks of the actual ocean shore
-      karstlands: 4                       # rare fractured-limestone drainage provinces; remains less common than ordinary wilderness biomes
+      karstlands: 4                       # rare fractured-limestone basins; each is enclosed by a full mountain ring on all eight sides
       bloomlands: 2                       # rarest biome: giant-fungus and willow provinces
     geography:
       riverWetlandReachChunks: 12          # radius from ACTUAL river banks, not lattice water reservations (1..24 chunks)
@@ -151,7 +151,7 @@ generator:
       minimumRegionBlocks: 480             # minimum-size averaging for the small geographic habitats; karst fracture valleys are exempt so their long narrow network is not erased
       wetlandCoreStrengthPercent: 86       # how strongly suitable river/coastal wetlands replace the background biome (0..92)
       duneCoreStrengthPercent: 86          # higher = stronger dune cores on exposed sandy coasts (0..92)
-      volcanicCoreStrengthPercent: 88       # legacy config key; strength of the Karstlands fracture-habitat core bias (0..92)
+      volcanicCoreStrengthPercent: 88       # legacy config key; strength of the Karstlands fracture-habitat core bias (0..92); city spacing comes from its mountain ring
     keepAway:                              # chunks from the nearest farm or city block at which a biome reaches full strength. it grows in from nothing at 40% of that distance, so there is none closer: farm beside forest or mountains looks natural, farm beside desert or mesa does not. 0 = may touch the cities. the wilderness between two cities' farm bands is only about 46 chunks wide at the default city spacing, so keep these well under that or the biome hardly appears. the shares above are measured without this, so a kept-away biome ends up with a little less than its share
       mountains: 0
       desert: 14
@@ -160,7 +160,7 @@ generator:
       dryForest: 8
       wetlands: 2
       oldGrowth: 5
-      karstlands: 6
+      karstlands: 0                       # legacy value ignored at runtime; mountain enclosure supplies natural city spacing
       bloomlands: 8
     transitions:
       - "forest>desert=dryForest"
@@ -388,11 +388,11 @@ generator:
     islandFraction: 0.42          # how much land can rise out of the water near the coast as islands (fraction of the base radius) -- bigger = more and larger islands, reaching further from shore. Never in the deep middle. 0 = no islands.
     seabedReliefFraction: 0.7     # how uneven the sea floor is, as a fraction of the water depth (basins, banks, hollows). Fades to nothing at the shoreline so the shallows stay a smooth slope. 0 = the old perfectly flat bed.
     seabed:                       # only ocean-owned water columns; does not move shoreline or overwrite ports
-      enabled: true               # underwater sediments, seagrass/kelp and sparse natural rock outcrops
-      patchSizeBlocks: 56         # 12..512: size of coherent sand/gravel/clay and plant habitat zones
-      rockPercent: 12             # 0..100: chance of small submerged boulder clusters inside rocky patches
-      seagrassPercent: 17         # 0..100: sparse growth on shallow sediment bottoms
-      kelpPercent: 9              # 0..100: growth in protected deeper water, with boat clearance
+      enabled: true               # varied underwater habitats: meadows, kelp forests, coral reefs, sponge gardens and rare vents
+      patchSizeBlocks: 44         # 12..512: size of coherent sand/gravel/clay and plant habitat zones
+      rockPercent: 18             # 0..100: chance of small submerged boulder clusters inside rocky patches
+      seagrassPercent: 34         # 0..100: sparse growth on shallow sediment bottoms
+      kelpPercent: 28              # 0..100: growth in protected deeper water, with boat clearance
       shelfVariationBlocks: 2.2   # 0..5: LOW, smooth rolling rises/hollows breaking the flat shelf; fades at shoreline
       midVariationBlocks: 2.0     # 0..6: mid-depth hills/hollows; deep ocean keeps existing broad relief
       bedformScaleBlocks: 110     # 24..512: width of the coherent low seabed rises; larger = broader, smoother shelves
