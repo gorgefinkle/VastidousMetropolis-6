@@ -447,9 +447,8 @@ public class MetropolisGenerator extends ChunkGenerator {
       // guarded:
       //
       // - nesting is limited to MAX_NESTED_POPULATES levels. Anything deeper is
-      //   put in a queue and run later from the top of the stack, within a time
-      //   budget per tick, so a long chain turns into a queue instead of
-      //   recursion and never holds the main thread for long;
+      //   durably queued and staged asynchronously from disk, so a long chain
+      //   becomes queued work instead of recursive synchronous chunk loading;
       // - deferred jobs are saved to disk and reloaded at the next start;
       // - the drain stages already-generated chunks asynchronously from disk,
       //   then runs one population callback on the server thread. It never
