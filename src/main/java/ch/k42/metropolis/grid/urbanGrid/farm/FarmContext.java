@@ -81,16 +81,10 @@ final class FarmContext {
       return !this.inRegion(cx, cz) && this.grid.isPlanStreet(cx, cz);
    }
 
-   /**
-    * Every cell boundary is a possible access spine. It is not automatically
-    * painted: FarmRoads activates only the part of a line that lies between a
-    * farm site's recorded access gate and a real planned street.
-    *
-    * farm.roadLinePercent remains loadable for old configurations, but no
-    * longer randomly creates or suppresses essential site access.
-    */
+   /** Whether grid line number idx (x = 64 * idx for vertical lines, z = 64 * idx for horizontal ones) carries a dirt road. */
    boolean lineExists(boolean vertical, int idx) {
-      return true;
+      double roll = vertical ? FarmRandom.unit(this.seed, idx, 0, 801) : FarmRandom.unit(this.seed, 0, idx, 802);
+      return roll * 100.0 < PluginConfig.getFarmRoadLinePercent();
    }
 
    /**
