@@ -38,6 +38,7 @@ final class FarmGreenhouse extends FarmFeature {
    private static final int BAY_W = 8;
 
    private static final int GLASS = 20;
+   private static final int WALL = FarmPainter.STONE_BRICK;
 
    private static final int QUARTZ = 155;
    private static final int STONE_BRICK_B = 98;      // data 1 mossy, 2 cracked
