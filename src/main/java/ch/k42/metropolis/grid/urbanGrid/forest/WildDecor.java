@@ -37,6 +37,10 @@ public final class WildDecor {
    private static final int SMALL_REACH = 6;
    private static final int BIG_CELL = 64;
    private static final int BIG_REACH = 84;
+   // Camps were appearing too frequently in adjacent large-site cells.
+   // 250 means at least 2.5x the former default spacing (about 1/6.25
+   // of the previous areal rate); configurations may make them rarer still.
+   private static final int CAMP_SPACING_FLOOR = 250;
    // Wind installations need their own sparse layer; a 64-block decoration cell
    // cannot contain their 4..6 by 2..3 tower footprint or long road approach.
    // Wind turbine geometry is not a small wilderness prop: separated towers
@@ -286,6 +290,9 @@ public final class WildDecor {
             double sum = 0.0;
             for (int i = 0; i < w.length; i++) {
                int spacing = Math.max(10, env.spacing(kinds[i].ordinal()));
+               if (kinds[i] == Prop.TENTS) {
+                  spacing = Math.max(CAMP_SPACING_FLOOR, spacing);
+               }
                w[i] = defaults[i] * 10000.0 / ((double) spacing * spacing);
                sum += w[i];
             }
