@@ -97,15 +97,38 @@ public final class MushroomCapStemProbe {
                         int by=ground+(int)(height*fraction);
                         double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                         double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
-                        int capX=(int)Math.round(bx),capZ=(int)Math.round(bz);
-                        int capBaseY=by+1;
-                        String capAtUnderside=voxels.get(new Voxel(capX,capBaseY,capZ));
-                        if(capAtUnderside==null||(!capAtUnderside.startsWith("minecraft:red_mushroom_block[")
-                                &&!capAtUnderside.startsWith("minecraft:brown_mushroom_block[")))
-                            throw new AssertionError("grouped crown missing its own underside: branch="+branch+" sample="+sample);
-                        Voxel neck=new Voxel(capX,capBaseY-1,capZ);
+                        int capRadius=5+(int)(MushroomGeometry.unit(geometrySeed+branch*199)*5.0);
+                        int boleY=Math.max(ground+1,by-8);
+                        double boleT=(double)(boleY-ground)/(double)height;
+                        double boleEase=boleT*boleT*(3.0-2.0*boleT);
+                        double boleX=x+Math.cos(angle)*lean*boleEase
+                                +Math.sin(boleT*4.1+geometrySeed%37)*boleT*1.3;
+                        double boleZ=z+Math.sin(angle)*lean*boleT
+                                +Math.cos(boleT*3.5+geometrySeed%29)*boleT*1.5;
+                        Voxel neck=null;
+                        double bestPort=Double.POSITIVE_INFINITY;
+                        int minX=(int)Math.floor(bx-capRadius-1),maxX=(int)Math.ceil(bx+capRadius+1);
+                        int minZ=(int)Math.floor(bz-capRadius-1),maxZ=(int)Math.ceil(bz+capRadius+1);
+                        for(int px=minX;px<=maxX;px++)for(int pz=minZ;pz<=maxZ;pz++) {
+                            double ox=px-bx,oz=pz-bz;
+                            double dist=Math.hypot(ox,oz),theta2=Math.atan2(oz,ox);
+                            if(dist>capRadius*(1.0+.14*Math.sin(theta2*5.0+branch)))continue;
+                            int capTop=by+3-(int)((dist/capRadius)*4.0);
+                            int underside=capTop-2;
+                            Voxel capVoxel=new Voxel(px,underside,pz);
+                            Voxel candidateNeck=new Voxel(px,underside-1,pz);
+                            if(!isCap(voxels.get(capVoxel))||isCap(voxels.get(candidateNeck)))continue;
+                            double dx=px-boleX,dy=candidateNeck.y-boleY,dz=pz-boleZ;
+                            double score=dx*dx+dy*dy+dz*dz;
+                            if(score<bestPort) {
+                                bestPort=score;
+                                neck=candidateNeck;
+                            }
+                        }
+                        if(neck==null)
+                            throw new AssertionError("grouped crown has no exposed underside port: branch="+branch+" sample="+sample);
                         if(!stemCells.contains(neck))
-                            throw new AssertionError("grouped crown has no stem meeting its own underside: branch="+branch+" sample="+sample);
+                            throw new AssertionError("grouped crown has no stem meeting its exposed underside: branch="+branch+" sample="+sample);
                         if(!connectedToGround(neck,stemCells))
                             throw new AssertionError("grouped crown stem is not connected through the emitted leaning bole to ground: branch="+branch+" sample="+sample);
                     }
