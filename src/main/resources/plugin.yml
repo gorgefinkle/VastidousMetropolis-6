@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.9-R14.30-Queue-Recovery-Stability-DEV
+version: 0.1.9-R14.31-Deferred-Retry-and-Clock-Fix-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
