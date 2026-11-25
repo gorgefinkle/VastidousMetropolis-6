@@ -4,7 +4,6 @@ import ch.k42.metropolis.grid.urbanGrid.context.CityRingField;
 import ch.k42.metropolis.grid.urbanGrid.highway.HighwayNetwork;
 import ch.k42.metropolis.grid.urbanGrid.layout.WaterField;
 import ch.k42.metropolis.grid.urbanGrid.layout.WaterFields;
-import ch.k42.metropolis.grid.urbanGrid.river.BoundedRiverSegment;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverConfig;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
 import ch.k42.metropolis.grid.urbanGrid.highway.HighwayNetworks;
@@ -177,7 +176,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          if (targets.isEmpty()) continue;
          List<StreamSegment> stream = this.buildOutlet(lake, h, targets);
          if (stream != null && !stream.isEmpty()) {
-            lake.streams = stream;
+            lake.stream = stream;
             return new FeatureCell(null, lake);
          }
       }
@@ -256,15 +255,13 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          for (int dz = -1; dz <= 1; dz++) {
             LakeSite lake = cell(gx + dx, gz + dz).lake;
             if (lake == null || lake.streams == null) continue;
-            for (StreamSegment segment : lake.streams) {
-               BoundedRiverSegment carrier = segment.carrier;
-               if (!carrier.isRiverOrBank(chunkX, chunkZ)) continue;
-               double signed = carrier.distanceFromCenterBlock(chunkX * 16.0 + 8.0, chunkZ * 16.0 + 8.0);
-               double distance = Math.max(0.0, Math.abs(signed) - carrier.getHalfWidthBlocks());
-               if (distance < bestDistance) {
-                  bestDistance = distance;
-                  best = carrier;
-               }
+            WildernessStreamCourse carrier = lake.stream;
+            if (!carrier.isRiverOrBank(chunkX, chunkZ)) continue;
+            double signed = carrier.distanceFromCenterBlock(chunkX * 16.0 + 8.0, chunkZ * 16.0 + 8.0);
+            double distance = Math.max(0.0, Math.abs(signed) - carrier.getHalfWidthBlocks());
+            if (distance < bestDistance) {
+               bestDistance = distance;
+               best = carrier;
             }
          }
       }
@@ -272,7 +269,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       return best;
    }
 
-   private List<StreamSegment> buildOutlet(LakeSite lake, long featureHash, List<WaterTarget> targets) {
+   private WildernessStreamCourse buildOutlet(LakeSite lake, long featureHash, List<WaterTarget> targets) {
       if (targets.isEmpty()) return null;
       WaterTarget nearest = targets.get(0);
       double dx = nearest.x - lake.centerX / 16.0;
@@ -284,36 +281,18 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       List<int[]> path = route(startX, startZ, targets);
       if (path == null || path.size() < 2) return null;
 
-      List<StreamSegment> result = new ArrayList<>();
-      int index = 0;
-      int runStart = 0;
-      int directionX = path.get(1)[0] - path.get(0)[0];
-      int directionZ = path.get(1)[1] - path.get(0)[1];
-      for (int i = 2; i <= path.size(); i++) {
-         boolean same = i < path.size()
-                 && path.get(i)[0] - path.get(i - 1)[0] == directionX
-                 && path.get(i)[1] - path.get(i - 1)[1] == directionZ;
-         if (same) continue;
-         int[] from = path.get(runStart);
-         int[] to = path.get(i - 1);
-         if (from[0] != to[0] || from[1] != to[1]) {
-            boolean axisZ = directionX == 0;
-            double x0 = from[0] * 16.0 + 8.0, z0 = from[1] * 16.0 + 8.0;
-            double x1 = to[0] * 16.0 + 8.0, z1 = to[1] * 16.0 + 8.0;
-            long segmentSeed = mix(featureHash ^ ((long)index * 0x9E3779B97F4A7C15L));
-            double width = 6.0 + unit(mix(segmentSeed)) * 2.0;
-            double bank = 7.0 + unit(mix(segmentSeed ^ 0x42414E4BL)) * 3.0;
-            BoundedRiverSegment carrier = new BoundedRiverSegment(segmentSeed, axisZ, x0, z0, x1, z1, width, bank);
-            result.add(new StreamSegment(segmentSeed, carrier));
-            index++;
-         }
-         if (i < path.size()) {
-            runStart = i - 1;
-            directionX = path.get(i)[0] - path.get(i - 1)[0];
-            directionZ = path.get(i)[1] - path.get(i - 1)[1];
-         }
+      double[] blockX = new double[path.size()];
+      double[] blockZ = new double[path.size()];
+      for (int i = 0; i < path.size(); i++) {
+         blockX[i] = path.get(i)[0] * 16.0 + 8.0;
+         blockZ[i] = path.get(i)[1] * 16.0 + 8.0;
       }
-      return result.isEmpty() ? null : result;
+      long streamSeed = mix(featureHash ^ 0x53545245414D4C4BL);
+      // A 6-7 block channel stays too narrow for the legacy pipe radius
+      // rules to create a culvert through a highway retaining wall.
+      double width = 6.0 + unit(mix(streamSeed)) * 1.0;
+      double bank = 7.0 + unit(mix(streamSeed ^ 0x42414E4BL)) * 3.0;
+      return new WildernessStreamCourse(streamSeed, blockX, blockZ, width, bank);
    }
 
    private List<WaterTarget> findTargets(int startX, int startZ) {
@@ -511,7 +490,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       public final int gridX, gridZ;
       public final double centerX, centerZ, radiusX, radiusZ, angle;
       public final int waterY;
-      public List<StreamSegment> streams;
+      public WildernessStreamCourse stream;
 
       LakeSite(long seed, int gx, int gz, double centerX, double centerZ,
                double radiusX, double radiusZ, double angle, int waterY) {
@@ -561,15 +540,6 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       }
    }
 
-   public static final class StreamSegment {
-      public final long id;
-      public final BoundedRiverSegment carrier;
-      StreamSegment(long id, BoundedRiverSegment carrier) {
-         this.id = id;
-         this.carrier = carrier;
-      }
-   }
-
    private static final class FeatureCell {
       static final FeatureCell EMPTY = new FeatureCell(null, null);
       final MountainSite mountain;
@@ -610,7 +580,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       if (ANNOUNCED.add(key)) {
          Minions.i("Wilderness landmark in '%s': %s at block (%d,%d); outlet stream segments=%d",
                  worldName, site.name, Math.round(site.centerX), Math.round(site.centerZ),
-                 site.streams == null ? 0 : site.streams.size());
+                 site.stream == null ? 0 : 1);
       }
    }
 
