@@ -150,22 +150,6 @@ public final class MushroomGeometry {
         return best;
     }
 
-    private static boolean connected(Set<P> cells,P start,P target) {
-        if(!cells.contains(start)||!cells.contains(target))return false;
-        java.util.ArrayDeque<P> queue=new java.util.ArrayDeque<>();
-        Set<P> seen=new HashSet<>();
-        queue.add(start);seen.add(start);
-        while(!queue.isEmpty()) {
-            P q=queue.removeFirst();
-            if(q.equals(target))return true;
-            for(int[] d:DIR) {
-                P next=new P(q.x+d[0],q.y+d[1],q.z+d[2]);
-                if(seen.add(next)&&cells.contains(next))queue.addLast(next);
-            }
-        }
-        return false;
-    }
-
     /**
      * Build a side-crown branch from an actual ground-connected block of the
      * leaning bole. The branch approaches an exposed point on the individual
