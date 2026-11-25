@@ -114,9 +114,37 @@ public final class MushroomCapStemProbe {
                                 }
                             }
                         }
-                        if(!attached)
+                        if(!attached) {
+                            int capFootprint=0, stemColumns=0, possibleGaps=0;
+                            int nearestDistance=Integer.MAX_VALUE;
+                            Voxel nearestStem=null;
+                            for(int px=(int)Math.floor(bx-capRadius-1);px<=bx+capRadius+1;px++) {
+                                for(int pz=(int)Math.floor(bz-capRadius-1);pz<=bz+capRadius+1;pz++) {
+                                    double dx=px-bx,dz=pz-bz,dist=Math.hypot(dx,dz);
+                                    double edge=Math.atan2(dz,dx);
+                                    if(dist>capRadius*(1.0+.14*Math.sin(edge*5.0+branch)))continue;
+                                    int capTop=by+3-(int)((dist/capRadius)*4.0);
+                                    int underside=capTop-2;
+                                    if(isCap(voxels.get(new Voxel(px,underside,pz))))capFootprint++;
+                                    boolean hasStem=false;
+                                    for(Voxel stem:stemCells)if(stem.x()==px&&stem.z()==pz) {
+                                        hasStem=true;
+                                        int dy=underside-1-stem.y();
+                                        if(dy>=0)possibleGaps++;
+                                    }
+                                    if(hasStem)stemColumns++;
+                                }
+                            }
+                            for(Voxel stem:stemCells) {
+                                int dx=stem.x()-(int)Math.round(bx),dz=stem.z()-(int)Math.round(bz);
+                                int d=dx*dx+dz*dz;
+                                if(d<nearestDistance) {nearestDistance=d;nearestStem=stem;}
+                            }
                             throw new AssertionError("grouped cap has no top-layer stem continued to its own underside: branch="
-                                    +branch+" sample="+sample);
+                                    +branch+" sample="+sample+" capBlocks="+capFootprint+" stemColumnsInCap="+stemColumns
+                                    +" candidateVerticalGaps="+possibleGaps+" nearestStem="+nearestStem
+                                    +" nearestPlanarDistanceSq="+nearestDistance);
+                        }
                     }
                 }
 
