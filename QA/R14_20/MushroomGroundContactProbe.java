@@ -8,7 +8,7 @@ import org.bukkit.Material;
 public final class MushroomGroundContactProbe {
     private record Voxel(int x, int y, int z) {}
 
-    private static void verifyBottomOnlyExtension() {
+    private static void verifyTerminalGapExtension() {
         java.util.Set<MushroomGeometry.P> authored = new java.util.HashSet<>();
         authored.add(new MushroomGeometry.P(0, 10, 0));
         authored.add(new MushroomGeometry.P(0, 11, 0));
@@ -17,17 +17,21 @@ public final class MushroomGroundContactProbe {
         authored.add(new MushroomGeometry.P(1, 15, 0));
         authored.add(new MushroomGeometry.P(1, 16, 0));
         authored.add(new MushroomGeometry.P(2, 18, 0));
+        authored.add(new MushroomGeometry.P(3, 10, 0));
+        authored.add(new MushroomGeometry.P(3, 11, 0));
+        authored.add(new MushroomGeometry.P(3, 12, 0));
 
         Map<Long,Integer> capBottom = new HashMap<>();
         capBottom.put(0L, 13);
         capBottom.put(1L << 32, 17);
         capBottom.put(2L << 32, 19);
+        capBottom.put(3L << 32, 20);
         java.util.Set<MushroomGeometry.P> emitted = new java.util.HashSet<>();
         MushroomGeometry.emitTrunkStems((x,y,z,state) -> {
             if (MushroomGeometry.STEM.equals(state)) emitted.add(new MushroomGeometry.P(x,y,z));
         }, new MushroomGeometry.Terrain() {
             public int groundAt(int x,int z) {
-                return x == 0 ? 5 : x == 1 ? 12 : 17;
+                return x == 0 ? 5 : x == 1 ? 12 : x == 2 ? 17 : 5;
             }
             public boolean allows(int x,int z) { return true; }
         }, authored, capBottom, 10);
@@ -36,8 +40,11 @@ public final class MushroomGroundContactProbe {
         for(int y=6;y<=12;y++)expected.add(new MushroomGeometry.P(0,y,0));
         for(int y=14;y<=16;y++)expected.add(new MushroomGeometry.P(1,y,0));
         expected.add(new MushroomGeometry.P(2,18,0));
+        // Column three verifies an eleven-block top gap is filled as well as
+        // its lower gap to ground.
+        for(int y=6;y<=19;y++)expected.add(new MushroomGeometry.P(3,y,0));
         if(!emitted.equals(expected)) {
-            throw new AssertionError("stem correction changed the leaning bole instead of extending only its original base row; "
+            throw new AssertionError("stem correction failed to fill bottom-to-ground and top-to-cap terminal gaps; "
                     + "expected="+expected.size()+" voxels actual="+emitted.size());
         }
     }
@@ -77,7 +84,7 @@ public final class MushroomGroundContactProbe {
     }
 
     public static void main(String[] args) {
-        verifyBottomOnlyExtension();
+        verifyTerminalGapExtension();
         if (!VegetationHeightPolicy.allows(-2, -64, 320))
             throw new AssertionError("negative-Y mushroom stalks are still blocked by the world-height policy");
         Material[] groundCover = {
