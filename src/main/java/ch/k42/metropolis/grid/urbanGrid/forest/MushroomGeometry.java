@@ -101,35 +101,81 @@ public final class MushroomGeometry {
         return best;
     }
 
-    /**
-     * A side crown is a branch of the leaning bole, not a separate tree.
-     * Build a short, tapered, rising stem from the bole into the cap underside.
-     */
-    private static void addGroupedCapBranch(Set<P> output,GroupedCapAnchor anchor,
-                                            Set<P> emittedMainBole,Set<P> crown) {
-        P actualBole=nearestEmittedBoleBlock(anchor,emittedMainBole);
-        if(actualBole==null)return;
-        double sx=actualBole.x,sy=actualBole.y,sz=actualBole.z;
-        double ex=anchor.capX(),ey=anchor.capBaseY()-1,ez=anchor.capZ();
-        double dx=ex-sx,dy=ey-sy,dz=ez-sz;
-        double length=Math.sqrt(dx*dx+dy*dy+dz*dz);
-        int steps=Math.max(1,(int)Math.ceil(length*3.0));
-        for(int i=0;i<=steps;i++) {
-            double t=(double)i/steps;
-            double cx=sx+dx*t,cy=sy+dy*t,cz=sz+dz*t;
-            double radius=2.05-.70*t;
-            int reach=(int)Math.ceil(radius);
-            int ix=(int)Math.round(cx),iy=(int)Math.round(cy),iz=(int)Math.round(cz);
-            for(int ox=-reach;ox<=reach;ox++)
-                for(int oy=-reach;oy<=reach;oy++)
-                    for(int oz=-reach;oz<=reach;oz++) {
-                        if(ox*ox+oy*oy+oz*oz<=radius*radius+.30) {
-                            P voxel=new P(ix+ox,iy+oy,iz+oz);
-                            if(voxel.y<anchor.capBaseY()&&!crown.contains(voxel))output.add(voxel);
-                        }
-                    }
+    private static boolean connected(Set<P> cells,P start,P target) {
+        if(!cells.contains(start)||!cells.contains(target))return false;
+        java.util.ArrayDeque<P> queue=new java.util.ArrayDeque<>();
+        Set<P> seen=new HashSet<>();
+        queue.add(start);seen.add(start);
+        while(!queue.isEmpty()) {
+            P q=queue.removeFirst();
+            if(q.equals(target))return true;
+            for(int[] d:DIR) {
+                P next=new P(q.x+d[0],q.y+d[1],q.z+d[2]);
+                if(seen.add(next)&&cells.contains(next))queue.addLast(next);
+            }
         }
+        return false;
     }
+
+    /**
+     * Build a side-crown branch from an actual ground-connected block of the
+     * leaning bole. Try several curved routes around intervening cap overhangs
+     * and terrain; accept only a route whose emitted voxels form one connected
+     * path to this crown's own underside.
+     */
+    private static Set<P> addGroupedCapBranch(GroupedCapAnchor anchor,
+                                               Set<P> rootedMainBole,
+                                               Set<P> crown,Terrain terrain) {
+        P actualBole=nearestEmittedBoleBlock(anchor,rootedMainBole);
+        if(actualBole==null)return Set.of();
+        P target=new P(anchor.capX(),anchor.capBaseY()-1,anchor.capZ());
+        double dx=target.x-actualBole.x,dz=target.z-actualBole.z;
+        double horizontal=Math.hypot(dx,dz);
+        double px=horizontal<.001?1.0:-dz/horizontal;
+        double pz=horizontal<.001?0.0:dx/horizontal;
+        int[] detours={0,4,7,10,13,16,20};
+        for(int detour:detours) {
+            int[] sides=detour==0?new int[]{0}:new int[]{-1,1};
+            for(int side:sides) {
+                double controlX=(actualBole.x+target.x)*.5+px*detour*side;
+                double controlY=(actualBole.y+target.y)*.5+2.0;
+                double controlZ=(actualBole.z+target.z)*.5+pz*detour*side;
+                double estimate=Math.sqrt(dx*dx+Math.pow(target.y-actualBole.y,2)+dz*dz)+detour*1.5;
+                int steps=Math.max(3,(int)Math.ceil(estimate*3.0));
+                Set<P> candidate=new HashSet<>();
+                int startClearance=Math.max(actualBole.y,
+                        terrain.groundAt(actualBole.x,actualBole.z)+3);
+                for(int y=actualBole.y;y<=startClearance;y++) {
+                    P q=new P(actualBole.x,y,actualBole.z);
+                    if(q.y<anchor.capBaseY()&&!crown.contains(q)
+                            &&q.y>terrain.groundAt(q.x,q.z))candidate.add(q);
+                }
+                for(int i=0;i<=steps;i++) {
+                    double t=(double)i/steps,u=1.0-t;
+                    double cx=u*u*actualBole.x+2*u*t*controlX+t*t*target.x;
+                    double cy=u*u*startClearance+2*u*t*controlY+t*t*target.y;
+                    double cz=u*u*actualBole.z+2*u*t*controlZ+t*t*target.z;
+                    double radius=2.0-.55*t;
+                    int ix=(int)Math.round(cx),iy=(int)Math.round(cy),iz=(int)Math.round(cz);
+                    int reach=(int)Math.ceil(radius);
+                    for(int ox=-reach;ox<=reach;ox++)
+                        for(int oy=-reach;oy<=reach;oy++)
+                            for(int oz=-reach;oz<=reach;oz++) {
+                                if(ox*ox+oy*oy+oz*oz>radius*radius+.30)continue;
+                                P q=new P(ix+ox,iy+oy,iz+oz);
+                                if(q.y>=anchor.capBaseY()||crown.contains(q))continue;
+                                if(q.y<=terrain.groundAt(q.x,q.z))continue;
+                                candidate.add(q);
+                            }
+                }
+                Set<P> combined=new HashSet<>(rootedMainBole);
+                combined.addAll(candidate);
+                if(connected(combined,actualBole,target))return candidate;
+            }
+        }
+        return Set.of();
+    }
+
 
 
     public static void grow(Sink sink,Terrain terrain,int x,int z,long worldSeed,int variant) {
@@ -249,7 +295,7 @@ public final class MushroomGeometry {
         }
         Set<P> groupedCapStems=new HashSet<>();
         for(GroupedCapAnchor anchor:groupedCapAnchors)
-            addGroupedCapBranch(groupedCapStems,anchor,rootedMainBole,crown);
+            groupedCapStems.addAll(addGroupedCapBranch(anchor,rootedMainBole,crown,terrain));
         for(P q:groupedCapStems) {
             if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
                 sink.set(q.x,q.y,q.z,STEM);
