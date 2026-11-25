@@ -111,7 +111,10 @@ public final class MushroomGeometry {
             // through cap blocks, and root only this stalk's own column.
             for(int y=ground+1;y<underside;y++) {
                 P q=new P(x,y,z);
-                if(crown.contains(q))continue;
+                // A grouped stalk may pass through the underside of a lower
+                // crown. The stalk owns that one-block column so the support
+                // remains continuous; surrounding cap geometry is unchanged.
+                crown.remove(q);
                 sink.set(x,y,z,STEM);
                 stems.add(q);
             }
