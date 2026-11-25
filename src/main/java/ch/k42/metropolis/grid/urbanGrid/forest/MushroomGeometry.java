@@ -105,8 +105,12 @@ public final class MushroomGeometry {
             P previous=null;
             for(int y=firstY;y<=lastY;y++) {
                 double t=(y-firstY)/(double)(lastY-firstY);
-                double sweep=Math.sin(Math.PI*t)*bend
-                        +Math.sin(2.0*Math.PI*t+anchor.branch()*.71)*.28;
+                // Keep the first four blocks anchored over the local root
+                // column before the stalk begins its visible lateral sweep.
+                double curveT=Math.max(0.0,Math.min(1.0,
+                        (y-firstY-4.0)/Math.max(1.0,lastY-firstY-4.0)));
+                double sweep=Math.sin(Math.PI*curveT)*bend
+                        +Math.sin(2.0*Math.PI*curveT+anchor.branch()*.71)*.28*curveT;
                 int px=(int)Math.round(x+sideX*sweep);
                 int pz=(int)Math.round(z+sideZ*sweep);
                 P current=new P(px,y,pz);
@@ -120,14 +124,20 @@ public final class MushroomGeometry {
                         emitStemVoxel(sink,terrain,stems,crown,new P(fx,y,fz));
                     }
                 } else {
-                    int steps=Math.max(1,Math.max(Math.abs(current.x-previous.x),
-                            Math.max(Math.abs(current.y-previous.y),Math.abs(current.z-previous.z))));
-                    for(int i=1;i<=steps;i++) {
-                        double q=i/(double)steps;
-                        P voxel=new P((int)Math.round(previous.x+(current.x-previous.x)*q),
-                                (int)Math.round(previous.y+(current.y-previous.y)*q),
-                                (int)Math.round(previous.z+(current.z-previous.z)*q));
-                        emitStemVoxel(sink,terrain,stems,crown,voxel);
+                    // Use face-adjacent voxel steps rather than diagonal
+                    // interpolation so every segment is physically connected.
+                    int sx=previous.x,sy=previous.y,sz=previous.z;
+                    while(sx!=current.x) {
+                        sx+=Integer.signum(current.x-sx);
+                        emitStemVoxel(sink,terrain,stems,crown,new P(sx,sy,sz));
+                    }
+                    while(sz!=current.z) {
+                        sz+=Integer.signum(current.z-sz);
+                        emitStemVoxel(sink,terrain,stems,crown,new P(sx,sy,sz));
+                    }
+                    while(sy!=current.y) {
+                        sy+=Integer.signum(current.y-sy);
+                        emitStemVoxel(sink,terrain,stems,crown,new P(sx,sy,sz));
                     }
                 }
                 previous=current;
