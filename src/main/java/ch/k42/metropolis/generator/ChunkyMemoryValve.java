@@ -118,6 +118,8 @@ public final class ChunkyMemoryValve {
             Logger log = Bukkit.getLogger();
             double usage = Math.max(0, used) / (double) max;
             long remaining = Math.max(0, max - used);
+            long postGcBytes = postGcHeapBytes();
+            double retainedUsage = postGcBytes >= 0L ? postGcBytes / (double) max : usage;
             // This periodic series is necessary to distinguish rising post-GC
             // retention from ordinary temporary chunk/WorldEdit allocations.
             if (lastDiagnosticNs == 0L || now - lastDiagnosticNs >= 300_000_000_000L) {
@@ -149,7 +151,7 @@ public final class ChunkyMemoryValve {
                     state.pausedAt = now;
                     state.initialPauseUsage = usage;
                     state.stableAtUsage = usage;
-                    state.stableSince = ChunkyBackpressurePolicy.hasStableHeadroom(usage, remaining, max) ? now : 0L;
+                    state.stableSince = ChunkyBackpressurePolicy.hasStableHeadroom(retainedUsage, remaining, max) ? now : 0L;
                     state.stableHighHeapMode = false;
                     state.probeUntil = 0;
                     log.severe("[Metropolis] Chunky continueTask returned success but the task never became running in " + name
@@ -158,16 +160,17 @@ public final class ChunkyMemoryValve {
 
                 boolean probeActive = now < state.probeUntil;
                 boolean stableMode = state.stableHighHeapMode
-                        && ChunkyBackpressurePolicy.shouldKeepStableMode(usage, remaining, max);
+                        && ChunkyBackpressurePolicy.shouldKeepStableMode(retainedUsage, remaining, max);
                 if (state.stableHighHeapMode && !stableMode) {
                     state.stableHighHeapMode = false;
                     log.warning("[Metropolis] Chunky stable-heap run band exited in " + name
                             + " at " + pct(usage) + "%; protective soft-pause is re-armed.");
                 }
-                boolean danger = ChunkyBackpressurePolicy.shouldPause(usage, queue, stableMode, probeActive);
+                boolean danger = ChunkyBackpressurePolicy.shouldPause(
+                        usage, retainedUsage, remaining, max, queue, stableMode, probeActive);
                 if (state.ourPause) {
                     if (state.unconfirmedResumes >= 3 && !running) {
-                        status(log, name, state, now, usage, queue, max,
+                        status(log, name, state, now, usage, retainedUsage, queue, max,
                                 "3 continue attempts failed; task stopped and operator investigation required");
                         continue;
                     }
@@ -177,26 +180,26 @@ public final class ChunkyMemoryValve {
                     // Stability means the retained heap has stopped rising, not
                     // that it remains within an unrealistically narrow 1% band.
                     // This avoids resetting the timer on ordinary GC variation.
-                    boolean probeHeadroom = ChunkyBackpressurePolicy.hasStableHeadroom(usage, remaining, max);
+                    boolean probeHeadroom = ChunkyBackpressurePolicy.hasStableHeadroom(retainedUsage, remaining, max);
                     if (!probeHeadroom) {
                         state.stableSince = 0L;
-                        state.stableAtUsage = usage;
+                        state.stableAtUsage = retainedUsage;
                     } else if (state.stableSince == 0L) {
                         state.stableSince = now;
                         state.stableAtUsage = usage;
-                    } else if (usage > state.stableAtUsage + 0.03) {
+                    } else if (retainedUsage > state.stableAtUsage + 0.03) {
                         state.stableSince = now;
-                        state.stableAtUsage = usage;
+                        state.stableAtUsage = retainedUsage;
                     } else {
-                        state.stableAtUsage = Math.min(state.stableAtUsage, usage);
+                        state.stableAtUsage = Math.min(state.stableAtUsage, retainedUsage);
                     }
                     boolean stableWithHeadroom = ChunkyBackpressurePolicy.stableRecoveryReady(
-                            usage, remaining, max, state.stableSince, now);
+                            retainedUsage, remaining, max, state.stableSince, now);
                     boolean recover = ChunkyBackpressurePolicy.canResume(
-                            queue, usage, remaining, max, state.stableSince, now);
+                            queue, usage, retainedUsage, remaining, max, state.stableSince, now);
                     if (!recover || running) {
                         if (running) pause.invoke(api, name);
-                        status(log, name, state, now, usage, queue, max,
+                        status(log, name, state, now, usage, retainedUsage, queue, max,
                                 recover && running ? "waiting for Chunky worker stop/save" : "waiting for safe recovery");
                         continue;
                     }
@@ -233,8 +236,9 @@ public final class ChunkyMemoryValve {
                     state.probeUntil = 0;
                     state.pauseCount++;
                     log.warning("[Metropolis] Chunky protective pause in " + name
-                            + ": heap " + pct(usage) + "%, free " + mib(remaining)
-                            + " MiB, queue " + queue + "; resume at <=68% or stable <=82% with a guarded high-heap run band."
+                            + ": heap " + pct(usage) + "%, post-GC retained " + pct(retainedUsage)
+                            + "%, free " + mib(remaining)
+                            + " MiB, queue " + queue + "; resume at <=68% or after 30s stable post-GC <=82% with >=8% free headroom."
                             + " GC: " + gcStats() + "; planning: " + retentionStats());
                 }
             }
@@ -247,11 +251,12 @@ public final class ChunkyMemoryValve {
     }
 
     private static void status(Logger log, String name, State state, long now,
-                               double usage, int queue, long max, String reason) {
+                               double usage, double retainedUsage, int queue, long max, String reason) {
         if (now - state.lastStatusNs < STATUS_NS) return;
         state.lastStatusNs = now;
         log.warning("[Metropolis] Chunky paused in " + name + ": " + reason
-                + "; heap " + pct(usage) + "%, free " + mib((long)(max * (1.0 - usage)))
+                + "; heap " + pct(usage) + "%, post-GC retained " + pct(retainedUsage)
+                + "%, free " + mib((long)(max * (1.0 - usage)))
                 + " MiB, pending " + queue + ", paused " + ((now - state.pausedAt) / 1_000_000_000L)
                 + " s, probes " + state.probeCount + ", GC " + gcStats()
                 + ", planning " + retentionStats() + ".");
@@ -259,6 +264,25 @@ public final class ChunkyMemoryValve {
 
     private static int pct(double value) { return (int) Math.round(value * 100); }
     private static long mib(long value) { return Math.max(0, value / 1_048_576L); }
+
+    /** Returns the latest post-collection live heap, or -1 when unavailable. */
+    private static long postGcHeapBytes() {
+        try {
+            long afterGc = 0L;
+            boolean haveAfterGc = false;
+            for (MemoryPoolMXBean pool : ManagementFactory.getMemoryPoolMXBeans()) {
+                if (pool.getType() != java.lang.management.MemoryType.HEAP) continue;
+                MemoryUsage usage = pool.getCollectionUsage();
+                if (usage != null && usage.getUsed() >= 0L) {
+                    afterGc += usage.getUsed();
+                    haveAfterGc = true;
+                }
+            }
+            return haveAfterGc ? afterGc : -1L;
+        } catch (RuntimeException | LinkageError e) {
+            return -1L;
+        }
+    }
 
     /** Diagnostics only. CollectionUsage may be unavailable for some collectors. */
     private static String gcStats() {
