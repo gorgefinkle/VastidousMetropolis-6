@@ -8,6 +8,23 @@ public final class MushroomCapStemProbe {
     private record Voxel(int x,int y,int z) {}
     private record Column(int x,int z) {}
 
+    private static boolean connectedToGround(Voxel start,java.util.Set<Voxel> stems) {
+        java.util.ArrayDeque<Voxel> queue=new java.util.ArrayDeque<>();
+        java.util.HashSet<Voxel> seen=new java.util.HashSet<>();
+        queue.add(start);seen.add(start);
+        int[][] directions={{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+        while(!queue.isEmpty()) {
+            Voxel current=queue.removeFirst();
+            int ground=-3+Math.floorMod(current.x()*31+current.z()*17,9);
+            if(current.y()==ground+1)return true;
+            for(int[] d:directions) {
+                Voxel next=new Voxel(current.x()+d[0],current.y()+d[1],current.z()+d[2]);
+                if(seen.add(next)&&stems.contains(next))queue.addLast(next);
+            }
+        }
+        return false;
+    }
+
     public static void main(String[] args) {
         int shapes=0, overlappingColumns=0;
         for(int sample=0;sample<96;sample++) {
@@ -37,6 +54,35 @@ public final class MushroomCapStemProbe {
                         stemTop.merge(c,v.y(),Math::max);
                     }
                 }
+                if(variant==5) {
+                    long geometrySeed=MushroomGeometry.mix(seed ^ MushroomGeometry.mix(
+                        x*-7046029254386353131L + z*-4417276706812531889L));
+                    int height=29+(int)(MushroomGeometry.unit(geometrySeed+2)*21);
+                    double angle=MushroomGeometry.unit(geometrySeed+11)*6.28318530718;
+                    double lean=3.0+MushroomGeometry.unit(geometrySeed+15)*10.0;
+                    java.util.HashSet<Voxel> stemCells=new java.util.HashSet<>();
+                    for(Map.Entry<Voxel,String> entry:voxels.entrySet())
+                        if(entry.getValue().startsWith("minecraft:mushroom_stem["))stemCells.add(entry.getKey());
+                    for(int branch=0;branch<5;branch++) {
+                        double theta=branch*2.399963+MushroomGeometry.unit(geometrySeed+branch*421)*.7;
+                        double fraction=.3+branch*.11;
+                        int by=ground+(int)(height*fraction);
+                        double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
+                        double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
+                        int capX=(int)Math.round(bx),capZ=(int)Math.round(bz);
+                        Integer underside=capBottom.get(new Column(capX,capZ));
+                        if(underside==null)throw new AssertionError("grouped cap missing at branch="+branch
+                                +" sample="+sample);
+                        Voxel neck=new Voxel(capX,underside-1,capZ);
+                        if(!stemCells.contains(neck))
+                            throw new AssertionError("grouped cap has no stem directly under its underside: branch="
+                                +branch+" sample="+sample+" cap="+capX+","+capZ+" y="+underside);
+                        if(!connectedToGround(neck,stemCells))
+                            throw new AssertionError("grouped cap stem does not connect down to a rooted stalk: branch="
+                                +branch+" sample="+sample);
+                    }
+                }
+
                 int overlaps=0;
                 for(Map.Entry<Column,Integer> entry:stemTop.entrySet()) {
                     Integer firstCap=capBottom.get(entry.getKey());
