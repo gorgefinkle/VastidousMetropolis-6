@@ -31,6 +31,7 @@ grep -Fq 'if (this.inOuterCity(nx, nz)) continue;' "$FEATURES"
 grep -Fq 'if (axes != 0 && (axes & moveAxis) != 0) continue' "$FEATURES"
 grep -Fq 'private static final int MAX_HIGHWAY_CROSSING_CHUNKS = 2' "$FEATURES"
 grep -Fq 'if (run > MAX_HIGHWAY_CROSSING_CHUNKS) continue' "$FEATURES"
+grep -Fq 'if (node.highwayRun > 0 && direction != node.direction) continue' "$FEATURES"
 grep -Fq 'this.water.isReceivingWaterAt(node.x, node.z)' "$FEATURES"
 ! grep -Fq 'this.water.kindAt(nx, nz)' "$FEATURES"
 
