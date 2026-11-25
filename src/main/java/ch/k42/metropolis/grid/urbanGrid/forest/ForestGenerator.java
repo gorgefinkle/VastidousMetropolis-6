@@ -25,6 +25,7 @@ import ch.k42.metropolis.grid.urbanGrid.wild.WildBiomes;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildBlock;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildRelief;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildGeography;
+import ch.k42.metropolis.grid.urbanGrid.wild.WildernessFeatures;
 import ch.k42.metropolis.grid.urbanGrid.wild.SpatialCache;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildHabitatBias;
 import ch.k42.metropolis.minions.LegacyBlocks;
@@ -633,7 +634,8 @@ public final class ForestGenerator {
             int z = baseZ + lz;
             int h = ctx.height(x, z);
             ctx.terrain.typeWeights(x, z, w);
-            WildBiome biome = ctx.wild == null ? WildBiome.FOREST :
+            WildBiome biome = ctx.wildernessMountainAt(x, z) != null ? WildBiome.MOUNTAINS :
+                    ctx.wild == null ? WildBiome.FOREST :
                     ctx.wild.pick(x, z, ForestTerrain.unit(ForestTerrain.hash(ctx.terrain.getSeed(), x, z, 41)));
             writeColumn(chunk, lx, lz, x, z, h, w, ctx, biome);
             try {
@@ -1899,6 +1901,7 @@ public final class ForestGenerator {
    }
 
    private static void writeColumn(Chunk chunk, int lx, int lz, int x, int z, int h, double[] w, Ctx ctx, WildBiome biome) {
+      if (ctx.wildernessMountainAt(x, z) != null) biome = WildBiome.MOUNTAINS;
       if (h > 64) {
          Material existingCap = chunk.getBlock(lx, 64, lz).getType();
          Material naturalSubstrate = buriedFallbackCap(existingCap, h, 64);
@@ -2063,6 +2066,11 @@ public final class ForestGenerator {
 
    /** The biome of the column: the forest type's, or desert / mesa / mountains (snowy high up) so grass tint and weather match. */
    private static Biome biomeFor(Ctx ctx, int x, int z, int h, double[] w, WildBiome b) {
+      WildernessFeatures.MountainSite namedMountain = ctx.wildernessMountainAt(x, z);
+      if (namedMountain != null) {
+         return namedMountain.snowy(h, ctx.baseline(x, z) + ctx.offset, ctx.worldMaxHeight())
+                 ? BiomeNames.snowyMountains() : BiomeNames.mountains();
+      }
       if (ctx.wild != null) {
          if (b == WildBiome.BLOOMLANDS) return BiomeNames.bloomlands();
          if (b == WildBiome.PRAIRIE) return BiomeNames.prairie();
@@ -2296,6 +2304,8 @@ public final class ForestGenerator {
       final ForestMountains mountains;
       /** The wilderness fields, or null when generator.wilderness.biomes is off (then the old per-region forest and mountains apply). */
       final WildField wild;
+      /** The rare, world-planned named massif overlay, independent of the ordinary mountain biome share. */
+      final WildernessFeatures wildernessFeatures;
       final double[] scratch = new double[ForestType.ALL.length];
       /** Whether a chunk cell counts as this wilderness (see sameKind), remembered for the life of this chunk's work. */
       private final Map<Long, Boolean> kindCache = new HashMap<Long, Boolean>();
@@ -2315,6 +2325,8 @@ public final class ForestGenerator {
       Ctx(MetropolisGenerator generator, UrbanGrid grid, MorphomosRegion region,
           ForestTerrain terrain, boolean plannedNaturalRoot) {
          this.plannedNaturalRoot = plannedNaturalRoot;
+         this.wildernessFeatures = generator == null || generator.getWorldSeed() == null
+                 ? null : WildernessFeatures.forSeed(generator.getWorldSeed());
          this.wild = wildFor(generator);
          if (this.wild == null && PluginConfig.isForestMountainsEnabled()) {
             this.mountains = mountainsFor(generator);
@@ -2338,6 +2350,33 @@ public final class ForestGenerator {
       /** The build height the neighbouring streets and lots sit at for this column. */
       int baseline(int x, int z) {
          return wildBaseline(this.grid, x, z);
+      }
+
+      WildernessFeatures.MountainSite wildernessMountainAt(int x, int z) {
+         return this.wildernessFeatures == null ? null : this.wildernessFeatures.mountainAt(x, z);
+      }
+
+      int worldMaxHeight() {
+         World world = this.generator == null ? null : this.generator.getWorld();
+         return world == null ? 320 : world.getMaxHeight();
+      }
+
+      private int namedMountainHeight(int x, int z, int baseY, int naturalHeight) {
+         WildernessFeatures.MountainSite site = wildernessMountainAt(x, z);
+         return site == null ? naturalHeight
+                 : Math.max(naturalHeight, site.heightAt(x, z, baseY, worldMaxHeight()));
+      }
+
+      private int namedMountainSurface(int x, int z, int h, WildernessFeatures.MountainSite site) {
+         int baseY = baseline(x, z) + offset;
+         if (site.snowy(h, baseY, worldMaxHeight())) return SURFACE_SNOW;
+         if (site.treeless(h, baseY, worldMaxHeight())) return SURFACE_ROCK;
+         if (h - baseY > 12) {
+            int slope = Math.max(Math.max(Math.abs(h - height(x + 1, z)), Math.abs(h - height(x - 1, z))),
+                    Math.max(Math.abs(h - height(x, z + 1)), Math.abs(h - height(x, z - 1))));
+            if (slope >= 3) return SURFACE_ROCK;
+         }
+         return SURFACE_GROUND;
       }
 
       /**
@@ -2441,6 +2480,8 @@ public final class ForestGenerator {
 
       /** Soil, bare rock or snow for the column. Only a mountain's heights ever take rock and snow; the other biomes have soil of their own. */
       int surfaceKind(int x, int z, int h, WildBiome biome) {
+         WildernessFeatures.MountainSite namedMountain = wildernessMountainAt(x, z);
+         if (namedMountain != null) return namedMountainSurface(x, z, h, namedMountain);
          if (this.wild != null) {
             return biome.is(WildBiome.MOUNTAINS) ? this.mountainSurface(x, z, h) : SURFACE_GROUND;
          }
@@ -2449,6 +2490,15 @@ public final class ForestGenerator {
 
       @Override
       public double fade(int x, int z) {
+         WildernessFeatures.MountainSite namedMountain = wildernessMountainAt(x, z);
+         if (namedMountain != null) {
+            int baseY = baseline(x, z) + offset;
+            int h = height(x, z);
+            if (namedMountain.treeless(h, baseY, worldMaxHeight())) return 0.0;
+            int treeLine = baseY + Math.max(48, (int)Math.round(
+                    (worldMaxHeight() - namedMountain.peakClearance - baseY) * 0.30));
+            return ForestTerrain.clamp((treeLine - h) / 18.0, 0.0, 1.0);
+         }
          if (this.wild != null) {
             // trees thin out as the forest gives way to desert, mesa or bare mountain, and stop at a mountain's tree line
             double[] n = this.sharpWeights(x, z);
@@ -2485,31 +2535,38 @@ public final class ForestGenerator {
       /** Surface height (y of the top grass/podzol block) at a world column. */
       int height(int x, int z) {
          int base = baseline(x, z) + this.offset;
+         int naturalHeight;
          if (this.wild != null) {
-            // tall relief (mountains, mesas) eases in over a longer ramp than a gentle forest does
+            // Ordinary biome relief remains unchanged outside the separately
+            // planned named massif footprint.
             double[] n = this.sharpWeights(x, z);
             double blendHere = wildBlend(this.blend, n);
             double fadeHere = reliefFade(x, z, blendHere);
             if (fadeHere <= 0.0) {
-               return base;
+               naturalHeight = base;
+            } else {
+               double[] wt = new double[this.scratch.length];
+               this.terrain.typeWeights(x, z, wt);
+               naturalHeight = base + (int)Math.round(
+                       fadeHere * this.wildRelief(x, z, n, this.terrain.relief(x, z, wt)));
             }
-            double[] wt = new double[this.scratch.length];
-            this.terrain.typeWeights(x, z, wt);
-            return base + (int) Math.round(fadeHere * this.wildRelief(x, z, n, this.terrain.relief(x, z, wt)));
+         } else {
+            double d = edgeDistance(x, z, this.blend / 16 + 2);
+            double fade = d == Double.MAX_VALUE ? 1.0 : ForestTerrain.smooth(d / this.blend);
+            if (fade <= 0.0) {
+               naturalHeight = base;
+            } else {
+               double[] w = new double[this.scratch.length];
+               this.terrain.typeWeights(x, z, w);
+               double relief = this.terrain.relief(x, z, w);
+               if (this.mountain != null) {
+                  // Lowland areas of a legacy range keep their ordinary hills and glades.
+                  relief = this.mountains.reliefBlend(this.mountain, x, z, relief);
+               }
+               naturalHeight = base + (int)Math.round(fade * relief);
+            }
          }
-         double d = edgeDistance(x, z, this.blend / 16 + 2);
-         double fade = d == Double.MAX_VALUE ? 1.0 : ForestTerrain.smooth(d / this.blend);
-         if (fade <= 0.0) {
-            return base;
-         }
-         double[] w = new double[this.scratch.length];
-         this.terrain.typeWeights(x, z, w);
-         double relief = this.terrain.relief(x, z, w);
-         if (this.mountain != null) {
-            // lowland areas of a range region keep this hilly relief (and its meadows and glades)
-            relief = this.mountains.reliefBlend(this.mountain, x, z, relief);
-         }
-         return base + (int) Math.round(fade * relief);
+         return namedMountainHeight(x, z, base, naturalHeight);
       }
 
       /**
