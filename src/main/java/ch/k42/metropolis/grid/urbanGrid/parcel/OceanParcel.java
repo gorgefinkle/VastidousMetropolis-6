@@ -14,6 +14,7 @@ import ch.k42.metropolis.grid.urbanGrid.ocean.OceanConfig;
 import ch.k42.metropolis.grid.urbanGrid.ocean.OceanDepthTier;
 import ch.k42.metropolis.grid.urbanGrid.ocean.OceanProvider;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
+import ch.k42.metropolis.grid.urbanGrid.river.RiverConfig;
 import ch.k42.metropolis.minions.Cartesian2D;
 import ch.k42.metropolis.minions.GridRandom;
 import ch.k42.metropolis.minions.Mats;
@@ -338,6 +339,18 @@ public class OceanParcel extends Parcel {
             double shoreRamp = Math.min(4.0, bankMarginBlock > 0 ? bankMarginBlock : 4.0);
             double shoreT = shoreRamp <= 0 ? 1.0 : Math.min(1.0, distanceInside / shoreRamp);
             int depth = Math.max(1, sample.columnDepth);
+            // A named wilderness outlet must enter the receiving sea without
+            // leaving a shallow cross-channel shelf at its mouth. Keep the
+            // ocean surface, but allow the narrow stream bed to deepen it.
+            if (grid != null) {
+               RiverProvider outlet = grid.planWater().streamCarrierAt(blockX >> 4, blockZ >> 4);
+               if (outlet != null) {
+                  double signed = outlet.distanceFromCenterBlock(blockX, blockZ);
+                  if (Double.isFinite(signed) && Math.abs(signed) <= outlet.getHalfWidthBlocks()) {
+                     depth = Math.max(depth, RiverConfig.getRiverDepth());
+                  }
+               }
+            }
             paintWater(world, rand, blockX, blockZ, waterY, buildHeight, shoreT, depth);
             // R30ea parity: detail the actual submerged floor after the water column
             // has been carved.  Restore the original integration point rather than
