@@ -32,6 +32,20 @@ public final class MotherWillowJunctionProbe {
             throw new AssertionError("leader must retain bole continuity while visibly leaving its side: "+alignment);
         if(outwardAlignment<.30)
             throw new AssertionError("leader take-off remains hidden along the bole: "+outwardAlignment);
+        double previousScale=Double.POSITIVE_INFINITY;
+        for(int i=0;i<4;i++) {
+            int attach=7+i*3;
+            double root=MotherWillowGeometry.leaderRootRadius(i,attach);
+            double trunk=15.0*Math.pow(1.0-.80*(attach/19.0),.82);
+            double scale=MotherWillowGeometry.leaderScale(i,attach);
+            if(root>trunk*.5800001)
+                throw new AssertionError("leader "+i+" exceeds its local bole taper: "+root+" > "+trunk);
+            if(scale>previousScale+1.0e-9)
+                throw new AssertionError("upper leader scaffold did not taper progressively with the bole");
+            if(i>0 && scale>=.999)
+                throw new AssertionError("upper leader "+i+" was not reduced to fit the narrower trunk tip");
+            previousScale=scale;
+        }
         System.out.println("MotherWillowJunctionProbe PASS: bole continuity="+alignment
                 +", outward emergence="+outwardAlignment+", surface offset="+offset+"; endpoint unchanged");
     }
