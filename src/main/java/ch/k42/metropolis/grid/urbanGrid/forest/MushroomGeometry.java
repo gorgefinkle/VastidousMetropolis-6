@@ -25,7 +25,9 @@ public final class MushroomGeometry {
         @Override public int hashCode(){return x*9176 ^ z*1709 ^ y*19307;}
         @Override public boolean equals(Object o){return o instanceof P p && p.x==x&&p.y==y&&p.z==z;}
     }
-    private record GroupedCapAnchor(int capX,int capZ,int capBaseY,double boleX,double boleZ,int boleY) {}
+    private record GroupedCapAnchor(double capX,double capZ,int capY,int radius,int branch,
+                                    double boleX,double boleZ,int boleY) {}
+    private record CapPort(int x,int undersideY,int z) {}
     static long mix(long v){ v^=v>>>30;v*= -4658895280553007687L; v^=v>>>27;v*= -7723592293110705685L;return v^(v>>>31); }
     static double unit(long v) {return (mix(v)>>>11)*0x1.0p-53;}
     public static String species(long seed) {return unit(seed ^ 131L)<.52?"minecraft:red_mushroom_block":"minecraft:brown_mushroom_block";}
@@ -118,17 +120,65 @@ public final class MushroomGeometry {
     }
 
     /**
+     * Find an exposed underside point on this specific grouped cap. Its centre
+     * can be covered by a lower cap, so use a real unoccupied edge port.
+     */
+    private static CapPort findGroupedCapPort(GroupedCapAnchor anchor,Set<P> crown) {
+        CapPort best=null;
+        double bestScore=Double.POSITIVE_INFINITY;
+        int minX=(int)Math.floor(anchor.capX()-anchor.radius()-1);
+        int maxX=(int)Math.ceil(anchor.capX()+anchor.radius()+1);
+        int minZ=(int)Math.floor(anchor.capZ()-anchor.radius()-1);
+        int maxZ=(int)Math.ceil(anchor.capZ()+anchor.radius()+1);
+        for(int px=minX;px<=maxX;px++)for(int pz=minZ;pz<=maxZ;pz++) {
+            double dx=px-anchor.capX(),dz=pz-anchor.capZ();
+            double dist=Math.hypot(dx,dz);
+            double theta=Math.atan2(dz,dx);
+            if(dist>anchor.radius()*(1.0+.14*Math.sin(theta*5.0+anchor.branch())))continue;
+            int top=anchor.capY()+3-(int)((dist/anchor.radius())*4.0);
+            int underside=top-2;
+            P capBlock=new P(px,underside,pz);
+            P neck=new P(px,underside-1,pz);
+            if(!crown.contains(capBlock)||crown.contains(neck))continue;
+            double bx=px-anchor.boleX(),by=neck.y-anchor.boleY(),bz=pz-anchor.boleZ();
+            double score=bx*bx+by*by+bz*bz;
+            if(score<bestScore) {
+                bestScore=score;
+                best=new CapPort(px,underside,pz);
+            }
+        }
+        return best;
+    }
+
+    private static boolean connected(Set<P> cells,P start,P target) {
+        if(!cells.contains(start)||!cells.contains(target))return false;
+        java.util.ArrayDeque<P> queue=new java.util.ArrayDeque<>();
+        Set<P> seen=new HashSet<>();
+        queue.add(start);seen.add(start);
+        while(!queue.isEmpty()) {
+            P q=queue.removeFirst();
+            if(q.equals(target))return true;
+            for(int[] d:DIR) {
+                P next=new P(q.x+d[0],q.y+d[1],q.z+d[2]);
+                if(seen.add(next)&&cells.contains(next))queue.addLast(next);
+            }
+        }
+        return false;
+    }
+
+    /**
      * Build a side-crown branch from an actual ground-connected block of the
-     * leaning bole. Try several curved routes around intervening cap overhangs
-     * and terrain; accept only a route whose emitted voxels form one connected
-     * path to this crown's own underside.
+     * leaning bole. The branch approaches an exposed point on the individual
+     * cap underside and detours around all intervening cap blocks.
      */
     private static Set<P> addGroupedCapBranch(GroupedCapAnchor anchor,
                                                Set<P> rootedMainBole,
                                                Set<P> crown,Terrain terrain) {
         P actualBole=nearestEmittedBoleBlock(anchor,rootedMainBole);
         if(actualBole==null)return Set.of();
-        P target=new P(anchor.capX(),anchor.capBaseY()-1,anchor.capZ());
+        CapPort port=findGroupedCapPort(anchor,crown);
+        if(port==null)return Set.of();
+        P target=new P(port.x(),port.undersideY()-1,port.z());
         double dx=target.x-actualBole.x,dz=target.z-actualBole.z;
         double horizontal=Math.hypot(dx,dz);
         double px=horizontal<.001?1.0:-dz/horizontal;
@@ -147,7 +197,7 @@ public final class MushroomGeometry {
                         terrain.groundAt(actualBole.x,actualBole.z)+3);
                 for(int y=actualBole.y;y<=startClearance;y++) {
                     P q=new P(actualBole.x,y,actualBole.z);
-                    if(q.y<anchor.capBaseY()&&!crown.contains(q)
+                    if(q.y<port.undersideY()&&!crown.contains(q)
                             &&q.y>terrain.groundAt(q.x,q.z))candidate.add(q);
                 }
                 for(int i=0;i<=steps;i++) {
@@ -163,7 +213,7 @@ public final class MushroomGeometry {
                             for(int oz=-reach;oz<=reach;oz++) {
                                 if(ox*ox+oy*oy+oz*oz>radius*radius+.30)continue;
                                 P q=new P(ix+ox,iy+oy,iz+oz);
-                                if(q.y>=anchor.capBaseY()||crown.contains(q))continue;
+                                if(q.y>=port.undersideY()||crown.contains(q))continue;
                                 if(q.y<=terrain.groundAt(q.x,q.z))continue;
                                 candidate.add(q);
                             }
@@ -175,7 +225,6 @@ public final class MushroomGeometry {
         }
         return Set.of();
     }
-
 
 
     public static void grow(Sink sink,Terrain terrain,int x,int z,long worldSeed,int variant) {
@@ -236,7 +285,6 @@ public final class MushroomGeometry {
                 int by=ground+(int)(height*fraction);
                 double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                 double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
-                int capX=(int)Math.round(bx),capZ=(int)Math.round(bz);
                 int boleY=Math.max(ground+1,by-8);
                 double boleT=(double)(boleY-ground)/(double)height;
                 double boleEase=boleT*boleT*(3.0-2.0*boleT);
@@ -244,8 +292,8 @@ public final class MushroomGeometry {
                         +Math.sin(boleT*4.1+seed%37)*boleT*1.3;
                 double boleZ=z+Math.sin(angle)*lean*boleEase
                         +Math.cos(boleT*3.5+seed%29)*boleT*1.5;
-                groupedCapAnchors.add(new GroupedCapAnchor(capX,capZ,by+1,boleX,boleZ,boleY));
                 int radius=5+(int)(unit(seed+j*199)*5.0);
+                groupedCapAnchors.add(new GroupedCapAnchor(bx,bz,by,radius,j,boleX,boleZ,boleY));
                 for(int px=(int)bx-radius;px<=bx+radius;px++)for(int pz=(int)bz-radius;pz<=bz+radius;pz++) {
                     double dist=Math.hypot(px-bx,pz-bz),theta2=Math.atan2(pz-bz,px-bx);
                     if(dist>radius*(1.0+.14*Math.sin(theta2*5.0+j)))continue;
