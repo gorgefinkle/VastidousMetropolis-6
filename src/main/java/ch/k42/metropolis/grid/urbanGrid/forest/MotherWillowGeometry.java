@@ -92,7 +92,7 @@ public final class MotherWillowGeometry {
       if(priority||!blocks.containsKey(k))blocks.put(k,state);
     }
     void put(int x,int y,int z,boolean wood,String axis,boolean root) {
-      putState(x,y,z,wood?"minecraft:oak_log[axis="+axis+"]":"minecraft:oak_leaves[persistent=true]",wood,root);
+      putState(x,y,z,wood?(axis.equals("none")?"minecraft:oak_wood":"minecraft:oak_log[axis="+axis+"]"):"minecraft:oak_leaves[persistent=true]",wood,root);
     }
     void bulb(P c,double r,boolean wood,long salt,String axis) {bulb(c,r,wood,salt,axis,false);}
     void bulb(P c,double r,boolean wood,long salt,String axis,boolean root) {
