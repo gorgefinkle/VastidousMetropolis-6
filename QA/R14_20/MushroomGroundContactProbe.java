@@ -20,22 +20,24 @@ public final class MushroomGroundContactProbe {
 
         Map<Long,Integer> capBottom = new HashMap<>();
         capBottom.put(0L, 13);
-        capBottom.put(1L << 32, 16);
+        capBottom.put(1L << 32, 17);
+        capBottom.put(2L << 32, 19);
         java.util.Set<MushroomGeometry.P> emitted = new java.util.HashSet<>();
         MushroomGeometry.emitTrunkStems((x,y,z,state) -> {
             if (MushroomGeometry.STEM.equals(state)) emitted.add(new MushroomGeometry.P(x,y,z));
         }, new MushroomGeometry.Terrain() {
             public int groundAt(int x,int z) {
-                return x == 0 ? 5 : x == 1 ? 12 : 20;
+                return x == 0 ? 5 : x == 1 ? 12 : 17;
             }
             public boolean allows(int x,int z) { return true; }
-        }, authored, capBottom);
+        }, authored, capBottom, 10);
 
         java.util.Set<MushroomGeometry.P> expected = new java.util.HashSet<>();
         for(int y=6;y<=12;y++)expected.add(new MushroomGeometry.P(0,y,0));
-        for(int y=13;y<=15;y++)expected.add(new MushroomGeometry.P(1,y,0));
+        for(int y=14;y<=16;y++)expected.add(new MushroomGeometry.P(1,y,0));
+        expected.add(new MushroomGeometry.P(2,18,0));
         if(!emitted.equals(expected)) {
-            throw new AssertionError("stem correction changed authored shape instead of adding only bottom extensions; "
+            throw new AssertionError("stem correction changed the leaning bole instead of extending only its original base row; "
                     + "expected="+expected.size()+" voxels actual="+emitted.size());
         }
     }
