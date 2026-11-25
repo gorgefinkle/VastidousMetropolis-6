@@ -40,11 +40,12 @@ public final class MushroomGroundContactProbe {
         for(int y=6;y<=12;y++)expected.add(new MushroomGeometry.P(0,y,0));
         for(int y=14;y<=16;y++)expected.add(new MushroomGeometry.P(1,y,0));
         expected.add(new MushroomGeometry.P(2,18,0));
-        // Column three verifies an eleven-block top gap is filled as well as
-        // its lower gap to ground.
-        for(int y=6;y<=19;y++)expected.add(new MushroomGeometry.P(3,y,0));
+        // Column three verifies that the original authored upper shape is
+        // preserved: only the base gap is extended, never a vertical column
+        // from the bole's topmost authored block to the cap.
+        for(int y=6;y<=12;y++)expected.add(new MushroomGeometry.P(3,y,0));
         if(!emitted.equals(expected)) {
-            throw new AssertionError("stem correction failed to fill bottom-to-ground and top-to-cap terminal gaps; "
+            throw new AssertionError("stem correction changed the authored bole instead of extending only its base; "
                     + "expected="+expected.size()+" voxels actual="+emitted.size());
         }
     }
