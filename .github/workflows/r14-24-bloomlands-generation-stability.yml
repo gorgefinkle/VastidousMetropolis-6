@@ -78,10 +78,10 @@ jobs:
         run: zip -r Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
       - name: Assemble exact two-file development package
         run: |
-          mkdir -p r14-30-package
-          cp target/Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV.jar r14-30-package/
-          cp Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_SOURCE.zip r14-30-package/
-          (cd r14-30-package && zip -q ../Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip ./*)
+          mkdir -p r14-31-package
+          cp target/Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV.jar r14-31-package/
+          cp Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_SOURCE.zip r14-31-package/
+          (cd r14-31-package && zip -q ../Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip ./*)
       - name: Verify exact package contents
         run: |
           unzip -Z1 Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip | sort > package-files.txt
