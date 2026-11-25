@@ -217,23 +217,13 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    }
 
    @Override
-   public boolean waterOrBank(int chunkX, int chunkZ) {
+   public boolean lakeOrBankAt(int chunkX, int chunkZ) {
       return lakeAt(chunkX, chunkZ) != null;
    }
 
    @Override
-   public boolean waterOrBank(int chunkX, int chunkZ, boolean ignored) {
-      return lakeAt(chunkX, chunkZ) != null;
-   }
-
-   @Override
-   public boolean waterOrBank(int chunkX, int chunkZ) {
-      return lakeAt(chunkX, chunkZ) != null;
-   }
-
-   @Override
-   public boolean waterOrBank(int chunkX, int chunkZ) {
-      return this.streamCarrierAt(chunkX, chunkZ) != null;
+   public boolean streamOrBankAt(int chunkX, int chunkZ) {
+      return streamCarrierAt(chunkX, chunkZ) != null;
    }
 
    @Override
