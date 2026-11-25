@@ -60,6 +60,7 @@ public final class LakeParcel extends Parcel {
                   // The outlet continues through this chunk's lake-owned
                   // shoreline before it reaches ordinary stream parcels.
                   RiverParcel.carveColumnWithCreeks(world, stream, this.grid, rand, x, z);
+                  world.setBiome(x, z, Biome.RIVER);
                   continue;
                }
             }
