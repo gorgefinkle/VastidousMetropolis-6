@@ -143,7 +143,7 @@ public final class MushroomGeometry {
                 double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                 double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
                 int capX=(int)Math.round(bx),capZ=(int)Math.round(bz);
-                int boleY=Math.max(ground+1,by-4);
+                int boleY=Math.max(ground+1,by-8);
                 double boleT=(double)(boleY-ground)/(double)height;
                 double boleEase=boleT*boleT*(3.0-2.0*boleT);
                 double boleX=x+Math.cos(angle)*lean*boleEase
