@@ -23,7 +23,7 @@ public final class MushroomGeometry {
         @Override public int hashCode(){return x*9176 ^ z*1709 ^ y*19307;}
         @Override public boolean equals(Object o){return o instanceof P p && p.x==x&&p.y==y&&p.z==z;}
     }
-    private record StalkAnchor(int baseX,int baseZ,int capX,int capZ,int capEndY) {}
+    private record StalkAnchor(int capX,int capZ,int capEndY) {}
 
     static long mix(long v){ v^=v>>>30;v*= -4658895280553007687L; v^=v>>>27;v*= -7723592293110705685L;return v^(v>>>31); }
     static double unit(long v) {return (mix(v)>>>11)*0x1.0p-53;}
@@ -33,58 +33,19 @@ public final class MushroomGeometry {
         return ((long)x<<32) ^ (z & 0xffffffffL);
     }
 
-    /**
-     * Draw a continuous support stalk from the underside of a cap down toward
-     * its own footing. Horizontal drift eases outward as it rises, so grouped
-     * caps have visibly leaning stems rather than unsupported crowns.
-     */
+    /** Root a separate stalk directly beneath the lowest face of a grouped cap. */
     private static void addCapStalk(Set<P> output,Terrain terrain,
                                     Map<Long,Integer> capBottomByColumn,
                                     StalkAnchor anchor) {
-        int baseY=terrain.groundAt(anchor.baseX(),anchor.baseZ())+1;
-        int capX=anchor.capX(),capZ=anchor.capZ();
-        Integer underside=capBottomByColumn.get(columnKey(capX,capZ));
+        int x=anchor.capX(),z=anchor.capZ();
+        Integer underside=capBottomByColumn.get(columnKey(x,z));
         if(underside==null)return;
         int endY=Math.min(anchor.capEndY(),underside-1);
-        if(endY<baseY)return;
-
-        int dx=capX-anchor.baseX(),dz=capZ-anchor.baseZ();
-        int dy=endY-baseY;
-        int steps=Math.max(1,Math.max(Math.max(Math.abs(dx),Math.abs(dz)),dy)*3);
-        int px=anchor.baseX(),pz=anchor.baseZ(),py=baseY;
-        addStalkCell(output,terrain,capBottomByColumn,px,py,pz);
-        for(int i=1;i<=steps;i++) {
-            double t=i/(double)steps;
-            double eased=t*t*(3.0-2.0*t);
-            int tx=(int)Math.round(anchor.baseX()+dx*eased);
-            int tz=(int)Math.round(anchor.baseZ()+dz*eased);
-            int ty=(int)Math.round(baseY+dy*t);
-            ty=Math.max(ty,terrain.groundAt(tx,tz)+1);
-            Integer localBottom=capBottomByColumn.get(columnKey(tx,tz));
-            if(localBottom!=null)ty=Math.min(ty,localBottom-1);
-
-            while(px!=tx) {
-                px+=Integer.signum(tx-px);
-                addStalkCell(output,terrain,capBottomByColumn,px,py,pz);
-            }
-            while(pz!=tz) {
-                pz+=Integer.signum(tz-pz);
-                addStalkCell(output,terrain,capBottomByColumn,px,py,pz);
-            }
-            while(py!=ty) {
-                py+=Integer.signum(ty-py);
-                addStalkCell(output,terrain,capBottomByColumn,px,py,pz);
-            }
+        int floor=terrain.groundAt(x,z)+1;
+        for(int y=floor;y<=endY;y++) {
+            if(!terrain.allows(x,z))break;
+            output.add(new P(x,y,z));
         }
-    }
-
-    private static void addStalkCell(Set<P> output,Terrain terrain,
-                                     Map<Long,Integer> capBottomByColumn,
-                                     int x,int y,int z) {
-        if(!terrain.allows(x,z)||y<=terrain.groundAt(x,z))return;
-        Integer underside=capBottomByColumn.get(columnKey(x,z));
-        if(underside!=null&&y>=underside)return;
-        output.add(new P(x,y,z));
     }
 
     public static void grow(Sink sink,Terrain terrain,int x,int z,long worldSeed,int variant) {
@@ -98,6 +59,7 @@ public final class MushroomGeometry {
         double lean=3.0+unit(seed+15)*10.0;
         double centerX=x+Math.cos(angle)*lean,centerZ=z+Math.sin(angle)*lean;
         Set<P> crown=new HashSet<>(), trunk=new HashSet<>(), capStems=new HashSet<>();
+        Set<Long> trunkColumns=new HashSet<>();
         java.util.List<StalkAnchor> groupedCapAnchors=new java.util.ArrayList<>();
         for(int y=ground+1;y<=ground+height+1;y++) {
             double t=(double)(y-ground)/(double)height;
@@ -142,11 +104,9 @@ public final class MushroomGeometry {
                 int by=ground+(int)(height*fraction);
                 double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                 double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
-                // Each grouped cap gets its own leaning stalk, rooted near the
-                // main bole and rising all the way to the cap's lower face.
-                int baseX=(int)Math.round(x+Math.cos(angle)*lean*fraction*.30+Math.cos(theta)*1.25);
-                int baseZ=(int)Math.round(z+Math.sin(angle)*lean*fraction*.30+Math.sin(theta)*1.25);
-                groupedCapAnchors.add(new StalkAnchor(baseX,baseZ,(int)Math.round(bx),(int)Math.round(bz),by));
+                // Each grouped crown receives its own rooted stem directly
+                // beneath the cap centre, including the three highest crowns.
+                groupedCapAnchors.add(new StalkAnchor((int)Math.round(bx),(int)Math.round(bz),by));
                 int radius=5+(int)(unit(seed+j*199)*5.0);
                 for(int px=(int)bx-radius;px<=bx+radius;px++)for(int pz=(int)bz-radius;pz<=bz+radius;pz++) {
                     double dist=Math.hypot(px-bx,pz-bz),theta2=Math.atan2(pz-bz,px-bx);
@@ -182,18 +142,8 @@ public final class MushroomGeometry {
             Integer previous=capBottomByColumn.get(key);
             if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
         }
-        // Build the primary leaning stalk down from the centre cap, not
-        // merely upward from the first ground-contact voxel. This closes any
-        // small gap where the curved bole meets the cap underside.
-        int primaryCapX=(int)Math.round(centerX),primaryCapZ=(int)Math.round(centerZ);
-        Integer primaryCapBottom=capBottomByColumn.get(columnKey(primaryCapX,primaryCapZ));
-        if(primaryCapBottom!=null) {
-            addCapStalk(capStems,terrain,capBottomByColumn,
-                new StalkAnchor(x,z,primaryCapX,primaryCapZ,primaryCapBottom-1));
-        }
         // The upper grouped crowns are independent cap masses. Give every
-        // one a descending stalk; the highest three must not be left floating
-        // just because the older painter only supplied the lower side stems.
+        // one a full-height descending stalk rooted at its own local ground.
         for(StalkAnchor anchor:groupedCapAnchors)
             addCapStalk(capStems,terrain,capBottomByColumn,anchor);
 
@@ -203,11 +153,19 @@ public final class MushroomGeometry {
         // of a broad stalk visibly suspended.
         Map<Long,Integer> trunkTopByColumn=new HashMap<>();
         for(P q:trunk) {
-            Integer capBottom=capBottomByColumn.get(columnKey(q.x,q.z));
-            if(capBottom!=null&&q.y>=capBottom)continue;
             long key=columnKey(q.x,q.z);
+            trunkColumns.add(key);
+            Integer capBottom=capBottomByColumn.get(key);
+            if(capBottom!=null&&q.y>=capBottom)continue;
             Integer old=trunkTopByColumn.get(key);
             if(old==null||q.y>old)trunkTopByColumn.put(key,q.y);
+        }
+        // Extend the existing leaning bole upward from the cap underside in
+        // every occupied trunk column. This preserves the curved base while
+        // making its top follow the actual, possibly sloping cap underside.
+        for(long key:trunkColumns) {
+            Integer capBottom=capBottomByColumn.get(key);
+            if(capBottom!=null)trunkTopByColumn.merge(key,capBottom-1,Math::max);
         }
         for(Map.Entry<Long,Integer> entry:trunkTopByColumn.entrySet()) {
             int tx=(int)(entry.getKey()>>32),tz=(int)(long)entry.getKey();
