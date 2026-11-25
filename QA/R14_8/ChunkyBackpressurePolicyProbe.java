@@ -1,58 +1,75 @@
 package ch.k42.metropolis.generator;
 
-/** Regression tests for the high-retained-heap resume path. */
+/** Regression tests for retained-heap recovery and instantaneous headroom guards. */
 public final class ChunkyBackpressurePolicyProbe {
     private static void check(boolean ok, String message) {
         if (!ok) throw new AssertionError(message);
     }
     public static void main(String[] args) {
-        long max = 8L * 1024L * 1024L * 1024L;
+        long max = 12L * 1024L * 1024L * 1024L;
         long now = 120_000_000_000L;
         long stableSince = now - ChunkyBackpressurePolicy.STABILITY_NS;
 
-        // The exact reported failure case: post-GC live heap stays at 80%.
-        double usage80 = 0.80;
-        long free80 = (long) (max * (1.0 - usage80));
-        check(ChunkyBackpressurePolicy.canResume(128, usage80, free80, max,
-                stableSince, now), "stable 80% heap must recover when queue is <=128");
-        check(ChunkyBackpressurePolicy.shouldKeepStableMode(usage80, free80, max),
-                "80% stable recovery must enter stable operating band");
-        check(!ChunkyBackpressurePolicy.shouldPause(usage80, 0, true, false),
-                "stable 80% operating band must not immediately pause again");
+        // Log-shaped case: the instantaneous heap is high, but the post-GC
+        // retained set is healthy and at least 8% of max remains free.
+        double current91 = 0.91;
+        double retained70 = 0.70;
+        long free9 = (long) (max * 0.09);
+        check(ChunkyBackpressurePolicy.canResume(128, current91, retained70,
+                free9, max, stableSince, now),
+                "stable 70% retained heap must recover at 91% instantaneous use with 9% free");
+        check(ChunkyBackpressurePolicy.shouldKeepStableMode(retained70, free9, max),
+                "healthy retained heap and headroom must enter stable operating band");
+        check(!ChunkyBackpressurePolicy.shouldPause(current91, retained70,
+                free9, max, 0, true, false),
+                "temporary 91% use must not immediately re-pause a safe stable run");
 
-        check(!ChunkyBackpressurePolicy.canResume(129, usage80, free80, max,
-                stableSince, now), "queue above 128 must remain paused");
-        check(!ChunkyBackpressurePolicy.canResume(128, usage80, free80, max,
-                now - ChunkyBackpressurePolicy.STABILITY_NS + 1, now),
-                "high heap must be stable for the full dwell period");
-        check(!ChunkyBackpressurePolicy.canResume(128, 0.821, (long)(max * .179), max,
-                stableSince, now), "heap above 82% must not enter stable recovery band");
+        check(!ChunkyBackpressurePolicy.canResume(129, current91, retained70,
+                free9, max, stableSince, now), "queue above 128 must remain paused");
+        check(!ChunkyBackpressurePolicy.canResume(128, current91, 0.821,
+                free9, max, stableSince, now), "retained heap above 82% must not recover");
+        check(!ChunkyBackpressurePolicy.canResume(128, current91, retained70,
+                (long)(max * 0.079), max, stableSince, now),
+                "less than 8% free headroom must not recover");
+        check(!ChunkyBackpressurePolicy.canResume(128, current91, retained70,
+                free9, max, now - ChunkyBackpressurePolicy.STABILITY_NS + 1, now),
+                "retained heap must be stable for the full dwell period");
 
-        // Stable band is protective, not a free pass: the hard heap ceiling and
-        // queue ceiling continue to pause generation.
-        check(ChunkyBackpressurePolicy.shouldPause(0.86, 0, true, false),
-                "86% hard pause must override stable mode");
-        check(ChunkyBackpressurePolicy.shouldPause(0.80, 1024, true, false),
+        // Stable mode is bounded by retained heap, free headroom, and queue size.
+        check(ChunkyBackpressurePolicy.shouldPause(current91, retained70,
+                (long)(max * 0.079), max, 0, true, false),
+                "stable mode must pause below the 8% free-headroom floor");
+        check(ChunkyBackpressurePolicy.shouldPause(current91, retained70,
+                free9, max, 1024, true, false),
                 "queue high-water mark must override stable mode");
-        check(ChunkyBackpressurePolicy.shouldPause(0.75, 0, false, false),
+        check(ChunkyBackpressurePolicy.shouldPause(0.75, 0.70,
+                (long)(max * .25), max, 0, false, false),
                 "ordinary soft pause must apply outside stable mode");
-        check(!ChunkyBackpressurePolicy.shouldPause(0.75, 0, false, true),
-                "a 30-second recovery probe must not immediately re-pause at 75%");
+        check(ChunkyBackpressurePolicy.shouldPause(0.86, 0.70,
+                (long)(max * .14), max, 0, false, false),
+                "ordinary hard pause must apply outside stable mode");
+        check(!ChunkyBackpressurePolicy.shouldPause(0.75, 0.70,
+                (long)(max * .25), max, 0, false, true),
+                "a recovery probe must not immediately re-pause at the soft threshold");
 
-        // Ordinary recovery below 68% does not wait for the 30-second dwell.
-        check(ChunkyBackpressurePolicy.canResume(128, 0.68, (long)(max * .32), max,
-                0L, now), "normal <=68% recovery must be immediate");
+        // Normal low-heap recovery remains immediate.
+        check(ChunkyBackpressurePolicy.canResume(128, 0.68, 0.68,
+                (long)(max * .32), max, 0L, now),
+                "normal <=68% recovery must be immediate");
 
-        // A small heap must not be allowed to resume at 80% with inadequate
-        // absolute free memory, even if its percentage looks like a large heap.
+        // Absolute free memory protects small heaps even when their percentage
+        // looks healthy.
         long smallMax = 2L * 1024L * 1024L * 1024L;
         long smallFree = (long)(smallMax * .20);
-        check(!ChunkyBackpressurePolicy.canResume(0, .80, smallFree, smallMax,
-                stableSince, now), "80% of a 2 GiB heap leaves insufficient free headroom");
+        check(!ChunkyBackpressurePolicy.canResume(0, .80, .80,
+                smallFree, smallMax, stableSince, now),
+                "80% of a 2 GiB heap leaves less than 512 MiB free");
 
-        // At 80% of an 8 GiB heap there is sufficient headroom to resume.
-        check(ChunkyBackpressurePolicy.hasStableHeadroom(.80, free80, max),
-                "8 GiB heap at 80% must qualify for guarded recovery");
-        System.out.println("ChunkyBackpressurePolicyProbe: PASS (stable 80% resumes; queue/hard ceilings still pause)");
+        long largeMax = 8L * 1024L * 1024L * 1024L;
+        long largeFree = (long)(largeMax * .20);
+        check(ChunkyBackpressurePolicy.hasStableHeadroom(.80, largeFree, largeMax),
+                "80% retained use of an 8 GiB heap qualifies with 20% free");
+
+        System.out.println("ChunkyBackpressurePolicyProbe: PASS (post-GC recovery, headroom floor, queue/hard guards)");
     }
 }
