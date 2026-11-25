@@ -288,9 +288,10 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          blockZ[i] = path.get(i)[1] * 16.0 + 8.0;
       }
       long streamSeed = mix(featureHash ^ 0x53545245414D4C4BL);
-      // A 6-7 block channel stays too narrow for the legacy pipe radius
-      // rules to create a culvert through a highway retaining wall.
-      double width = 6.0 + unit(mix(streamSeed)) * 1.0;
+      // A narrow 10-12 block channel retains the smallest explicit
+      // highway-crossing bore used by RiverParcel. Banks stay short and the
+      // road deck itself remains untouched; no extra storm drains are added.
+      double width = 10.0 + unit(mix(streamSeed)) * 2.0;
       double bank = 7.0 + unit(mix(streamSeed ^ 0x42414E4BL)) * 3.0;
       return new WildernessStreamCourse(streamSeed, blockX, blockZ, width, bank);
    }
