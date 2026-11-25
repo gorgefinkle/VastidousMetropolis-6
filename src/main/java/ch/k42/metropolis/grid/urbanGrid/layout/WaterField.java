@@ -218,10 +218,10 @@ public final class WaterField implements WorldLayout.Mask {
       if (base != Kind.NONE) return base;
       CreekSource src = creeks;
       if (src != null && src.waterOrBank(x, z)) return Kind.CREEK;
-      StreamSource stream = streams;
-      if (stream != null && stream.streamOrBankAt(x, z)) return Kind.STREAM;
       LakeSource lake = lakes;
-      return lake != null && lake.lakeOrBankAt(x, z) ? Kind.LAKE : Kind.NONE;
+      if (lake != null && lake.lakeOrBankAt(x, z)) return Kind.LAKE;
+      StreamSource stream = streams;
+      return stream != null && stream.streamOrBankAt(x, z) ? Kind.STREAM : Kind.NONE;
    }
 
    public Kind baseKindAt(int x, int z) {
@@ -347,9 +347,9 @@ public final class WaterField implements WorldLayout.Mask {
          if (src.useRiverPlanningLattice() && hasCreekInLattice(x, z, src)
                  && !src.protectedDryParkAt(x, z)) return Kind.CREEK;
       }
-      StreamSource stream = streams;
-      if (stream != null && stream.streamOrBankAt(x, z)) return Kind.STREAM;
       LakeSource lake = lakes;
-      return lake != null && lake.lakeOrBankAt(x, z) ? Kind.LAKE : Kind.NONE;
+      if (lake != null && lake.lakeOrBankAt(x, z)) return Kind.LAKE;
+      StreamSource stream = streams;
+      return stream != null && stream.streamOrBankAt(x, z) ? Kind.STREAM : Kind.NONE;
    }
 }
