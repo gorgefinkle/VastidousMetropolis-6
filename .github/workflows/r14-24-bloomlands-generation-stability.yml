@@ -61,6 +61,12 @@ jobs:
         run: sh QA/R14_24/run_deferred_population_async_probe.sh
       - name: FARM underground sites policy probe
         run: sh QA/R14_24/run_farm_underground_sites_probe.sh
+      - name: Camp decoration spacing policy probe
+        run: sh QA/R14_25/run_camp_spacing_probe.sh
+      - name: Karst natural arch and massif profile probes
+        run: |
+          sh QA/R14_8/run_karst_landbridge_clearance_probe.sh
+          sh QA/R14_9/run_karst_mountain_profile_probe.sh
       - name: Disk deferred queue durability probe
         run: |
           mkdir -p target/qa-queue
