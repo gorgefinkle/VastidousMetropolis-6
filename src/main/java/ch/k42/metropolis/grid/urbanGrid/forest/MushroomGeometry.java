@@ -96,7 +96,6 @@ public final class MushroomGeometry {
             if(!terrain.allows(x,z))continue;
             int capTop=anchor.capY()+3;
             int underside=capTop-2;
-            if(!crown.contains(new P(x,underside,z)))continue;
             int ground=terrain.groundAt(x,z);
             int firstY=ground+1,lastY=underside-1;
             if(lastY-firstY<3)continue;
@@ -132,6 +131,22 @@ public final class MushroomGeometry {
                     }
                 }
                 previous=current;
+            }
+        }
+        // A later stalk may pass through an earlier cap. Restore every
+        // grouped cap's center underside after all stalk paths are laid, and
+        // pin its final stem voxel directly beneath that cap.
+        for(GroupedCapAnchor anchor:anchors) {
+            int x=(int)Math.round(anchor.capX());
+            int z=(int)Math.round(anchor.capZ());
+            if(!terrain.allows(x,z))continue;
+            int underside=anchor.capY()+1;
+            P capBottom=new P(x,underside,z);
+            crown.add(capBottom);
+            P stemTop=new P(x,underside-1,z);
+            if(stemTop.y>terrain.groundAt(x,z)) {
+                sink.set(stemTop.x,stemTop.y,stemTop.z,STEM);
+                stems.add(stemTop);
             }
         }
     }
