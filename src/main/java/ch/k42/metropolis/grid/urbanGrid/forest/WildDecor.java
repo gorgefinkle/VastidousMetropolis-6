@@ -37,6 +37,8 @@ public final class WildDecor {
    private static final int SMALL_REACH = 6;
    private static final int BIG_CELL = 64;
    private static final int BIG_REACH = 84;
+   private static final int CAMP_GROUP_RADIUS = WildDecorSpacingPolicy.CAMP_GROUP_RADIUS;
+   private static final int CAMP_SALT = 111;
    // Wind installations need their own sparse layer; a 64-block decoration cell
    // cannot contain their 4..6 by 2..3 tower footprint or long road approach.
    // Wind turbine geometry is not a small wilderness prop: separated towers
@@ -150,14 +152,13 @@ public final class WildDecor {
 
    enum Prop {PLANE, HELI, TENTS, MINE, WINDFARM, MAST, BOULDER, HOODOO}
 
-   // Ordinary large sites and crashed aircraft have independent layers.
-   // Mixing aircraft into BIG made helicopter/plane locations compete with
-   // camps and mines, and erased their original long-distance separation.
-   private static final Prop[] BIG = {Prop.TENTS, Prop.MINE, Prop.MAST};
-   private static final double[] B_FOREST = {4.0, 0.0, 1.0};
-   private static final double[] B_MOUNTAIN = {2.0, 0.0, 3.0};
-   private static final double[] B_DESERT = {3.0, 0.0, 0.0};
-   private static final double[] B_MESA = {3.0, 5.0, 0.0};
+   // Camps use a separate clustered-site planner. Mines and masts retain
+   // their own ordinary large-site layer and their original effective weights.
+   private static final Prop[] BIG = {Prop.MINE, Prop.MAST};
+   private static final double[] B_FOREST = {0.0, 1.0};
+   private static final double[] B_MOUNTAIN = {0.0, 3.0};
+   private static final double[] B_DESERT = {0.0, 0.0};
+   private static final double[] B_MESA = {5.0, 0.0};
    private static final int AIRCRAFT_CELL = 160;
    private static final int PLANE_GAP = 260;
    private static final int HELI_GAP = 340;
@@ -197,6 +198,7 @@ public final class WildDecor {
       }
       Painter p = new Painter(chunk, env, seed);
       layer(p, seed, env, percent, SMALL_CELL, SMALL_REACH, 61, 0.12, false);
+      campLayer(p, seed, env, percent);
       layer(p, seed, env, percent, BIG_CELL, BIG_REACH, 71, 0.044, true);
       windLayer(p, seed, env, percent, windOrigins);
       // These have their own sparse spatial processes, as in the original
@@ -265,6 +267,99 @@ public final class WildDecor {
       return ForestTerrain.unit(ForestTerrain.hash(seed, cx, cz, salt + 1)) < chance;
    }
 
+   private record CampCandidate(int cx, int cz, int x, int z, long rank) {}
+
+   private static double campWeight(WildBiome biome) {
+      if (biome.is(WildBiome.MOUNTAINS)) return 2.0;
+      if (biome.is(WildBiome.DESERT) || biome.is(WildBiome.MESA)) return 3.0;
+      return 4.0;
+   }
+
+   /** A candidate exists independently of chunk order and of the chunk being painted. */
+   private static CampCandidate campCandidate(long seed, Env env, int percent,
+                                              int cx, int cz, int spacing) {
+      long h = ForestTerrain.hash(seed, cx, cz, CAMP_SALT);
+      int ox = cx * BIG_CELL + (int) ((h >>> 8) % BIG_CELL);
+      int oz = cz * BIG_CELL + (int) ((h >>> 24) % BIG_CELL);
+      if (!env.allows(ox, oz)) return null;
+      double weight = campWeight(env.biomeAt(ox, oz));
+      double chance = Math.min(0.95,
+              0.044 * weight * 10000.0 / ((double) spacing * spacing)
+                      * zone(seed, ox, oz, 192) * percent / 100.0);
+      if (ForestTerrain.unit(ForestTerrain.hash(seed, cx, cz, CAMP_SALT + 1)) >= chance) {
+         return null;
+      }
+      return new CampCandidate(cx, cz, ox, oz,
+              ForestTerrain.hash(seed, cx, cz, CAMP_SALT + 2));
+   }
+
+   /** Deterministic non-maximum suppression: nearby candidate groups keep only the highest-ranked centre. */
+   private static boolean campGroupWins(long seed, Env env, int percent, int spacing,
+                                        CampCandidate candidate) {
+      int minimumGap = WildDecorSpacingPolicy.campMinimumGroupGap(spacing);
+      int range = (minimumGap + BIG_CELL - 1) / BIG_CELL + 1;
+      long minimumGapSquared = (long) minimumGap * minimumGap;
+      for (int dx = -range; dx <= range; dx++) {
+         for (int dz = -range; dz <= range; dz++) {
+            if (dx == 0 && dz == 0) continue;
+            CampCandidate other = campCandidate(seed, env, percent,
+                    candidate.cx + dx, candidate.cz + dz, spacing);
+            if (other == null) continue;
+            long ddx = (long) candidate.x - other.x;
+            long ddz = (long) candidate.z - other.z;
+            if (ddx * ddx + ddz * ddz >= minimumGapSquared) continue;
+            int rank = Long.compareUnsigned(other.rank, candidate.rank);
+            if (rank > 0 || (rank == 0 &&
+                    (other.cx < candidate.cx || (other.cx == candidate.cx && other.cz < candidate.cz)))) {
+               return false;
+            }
+         }
+      }
+      return true;
+   }
+
+   /**
+    * One sparse camp-group centre owns two or three individual camp compounds.
+    * Their deterministic layout is planned before painting, so chunk order
+    * cannot split a group or move one of its sites.
+    */
+   private static void campLayer(Painter p, long seed, Env env, int percent) {
+      int spacing = WildDecorSpacingPolicy.campSpacing(env.spacing(Prop.TENTS.ordinal()));
+      int cellMinX = Math.floorDiv(p.minX - CAMP_GROUP_RADIUS, BIG_CELL);
+      int cellMaxX = Math.floorDiv(p.minX + 15 + CAMP_GROUP_RADIUS, BIG_CELL);
+      int cellMinZ = Math.floorDiv(p.minZ - CAMP_GROUP_RADIUS, BIG_CELL);
+      int cellMaxZ = Math.floorDiv(p.minZ + 15 + CAMP_GROUP_RADIUS, BIG_CELL);
+      for (int cx = cellMinX; cx <= cellMaxX; cx++) {
+         for (int cz = cellMinZ; cz <= cellMaxZ; cz++) {
+            CampCandidate candidate = campCandidate(seed, env, percent, cx, cz, spacing);
+            if (candidate == null || !p.touches(candidate.x, candidate.z, CAMP_GROUP_RADIUS)) continue;
+            if (!campGroupWins(seed, env, percent, spacing, candidate)) continue;
+            if (env.edgeDistance(candidate.x, candidate.z, 1 + CAMP_GROUP_RADIUS / 16)
+                    < CAMP_GROUP_RADIUS) continue;
+
+            Random layout = new Random(ForestTerrain.hash(seed, cx, cz, CAMP_SALT + 3));
+            int groupSize = 2 + layout.nextInt(2);
+            int rotation = layout.nextInt(4);
+            int[][] offsets = WildDecorSpacingPolicy.campOffsets(groupSize, rotation);
+            ArrayList<int[]> sites = new ArrayList<>(groupSize);
+            for (int i = 0; i < offsets.length; i++) {
+               int sx = candidate.x + offsets[i][0] + layout.nextInt(5) - 2;
+               int sz = candidate.z + offsets[i][1] + layout.nextInt(5) - 2;
+               if (env.allows(sx, sz) && suitable(p, env, Prop.TENTS, sx, sz)) {
+                  sites.add(new int[]{sx, sz});
+               }
+            }
+            if (sites.size() < 2) continue;
+
+            for (int i = 0; i < sites.size(); i++) {
+               int[] site = sites.get(i);
+               long siteSeed = ForestTerrain.hash(seed, cx * 17 + i, cz, CAMP_SALT + 4);
+               tentCamp(p, new Random(siteSeed), site[0], site[1]);
+            }
+         }
+      }
+   }
+
    private static void layer(Painter p, long seed, Env env, int percent, int cell, int reach, int salt, double base, boolean big) {
       int cellMinX = Math.floorDiv(p.minX - reach, cell);
       int cellMaxX = Math.floorDiv(p.minX + 15 + reach, cell);
@@ -286,9 +381,6 @@ public final class WildDecor {
             double sum = 0.0;
             for (int i = 0; i < w.length; i++) {
                int spacing = Math.max(10, env.spacing(kinds[i].ordinal()));
-               if (kinds[i] == Prop.TENTS) {
-                  spacing = WildDecorSpacingPolicy.campSpacing(spacing);
-               }
                w[i] = defaults[i] * 10000.0 / ((double) spacing * spacing);
                sum += w[i];
             }
@@ -768,7 +860,7 @@ public final class WildDecor {
          case HELI:
             return 18;
          case TENTS:
-            return 12;
+            return CAMP_GROUP_RADIUS;
          case MINE:
             return 50;
          case WINDFARM:
