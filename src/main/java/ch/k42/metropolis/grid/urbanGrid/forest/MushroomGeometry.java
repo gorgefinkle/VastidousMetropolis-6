@@ -52,6 +52,10 @@ public final class MushroomGeometry {
         Set<P> emitted=new HashSet<>();
         for(P q:trunk) {
             long key=columnKey(q.x,q.z);
+            // Capture the authored first-row footprint before terrain or cap
+            // clipping. Those terminal corrections must not erase the fact
+            // that this column belongs to the original leaning bole base.
+            if(q.y==rootY&&terrain.allows(q.x,q.z))originalBottomFootprint.add(key);
             Integer capBottom=capBottomByColumn.get(key);
             if(capBottom!=null&&q.y>=capBottom)continue;
             if(!terrain.allows(q.x,q.z))continue;
@@ -59,7 +63,6 @@ public final class MushroomGeometry {
             sink.set(q.x,q.y,q.z,STEM);
             emitted.add(q);
             highestByColumn.merge(key,q.y,Math::max);
-            if(q.y==rootY)originalBottomFootprint.add(key);
         }
         // Bottom correction: only columns in the original lowest layer.
         for(long key:originalBottomFootprint) {
