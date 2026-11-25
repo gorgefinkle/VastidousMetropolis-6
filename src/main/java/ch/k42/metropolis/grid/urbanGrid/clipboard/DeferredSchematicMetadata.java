@@ -221,7 +221,10 @@ public final class DeferredSchematicMetadata {
             }
         }
         private void requeueOrReturn(Slot slot){
-            if(staging==slot)window.addLast(slot);
+            // A released job must remain in the bounded window until its retry
+            // cooldown expires; dropping it here would recreate it from disk with
+            // nextTry=0 and silently erase the backoff.
+            if(staging==slot||ticks<slot.nextTry)window.addLast(slot);
             else {release(slot);inWindow.remove(slot.path);}
         }
         private void release(Slot slot){
@@ -249,9 +252,9 @@ public final class DeferredSchematicMetadata {
             CompletableFuture<Chunk> future;
             try{future=world.getChunkAtAsync(x,z,false);}
             catch(RuntimeException ex){
-                // Keep this slot staged so requeueOrReturn() preserves its cooldown.
-                // No ticket was acquired for this failed request.
-                loading=false;loadGeneration++;slot.nextTry=ticks+100;
+                // release() invalidates the generation and clears the staging gate;
+                // requeueOrReturn() preserves this slot's retry cooldown.
+                release(slot);slot.nextTry=ticks+100;
                 asyncLoadFailuresSinceLog++;
                 return;
             }
