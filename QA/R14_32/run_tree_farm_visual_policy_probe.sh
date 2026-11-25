@@ -2,6 +2,7 @@
 set -eu
 WILLOW=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/MotherWillowGeometry.java
 FOREST=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/ForestTrees.java
+COMPANION=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/CompanionTreeGeometry.java
 MUSHROOM=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/MushroomGeometry.java
 LAYOUT=src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmLayout.java
 PROPS=src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmProps.java
@@ -9,6 +10,8 @@ OUTBUILDINGS=src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmOutbuilding
 
 grep -Fq 'axis.equals("none")?"minecraft:oak_wood"' "$WILLOW"
 grep -Fq 'data | 12' "$FOREST"
+grep -Fq 'axis.equals("none")?bark:wood+' "$COMPANION"
+grep -Fq 'maker.curved(joint,midBranch,end,spruce?1.3:1.8,0.65,true)' "$COMPANION"
 grep -Fq 'branchSegment(last,next' "$WILLOW"
 grep -Fq 'minecraft:oak_fence[north=true,east=true,south=true,west=true,waterlogged=false]' "$WILLOW"
 grep -Fq 'leaderIndex>=2?.34:.48' "$WILLOW"
