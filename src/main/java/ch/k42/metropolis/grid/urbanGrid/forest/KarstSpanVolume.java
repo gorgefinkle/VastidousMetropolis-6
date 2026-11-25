@@ -93,6 +93,10 @@ public final class KarstSpanVolume {
     private static double centerHeight(long seed,int x,int z,double natural,double r){
         return crownDatum(seed,x,z,natural)-verticalRadius(seed,x,z,r);
     }
+    /** The natural crest rises smoothly at midspan and settles into both portals. */
+    static double archCrownRise(double normalizedLongitudinal,double bankRatio){
+        return 11.0*(1-smooth(normalizedLongitudinal/.98))*smooth((1.18-bankRatio)/.48);
+    }
     /** Exposed crown. No artificially raised vertical rock wall exists. */
     public static double upperRelief(long seed,int x,int z,double natural){
         if(!eligible(seed,x,z))return natural;
@@ -124,7 +128,7 @@ public final class KarstSpanVolume {
         // mountain roof with a cave hollowed underneath it. The rise fades
         // toward both portals and remains small enough to leave a broad,
         // walkable limestone crest.
-        double crownRise=6.5*(1-smooth(q/.98))*smooth((1.18-r)/.48);
+        double crownRise=archCrownRise(q,r);
         double top=highland+crownRise-roundedDrop*rim+shelfMask*(bedding-pits);
         // Blend only where the shelf is physically seated in the banks, not
         // halfway across the ravine. This replaces the R30dq long approach
