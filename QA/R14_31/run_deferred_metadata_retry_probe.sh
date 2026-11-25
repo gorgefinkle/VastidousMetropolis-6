@@ -1,32 +1,31 @@
 #!/bin/sh
 set -eu
 
-SOURCE=src/main/java/ch/k42/metropolis/grid/urbanGrid/clipboard/DeferredSchematicMetadata.java
+python3 - <<'PY'
+from pathlib import Path
 
-# Retry cooldowns must survive releasing a staging slot. The slot remains in
-# the bounded in-memory window until nextTry, instead of being rediscovered
-# from disk as a fresh Slot with nextTry=0.
-requeue=$(sed -n '/private void requeueOrReturn/,/private void release/p' "$SOURCE")
-printf '%s\n' "$requeue" | grep -Fq 'ticks<slot.nextTry'
-printf '%s\n' "$requeue" | grep -Fq 'window.addLast(slot)'
+source = Path("src/main/java/ch/k42/metropolis/grid/urbanGrid/clipboard/DeferredSchematicMetadata.java").read_text()
 
-# A synchronous async-load failure releases the global staging gate, records
-# a cooldown, and leaves the durable job to be retried later.
-sync_failure=$(sed -n '/CompletableFuture<Chunk> future;/,/future.whenComplete/p' "$SOURCE")
-printf '%s\n' "$sync_failure" | grep -Fq 'release(slot);slot.nextTry=ticks+100;'
+def section(start, end):
+    a = source.index(start)
+    b = source.index(end, a)
+    return source[a:b]
 
-# The caller must not overwrite a failure delay after loadLater() decides it.
-missing_chunk=$(sed -n '/long missing=Long.MIN_VALUE;/,/Set<Long> acquired/p' "$SOURCE")
-printf '%s\n' "$missing_chunk" | grep -Fq 'loadLater(slot,missing);requeueOrReturn(slot);continue;'
-if printf '%s\n' "$missing_chunk" | grep -Fq 'slot.nextTry='; then
-  echo "FAIL: caller overwrites the async-load retry cooldown" >&2
-  exit 1
-fi
+requeue = section("private void requeueOrReturn", "private void release")
+assert "ticks<slot.nextTry" in requeue, "released slot can bypass its retry cooldown"
+assert "window.addLast(slot)" in requeue, "cooldown slot is not retained in bounded window"
 
-# Pending requests need a watchdog, and late callbacks must not mutate new work.
-watchdog=$(sed -n '/if(staging!=null&&ticks-stagingSince>100)/,/if(window.isEmpty()/p' "$SOURCE")
-printf '%s\n' "$watchdog" | grep -Fq 'expired.nextTry=ticks+100;'
-printf '%s\n' "$watchdog" | grep -Fq 'release(expired);'
-printf '%s\n' "$SOURCE" | grep -Fq 'if(generation!=loadGeneration)return;'
+sync_failure = section("CompletableFuture<Chunk> future;", "future.whenComplete")
+assert "release(slot);slot.nextTry=ticks+100;" in sync_failure, "synchronous async-load failure does not release gate and preserve cooldown"
 
-echo "DeferredMetadataRetryProbe PASS: retry cooldowns survive release, caller preserves failure delay, timeouts retry, stale callbacks rejected"
+missing_chunk = section("long missing=Long.MIN_VALUE;", "Set<Long> acquired")
+assert "loadLater(slot,missing);requeueOrReturn(slot);continue;" in missing_chunk, "missing-chunk path does not requeue through cooldown-aware path"
+assert "slot.nextTry=" not in missing_chunk, "caller overwrites loadLater retry cooldown"
+
+watchdog = section("if(staging!=null&&ticks-stagingSince>100)", "if(window.isEmpty()")
+assert "expired.nextTry=ticks+100;" in watchdog, "timeout does not preserve retry delay"
+assert "release(expired);" in watchdog, "timeout does not release staging slot"
+assert "if(generation!=loadGeneration)return;" in source, "late async callback can mutate newer load"
+
+print("DeferredMetadataRetryProbe PASS: cooldown survives staging release, synchronous failures and timeouts retry, caller preserves delay, stale callbacks rejected")
+PY
