@@ -47,6 +47,7 @@ import ch.k42.metropolis.grid.urbanGrid.highway.HighwayNetworks;
 import ch.k42.metropolis.grid.urbanGrid.parcel.HighwayParcel;
 import ch.k42.metropolis.grid.urbanGrid.parcel.Parcel;
 import ch.k42.metropolis.grid.urbanGrid.parcel.OceanParcel;
+import ch.k42.metropolis.grid.urbanGrid.parcel.LakeParcel;
 import ch.k42.metropolis.grid.urbanGrid.parcel.RiverParcel;
 import ch.k42.metropolis.grid.urbanGrid.parcel.RoadParcel;
 import ch.k42.metropolis.grid.urbanGrid.parcel.StreetParcel;
@@ -66,6 +67,7 @@ import ch.k42.metropolis.grid.urbanGrid.river.CreekRoadBankOwner;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverConfig;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverReclaim;
+import ch.k42.metropolis.grid.urbanGrid.wild.WildernessFeatures;
 import ch.k42.metropolis.grid.urbanGrid.statistics.AthmosStat;
 import ch.k42.metropolis.grid.urbanGrid.statistics.GridStatistics;
 import ch.k42.metropolis.minions.Cartesian2D;
@@ -953,6 +955,11 @@ public class UrbanGrid extends Grid implements DistrictHost {
                this.placeRiverParcel(x, z);
             } else if (kind == WaterField.Kind.CREEK) {
                this.placeCreekAt(x, z);
+            } else if (kind == WaterField.Kind.LAKE) {
+               WildernessFeatures.LakeSite lake = WildernessFeatures.forSeed(seed).lakeAt(x, z);
+               if (lake != null) new LakeParcel(this, new Cartesian2D(x, z), lake);
+            } else if (kind == WaterField.Kind.STREAM) {
+               this.placeStreamAt(x, z);
             } else if (layout.kindAt(x, z) == WorldLayout.NATURAL) {
                this.assignPlannedInterfluveGround(x,z);
             } else if (layout.kindAt(x, z) == WorldLayout.ZONE) {
@@ -982,6 +989,11 @@ public class UrbanGrid extends Grid implements DistrictHost {
                      this.assignCreekNaturalGround(x,z);
                      this.boundedShoreWithoutCarrier++;
                   } else this.placeCreekAt(x,z);
+               } else if (shore == WaterField.Kind.LAKE) {
+                  WildernessFeatures.LakeSite lake = WildernessFeatures.forSeed(seed).lakeAt(x, z);
+                  if (lake != null) new LakeParcel(this, new Cartesian2D(x, z), lake);
+               } else if (shore == WaterField.Kind.STREAM) {
+                  this.placeStreamAt(x, z);
                } else {
                   // not beside any water: a pocket between highway lanes too narrow for a block (see the notes)
                   this.placeGroundFallback(x, z, "zone-pocket");
@@ -3766,6 +3778,7 @@ public class UrbanGrid extends Grid implements DistrictHost {
                  contexts, PluginConfig.getBlockSize()));
       }
       installCreeks(generator);
+      WildernessFeatures.install(seed);
    }
 
    private static void installCreeks(MetropolisGenerator generator) {
@@ -3937,6 +3950,30 @@ public class UrbanGrid extends Grid implements DistrictHost {
       }
    }
 
+   /** A named-lake outlet is a narrow bounded tributary, not a city creek site.
+    * It uses the same river parcel and highway-wall handoff, but is never
+    * registered in creekCarriers (which would enroll it in the creek-origin
+    * park, road-pruning, and lifecycle-audit systems). */
+   private void placeStreamAt(int chunkX, int chunkZ) {
+      RiverProvider stream = this.planWater().streamCarrierAt(chunkX, chunkZ);
+      if (stream == null) {
+         Minions.w("WILDERNESS STREAM CARRIER MISSING chunk=(%d,%d)", chunkX, chunkZ);
+         return;
+      }
+      RiverParcel parcel = new RiverParcel(this, new Cartesian2D(chunkX, chunkZ), stream);
+      if (stream.isZBound()) {
+         if (this.isLaneOverCreek(stream, chunkX, chunkZ - 1)) {
+            parcel.markHighwayCrossingZ(true);
+         } else if (this.isLaneOverCreek(stream, chunkX, chunkZ + 1)) {
+            parcel.markHighwayCrossingZ(false);
+         }
+      } else if (this.isLaneOverCreek(stream, chunkX - 1, chunkZ)) {
+         parcel.markHighwayBoundaryX(true);
+      } else if (this.isLaneOverCreek(stream, chunkX + 1, chunkZ)) {
+         parcel.markHighwayBoundaryX(false);
+      }
+   }
+
    private boolean isLaneOverCreek(RiverProvider creek, int x, int z) {
       return this.networkPieceAt(x, z) != null && creek.isRiverOrBank(x, z);
    }
@@ -3966,6 +4003,11 @@ public class UrbanGrid extends Grid implements DistrictHost {
          if (Double.isNaN(signed)) continue;
          double d = Math.abs(signed) - creek.getHalfWidthBlocks();
          if (d < nearest) nearest = d;
+      }
+      RiverProvider stream = this.planWater().streamCarrierAt(blockX >> 4, blockZ >> 4);
+      if (stream != null) {
+         double signed = stream.distanceFromCenterBlock(blockX, blockZ);
+         if (Double.isFinite(signed)) nearest = Math.min(nearest, Math.abs(signed) - stream.getHalfWidthBlocks());
       }
       return nearest;
    }
@@ -4013,9 +4055,12 @@ public class UrbanGrid extends Grid implements DistrictHost {
    public RiverProvider creekWaterAt(int blockX, int blockZ) {
       for (RiverProvider creek : this.creekCarriers) {
          double d = creek.distanceFromCenterBlock(blockX, blockZ);
-         if (!Double.isNaN(d) && Math.abs(d) <= creek.getHalfWidthBlocks()) {
-            return creek;
-         }
+         if (!Double.isNaN(d) && Math.abs(d) <= creek.getHalfWidthBlocks()) return creek;
+      }
+      RiverProvider stream = this.planWater().streamCarrierAt(blockX >> 4, blockZ >> 4);
+      if (stream != null) {
+         double d = stream.distanceFromCenterBlock(blockX, blockZ);
+         if (Double.isFinite(d) && Math.abs(d) <= stream.getHalfWidthBlocks()) return stream;
       }
       return null;
    }
@@ -4080,11 +4125,17 @@ public class UrbanGrid extends Grid implements DistrictHost {
          double signed = creek.distanceFromCenterBlock(blockX, blockZ);
          if (Double.isNaN(signed)) continue;
          double fromWater = Math.abs(signed) - creek.getHalfWidthBlocks();
-         if (fromWater > creek.getFallbackBankMarginBlocks()) continue;
-         if (fromWater < smallest) {
+         if (fromWater <= creek.getFallbackBankMarginBlocks() && fromWater < smallest) {
             smallest = fromWater;
             best = creek;
          }
+      }
+      RiverProvider stream = this.planWater().streamCarrierAt(blockX >> 4, blockZ >> 4);
+      if (stream != null) {
+         double signed = stream.distanceFromCenterBlock(blockX, blockZ);
+         double fromWater = Math.abs(signed) - stream.getHalfWidthBlocks();
+         if (Double.isFinite(signed) && fromWater <= stream.getFallbackBankMarginBlocks() && fromWater < smallest)
+            best = stream;
       }
       return best;
    }
