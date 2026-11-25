@@ -316,7 +316,9 @@ public class MetropolisGenerator extends ChunkGenerator {
    /**
     * The base terrain: stone from y=1 (y=0 when the underworld is vanilla) up
     * to just below buildHeight, or whatever the environment provider
-    * substitutes -- the Nether's lava sea. Everything else, including the
+    * substitutes -- the Nether's lava sea. Normal-overworld Y=64 is an
+    * intentional smoothstone pre-paint safety cap for unpopulated chunks.
+    * Everything else, including the
     * real surface, is painted later by the grid's populate step.
     *
     * This replaces generateBlockSections(), whose byte[][] of numeric block
@@ -339,9 +341,23 @@ public class MetropolisGenerator extends ChunkGenerator {
     * This runs on a world-generation thread: it must not touch the Bukkit
     * World, and doesn't (EnvironmentProvider.checkBlock() only computes).
     */
-   /** Base substrate for a column; normal overworld terrain is stone at every base-fill height. */
+   /** Base substrate fallback after environment-specific material selection. */
    static Material baseTerrainMaterial(Material environmentOverride) {
       return environmentOverride != null ? environmentOverride : Material.STONE;
+   }
+
+   /**
+    * The normal overworld has an intentional pre-paint safety cap at Y=64.
+    * It must be written during base generation, before parcels populate, so
+    * chunks that remain unpopulated never expose a grass-cap surface.
+    * Populated parcels may replace it; raised forest columns normalize it only
+    * when it is buried beneath their actual surface.
+    */
+   static Material baseTerrainMaterial(Material environmentOverride, Environment environment, int y) {
+      if (environment == Environment.NORMAL && y == 64) {
+         return Material.SMOOTH_STONE;
+      }
+      return baseTerrainMaterial(environmentOverride);
    }
 
    @Override
@@ -361,7 +377,8 @@ public class MetropolisGenerator extends ChunkGenerator {
          for (int z = 0; z < 16; z++) {
             for (int y = firstY; y < TERRAIN_TOP; y++) {
                Material decay = this.natureDecay.checkBlock(this.world, chunkX * 16 + x, y, chunkZ * 16 + z);
-               CachedChunkWrite.set(chunkData, x, y, z, baseTerrainMaterial(decay));
+               CachedChunkWrite.set(chunkData, x, y, z,
+                       baseTerrainMaterial(decay, worldInfo.getEnvironment(), y));
             }
          }
       }
