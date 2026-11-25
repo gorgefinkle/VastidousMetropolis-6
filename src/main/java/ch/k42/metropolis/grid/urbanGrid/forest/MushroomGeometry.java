@@ -39,9 +39,10 @@ public final class MushroomGeometry {
      * only under columns that were already occupied on its original first row.
      * Higher, laterally-shifted bole columns are never filled down to ground.
      */
-    static void emitTrunkStems(Sink sink,Terrain terrain,Set<P> trunk,
-                               Map<Long,Integer> capBottomByColumn,int rootY) {
+    static Set<P> emitTrunkStems(Sink sink,Terrain terrain,Set<P> trunk,
+                                 Map<Long,Integer> capBottomByColumn,int rootY) {
         Set<Long> originalFootprint=new HashSet<>();
+        Set<P> emitted=new HashSet<>();
         for(P q:trunk) {
             long key=columnKey(q.x,q.z);
             Integer capBottom=capBottomByColumn.get(key);
@@ -50,21 +51,44 @@ public final class MushroomGeometry {
             int groundY=terrain.groundAt(q.x,q.z);
             if(q.y<=groundY)continue;
             sink.set(q.x,q.y,q.z,STEM);
+            emitted.add(q);
             if(q.y==rootY)originalFootprint.add(key);
         }
         for(long key:originalFootprint) {
             int tx=(int)(key>>32),tz=(int)key;
             int floor=terrain.groundAt(tx,tz)+1;
-            for(int y=floor;y<rootY;y++)sink.set(tx,y,tz,STEM);
+            for(int y=floor;y<rootY;y++) {
+                P root=new P(tx,y,tz);
+                sink.set(tx,y,tz,STEM);
+                emitted.add(root);
+            }
         }
+        return emitted;
+    }
+
+    private static P nearestEmittedBoleBlock(GroupedCapAnchor anchor,Set<P> emittedMainBole) {
+        P best=null;
+        double bestDistance=Double.POSITIVE_INFINITY;
+        for(P q:emittedMainBole) {
+            double dx=q.x-anchor.boleX(),dy=q.y-anchor.boleY(),dz=q.z-anchor.boleZ();
+            double distance=dx*dx+dy*dy+dz*dz;
+            if(distance<bestDistance) {
+                bestDistance=distance;
+                best=q;
+            }
+        }
+        return best;
     }
 
     /**
      * A side crown is a branch of the leaning bole, not a separate tree.
      * Build a short, tapered, rising stem from the bole into the cap underside.
      */
-    private static void addGroupedCapBranch(Set<P> output,GroupedCapAnchor anchor,Set<P> crown) {
-        double sx=anchor.boleX(),sy=anchor.boleY(),sz=anchor.boleZ();
+    private static void addGroupedCapBranch(Set<P> output,GroupedCapAnchor anchor,
+                                            Set<P> emittedMainBole,Set<P> crown) {
+        P actualBole=nearestEmittedBoleBlock(anchor,emittedMainBole);
+        if(actualBole==null)return;
+        double sx=actualBole.x,sy=actualBole.y,sz=actualBole.z;
         double ex=anchor.capX(),ey=anchor.capBaseY()-1,ez=anchor.capZ();
         double dx=ex-sx,dy=ey-sy,dz=ez-sz;
         double length=Math.sqrt(dx*dx+dy*dy+dz*dz);
@@ -111,6 +135,9 @@ public final class MushroomGeometry {
                 if(dist<rad*(.94+.08*unit(mix(seed ^ px*257L ^ pz*433L))))trunk.add(new P(px,y,pz));
             }
         }
+        // Snapshot only the original leaning bole. Later auxiliary stems are
+        // kept separate so grouped caps cannot silently anchor to a ground spur.
+        Set<P> primaryBole=new HashSet<>(trunk);
         for(int px=(int)(centerX-spread-4);px<=centerX+spread+4;px++)for(int pz=(int)(centerZ-spread-4);pz<=centerZ+spread+4;pz++) {
             double offsetX=px-centerX,offsetZ=pz-centerZ;
             double a=Math.atan2(offsetZ,offsetX), dist=Math.hypot(offsetX,offsetZ);
@@ -186,10 +213,21 @@ public final class MushroomGeometry {
             Integer previous=capBottomByColumn.get(key);
             if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
         }
-        emitTrunkStems(sink,terrain,trunk,capBottomByColumn,ground+1);
+        Set<P> emittedMainBole=emitTrunkStems(sink,terrain,primaryBole,
+                capBottomByColumn,ground+1);
+        // Mode-specific satellite stalks keep their authored shape and are
+        // emitted separately; only the primary leaning bole gets base-row
+        // terrain extension and only it may anchor stacked crown branches.
+        for(P q:trunk) {
+            if(primaryBole.contains(q))continue;
+            Integer capBottom=capBottomByColumn.get(columnKey(q.x,q.z));
+            if(capBottom!=null&&q.y>=capBottom)continue;
+            if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
+                sink.set(q.x,q.y,q.z,STEM);
+        }
         Set<P> groupedCapStems=new HashSet<>();
         for(GroupedCapAnchor anchor:groupedCapAnchors)
-            addGroupedCapBranch(groupedCapStems,anchor,crown);
+            addGroupedCapBranch(groupedCapStems,anchor,emittedMainBole,crown);
         for(P q:groupedCapStems) {
             if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
                 sink.set(q.x,q.y,q.z,STEM);
