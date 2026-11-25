@@ -58,6 +58,17 @@ public final class BloomUnderstoryGeometry {
          */
         void groundedTube(P a,P b,double startRadius,double endRadius) {
             double dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
+            // Explicitly flare the basal root into each adjacent terrain column.
+            // This is kept separate from the swept bole so rasterization/rounding
+            // cannot leave a one-block gap on steep, uneven valley floors.
+            for(int ox=-1;ox<=1;ox++) for(int oz=-1;oz<=1;oz++) {
+                if(ox*ox+oz*oz>1) continue;
+                int wx=(int)Math.round(a.x)+ox,wz=(int)Math.round(a.z)+oz;
+                if(!terrain.allows(wx,wz)) continue;
+                int floor=terrain.groundAt(wx,wz)+1;
+                int top=Math.max(floor+2,(int)Math.round(a.y)+1);
+                for(int y=floor;y<=top;y++) sink.set(wx,y,wz,wood+"[axis=y]");
+            }
             int steps=Math.max(1,(int)Math.ceil(Math.sqrt(dx*dx+dy*dy+dz*dz)*2.2));
             for(int i=0;i<=steps;i++) {
                 double t=i/(double)steps; P q=lerp(a,b,t);
