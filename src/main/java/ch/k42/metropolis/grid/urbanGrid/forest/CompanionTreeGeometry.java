@@ -50,7 +50,7 @@ public final class CompanionTreeGeometry {
         void put(int x,int y,int z,boolean trunk,String axis) {
             if (!land.allows(x,z) || y<=land.groundAt(x,z)) return;
             Pos key=new Pos(x,y,z);
-            if (trunk || !vox.containsKey(key)) vox.put(key,trunk?(axis.equals("none")?bark:bark+"[axis="+axis+"]"):leaves);
+            if (trunk || !vox.containsKey(key)) vox.put(key,trunk?(axis.equals("none")?bark:wood+"[axis="+axis+"]"):leaves);
         }
         void sphere(P center,double radius,boolean trunk,long salt,String axis) {
             for(int x=(int)Math.floor(center.x-radius);x<=(int)Math.ceil(center.x+radius);x++)
