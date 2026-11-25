@@ -113,15 +113,6 @@ public final class BloomUnderstoryGeometry {
                 else tube(previous,next,1.25-.67*t,.58);
                 previous=next;
             }
-            // Reassert the four basal root contacts from the world-space anchor.
-            // Keeping this at the grow call site makes the footprint independent
-            // of the swept segment's interpolation and rounding.
-            for(int[] offset:new int[][]{{0,0},{1,0},{-1,0},{0,1},{0,-1}}) {
-                int wx=x+offset[0],wz=z+offset[1];
-                if(!terrain.allows(wx,wz)) continue;
-                int floor=terrain.groundAt(wx,wz)+1;
-                for(int y=floor;y<=floor+2;y++) sink.set(wx,y,wz,wood+"[axis=y]");
-            }
             tuft(top,3.3,2.25,3.0,hash(seed,91));
             for(int level=0;level<3;level++) {
                 double t=.38+level*.20;
@@ -156,6 +147,14 @@ public final class BloomUnderstoryGeometry {
                            joint.z+Math.sin(a)*3.3);
                 tube(joint,end,.66,.38);
                 tuft(end,1.9,1.35,1.9,h+1);
+            }
+            // Restore basal logs after all canopy/branch painting, so a low
+            // overlapping leaf tuft cannot overwrite the tree's ground contact.
+            for(int[] offset:new int[][]{{0,0},{1,0},{-1,0},{0,1},{0,-1}}) {
+                int wx=x+offset[0],wz=z+offset[1];
+                if(!terrain.allows(wx,wz)) continue;
+                int floor=terrain.groundAt(wx,wz)+1;
+                for(int y=floor;y<=floor+2;y++) sink.set(wx,y,wz,wood+"[axis=y]");
             }
         }
     }
