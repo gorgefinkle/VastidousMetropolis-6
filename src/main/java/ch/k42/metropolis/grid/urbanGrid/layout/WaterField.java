@@ -219,9 +219,9 @@ public final class WaterField implements WorldLayout.Mask {
       CreekSource src = creeks;
       if (src != null && src.waterOrBank(x, z)) return Kind.CREEK;
       StreamSource stream = streams;
-      if (stream != null && stream.waterOrBank(x, z)) return Kind.STREAM;
+      if (stream != null && stream.streamOrBankAt(x, z)) return Kind.STREAM;
       LakeSource lake = lakes;
-      return lake != null && lake.waterOrBank(x, z) ? Kind.LAKE : Kind.NONE;
+      return lake != null && lake.lakeOrBankAt(x, z) ? Kind.LAKE : Kind.NONE;
    }
 
    public Kind baseKindAt(int x, int z) {
@@ -348,8 +348,8 @@ public final class WaterField implements WorldLayout.Mask {
                  && !src.protectedDryParkAt(x, z)) return Kind.CREEK;
       }
       StreamSource stream = streams;
-      if (stream != null && stream.waterOrBank(x, z)) return Kind.STREAM;
+      if (stream != null && stream.streamOrBankAt(x, z)) return Kind.STREAM;
       LakeSource lake = lakes;
-      return lake != null && lake.waterOrBank(x, z) ? Kind.LAKE : Kind.NONE;
+      return lake != null && lake.lakeOrBankAt(x, z) ? Kind.LAKE : Kind.NONE;
    }
 }
