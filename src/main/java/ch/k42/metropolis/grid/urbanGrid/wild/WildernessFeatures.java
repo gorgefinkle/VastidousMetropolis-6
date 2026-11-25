@@ -9,6 +9,7 @@ import ch.k42.metropolis.grid.urbanGrid.river.RiverConfig;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
 import ch.k42.metropolis.grid.urbanGrid.highway.HighwayNetworks;
 import ch.k42.metropolis.plugin.PluginConfig;
+import ch.k42.metropolis.minions.Minions;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -17,6 +18,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Seed-stable wilderness landmarks. A rare alpine massif and named lakes are
@@ -37,6 +40,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private static final int LAKE_THRESHOLD = 10;
 
    private static final Map<String, WildernessFeatures> CACHE = new HashMap<>();
+   private static final Set<String> ANNOUNCED = ConcurrentHashMap.newKeySet();
    private static final String[] ROOTS = {
       "Ash", "Brindle", "Clear", "Dun", "Elder", "Fair", "Glen", "Hart", "Iron", "Juniper", "Kings", "Lark",
       "Marl", "North", "Oak", "Pine", "Quarry", "Raven", "Silver", "Stone", "Thorn", "Vale", "West", "Willow",
@@ -595,6 +599,26 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       RouteNode(long key, int x, int z, int direction, int highwayRun, int cost, int score) {
          this.key=key; this.x=x; this.z=z; this.direction=direction;
          this.highwayRun=highwayRun; this.cost=cost; this.score=score;
+      }
+   }
+
+   /** Log each named location once per server process, including coordinates for test visits. */
+   public static void announceMountain(MountainSite site, String worldName) {
+      if (site == null) return;
+      String key = "M:" + worldName + ":" + Math.round(site.centerX) + ":" + Math.round(site.centerZ);
+      if (ANNOUNCED.add(key)) {
+         Minions.i("Wilderness landmark in '%s': %s at block (%d,%d); summit target is near the world build ceiling",
+                 worldName, site.name, Math.round(site.centerX), Math.round(site.centerZ));
+      }
+   }
+
+   public static void announceLake(LakeSite site, String worldName) {
+      if (site == null) return;
+      String key = "L:" + worldName + ":" + Math.round(site.centerX) + ":" + Math.round(site.centerZ);
+      if (ANNOUNCED.add(key)) {
+         Minions.i("Wilderness landmark in '%s': %s at block (%d,%d); outlet stream segments=%d",
+                 worldName, site.name, Math.round(site.centerX), Math.round(site.centerZ),
+                 site.streams == null ? 0 : site.streams.size());
       }
    }
 
