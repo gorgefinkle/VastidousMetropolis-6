@@ -8,7 +8,40 @@ import org.bukkit.Material;
 public final class MushroomGroundContactProbe {
     private record Voxel(int x, int y, int z) {}
 
+    private static void verifyBottomOnlyExtension() {
+        java.util.Set<MushroomGeometry.P> authored = new java.util.HashSet<>();
+        authored.add(new MushroomGeometry.P(0, 10, 0));
+        authored.add(new MushroomGeometry.P(0, 11, 0));
+        authored.add(new MushroomGeometry.P(0, 12, 0));
+        authored.add(new MushroomGeometry.P(1, 14, 0));
+        authored.add(new MushroomGeometry.P(1, 15, 0));
+        authored.add(new MushroomGeometry.P(1, 16, 0));
+        authored.add(new MushroomGeometry.P(2, 18, 0));
+
+        Map<Long,Integer> capBottom = new HashMap<>();
+        capBottom.put(0L, 13);
+        capBottom.put(1L << 32, 16);
+        java.util.Set<MushroomGeometry.P> emitted = new java.util.HashSet<>();
+        MushroomGeometry.emitTrunkStems((x,y,z,state) -> {
+            if (MushroomGeometry.STEM.equals(state)) emitted.add(new MushroomGeometry.P(x,y,z));
+        }, new MushroomGeometry.Terrain() {
+            public int groundAt(int x,int z) {
+                return x == 0 ? 5 : x == 1 ? 12 : 20;
+            }
+            public boolean allows(int x,int z) { return true; }
+        }, authored, capBottom);
+
+        java.util.Set<MushroomGeometry.P> expected = new java.util.HashSet<>();
+        for(int y=6;y<=12;y++)expected.add(new MushroomGeometry.P(0,y,0));
+        for(int y=13;y<=15;y++)expected.add(new MushroomGeometry.P(1,y,0));
+        if(!emitted.equals(expected)) {
+            throw new AssertionError("stem correction changed authored shape instead of adding only bottom extensions; "
+                    + "expected="+expected.size()+" voxels actual="+emitted.size());
+        }
+    }
+
     public static void main(String[] args) {
+        verifyBottomOnlyExtension();
         if (!VegetationHeightPolicy.allows(-2, -64, 320))
             throw new AssertionError("negative-Y mushroom stalks are still blocked by the world-height policy");
         Material[] groundCover = {
