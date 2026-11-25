@@ -72,6 +72,10 @@ public final class WildernessStreamCourse extends RiverProvider {
       return this.courseSeed;
    }
 
+   public int pointCount() {
+      return this.xs.length;
+   }
+
    public WildernessStreamCourse forChunk(int chunkX, int chunkZ) {
       boolean zAxis = isZBoundAt(chunkX * 16.0 + 8.0, chunkZ * 16.0 + 8.0);
       return new WildernessStreamCourse(this.courseSeed, this.xs, this.zs,
