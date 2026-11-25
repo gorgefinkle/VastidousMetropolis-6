@@ -3,7 +3,7 @@ package ch.k42.metropolis.grid.urbanGrid.forest;
 /** Deterministic policy for spacing and layout of clustered wilderness camps. */
 final class WildDecorSpacingPolicy {
     static final int CAMP_SPACING_FLOOR = 400;
-    static final int CAMP_GROUP_RADIUS = 32;
+    static final int CAMP_GROUP_RADIUS = 34;
     private static final int CAMP_MINIMUM_GROUP_GAP = 384;
     private static final int CAMP_MAXIMUM_GROUP_GAP = 768;
 
