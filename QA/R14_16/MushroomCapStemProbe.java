@@ -15,7 +15,7 @@ public final class MushroomCapStemProbe {
         int[][] directions={{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
         while(!queue.isEmpty()) {
             Voxel current=queue.removeFirst();
-            int ground=-3+Math.floorMod(current.x()*31+current.z()*17,9);
+            int ground=60+Math.floorMod(current.x()*31+current.z()*17,5);
             if(current.y()==ground+1)return true;
             for(int[] d:directions) {
                 Voxel next=new Voxel(current.x()+d[0],current.y()+d[1],current.z()+d[2]);
