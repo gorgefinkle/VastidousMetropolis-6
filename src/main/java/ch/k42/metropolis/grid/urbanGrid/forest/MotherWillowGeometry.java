@@ -84,14 +84,15 @@ public final class MotherWillowGeometry {
     final HashMap<Long,String> blocks=new HashMap<>();
     Maker(Sink out,Terrain land,long seed,int x0,int x1,int z0,int z1){this.out=out;this.land=land;this.seed=seed;this.x0=x0;this.x1=x1;this.z0=z0;this.z1=z1;}
     static long key(int x,int y,int z){return ((((long)x+1048576)&0x1fffffL)<<42)|(((((long)z+1048576)&0x1fffffL)<<21))|(((long)y+1048576)&0x1fffffL);}
-    void put(int x,int y,int z,boolean wood,String axis,boolean root) {
+    void putState(int x,int y,int z,String state,boolean priority,boolean root) {
       if(x<x0||x>x1||z<z0||z>z1||!land.allows(x,z))return;
       int surface=land.groundAt(x,z);
-      // Only root wood is allowed to penetrate natural ground, and never
-      // farther than a bounded anchor depth. Branches and leaves stay above.
-      if(y<=surface && (!root || !wood || y<surface-24))return;
+      if(y<=surface && (!root || y<surface-24))return;
       long k=key(x,y,z);
-      if(wood||!blocks.containsKey(k))blocks.put(k,wood?"minecraft:oak_log[axis="+axis+"]":"minecraft:oak_leaves[persistent=true]");
+      if(priority||!blocks.containsKey(k))blocks.put(k,state);
+    }
+    void put(int x,int y,int z,boolean wood,String axis,boolean root) {
+      putState(x,y,z,wood?"minecraft:oak_log[axis="+axis+"]":"minecraft:oak_leaves[persistent=true]",wood,root);
     }
     void bulb(P c,double r,boolean wood,long salt,String axis) {bulb(c,r,wood,salt,axis,false);}
     void bulb(P c,double r,boolean wood,long salt,String axis,boolean root) {
@@ -109,22 +110,36 @@ public final class MotherWillowGeometry {
         }
       }
     }
-    void segment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,false);}
+    void segment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,false,false);}
+    void branchSegment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,false,true);}
+    void trailSegment(P a,P b) {
+      int ax=(int)Math.round(a.x),ay=(int)Math.round(a.y),az=(int)Math.round(a.z);
+      int bx=(int)Math.round(b.x),by=(int)Math.round(b.y),bz=(int)Math.round(b.z);
+      int steps=Math.max(1,(int)Math.ceil(Math.hypot(Math.hypot(b.x-a.x,b.z-a.z),b.y-a.y)*2.2));
+      for(int i=0;i<=steps;i++){
+        double t=i/(double)steps;
+        int x=(int)Math.round(a.x+(b.x-a.x)*t);
+        int y=(int)Math.round(a.y+(b.y-a.y)*t);
+        int z=(int)Math.round(a.z+(b.z-a.z)*t);
+        putState(x,y,z,"minecraft:oak_fence[north=true,east=true,south=true,west=true,waterlogged=false]",true,false);
+      }
+    }
     void smoothLeaderJunction(P a,P b,P trunkBefore,P trunkAfter,double radA,double radB){
       // Start the leader at the bole's outer wood, not its hidden centreline.
       // The root radius overlaps the parent trunk so the two volumes fuse.
       P surface=leaderSurfaceStart(a,b,radA);
-      bulb(surface,radA+.55,true,0,"y");
+      bulb(surface,radA+.55,true,0,"none");
       P previous=surface;double previousT=0.0;
       for(int i=1;i<=14;i++){
         double t=i/14.0;P next=leaderJunctionPoint(surface,b,trunkBefore,trunkAfter,t);
         double r0=radA+(radB-radA)*previousT,r1=radA+(radB-radA)*t;
-        segment(previous,next,r0,r1);previous=next;previousT=t;
+        branchSegment(previous,next,r0,r1);previous=next;previousT=t;
       }
     }
-    void rootSegment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,true);}
-    void segmentInternal(P a,P b,double radA,double radB,boolean root){
-      String axis=Math.abs(b.y-a.y)>=Math.max(Math.abs(b.x-a.x),Math.abs(b.z-a.z))?"y":Math.abs(b.x-a.x)>=Math.abs(b.z-a.z)?"x":"z";
+    void rootSegment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,true,false);}
+    void segmentInternal(P a,P b,double radA,double radB,boolean root){segmentInternal(a,b,radA,radB,root,false);}
+    void segmentInternal(P a,P b,double radA,double radB,boolean root,boolean directionless){
+      String axis=directionless?"none":Math.abs(b.y-a.y)>=Math.max(Math.abs(b.x-a.x),Math.abs(b.z-a.z))?"y":Math.abs(b.x-a.x)>=Math.abs(b.z-a.z)?"x":"z";
       int ax=(int)Math.round(a.x),ay=(int)Math.round(a.y),az=(int)Math.round(a.z);
       int steps=Math.max(1,(int)Math.ceil(Math.hypot(Math.hypot(b.x-a.x,b.z-a.z),b.y-a.y)*2.2));
       for(int i=0;i<=steps;i++){
@@ -153,7 +168,9 @@ public final class MotherWillowGeometry {
           double sway=Math.sin(k*.18+rand(hash(sh,7))*6.283)*(.26+1.5*t);
           P cur=p(at.x+dx*k+Math.cos(a)*sway,at.y-k*(.56+.40*t),at.z+dz*k+Math.sin(a)*sway);
           // Only young shoot axes are woody; mature lower twigs droop to a fine tip.
-          if(k<Math.max(2,length/4))segment(prev,cur,.53,.42);
+          // A continuous, slender fence shoot carries the leaves all the way
+          // down the pendulous trail instead of leaving isolated leaf clumps.
+          trailSegment(prev,cur);
           if(k%2==0 || k==length-1)bulb(cur,.8+(1-t)*.55,false,sh+k,"y");
           if(k%6==2 && rand(hash(sh,k))>.38) {
             P bud=cur.add(Math.cos(a+1.4)*1.15,.3,Math.sin(a+1.4)*1.15);
@@ -181,7 +198,7 @@ public final class MotherWillowGeometry {
         double step=length/steps;
         P next=last.add(Math.cos(bearing)*step*Math.cos(elev),Math.sin(elev)*step,Math.sin(bearing)*step*Math.cos(elev));
         double rr=Math.max(.43,radius*Math.pow(1-.85*t,.78));
-        segment(last,next,Math.max(.44,radius*Math.pow(1-.85*(t-1.0/steps),.78)),rr);
+        branchSegment(last,next,Math.max(.44,radius*Math.pow(1-.85*(t-1.0/steps),.78)),rr);
         pts[k]=next;last=next;
       }
       if(order==3){
@@ -353,12 +370,12 @@ public final class MotherWillowGeometry {
       P mid=p0.add(Math.cos(a)*(10+i*2),24-i*2,Math.sin(a)*(10+i*2));
       P top=mid.add(Math.cos(a+0.28)*(11+i*2),20+rand(hash(sh,4))*11,Math.sin(a+.28)*(11+i*2));
       double leaderRoot=leaderRootRadius(i,attach);
-      double leaderMid=leaderRoot*.638;
-      double leaderTip=leaderMid*.365;
+      double leaderMid=leaderRoot*(i>=2?.52:.638);
+      double leaderTip=leaderMid*(i>=2?.26:.365);
       double leaderScale=leaderScale(i,attach);
       if(i==3) m.smoothLeaderJunction(p0,mid,nodes[attach-1],nodes[attach+1],leaderRoot,leaderMid);
-      else m.segment(p0,mid,leaderRoot,leaderMid);
-      m.segment(mid,top,leaderMid,leaderTip);
+      else m.branchSegment(p0,mid,leaderRoot,leaderMid);
+      m.branchSegment(mid,top,leaderMid,leaderTip);
       // Primary scaffolds arise along the leaders at staggered heights;
       // asymmetric crowding and self-pruning prevent a symmetric umbrella.
       for(int j=0;j<5;j++){
@@ -366,7 +383,7 @@ public final class MotherWillowGeometry {
         double height=(j+.5)/6.0;
         P start=lerp(j%2==0?p0:mid, j%2==0?mid:top, height);
         double len=47+rand(hash(bh,6))*57-(j==0?11:0);
-        double radius=(3.45+rand(hash(bh,9))*1.25)*leaderScale;
+        double radius=(3.45+rand(hash(bh,9))*1.25)*leaderScale*(i>=2?.72:1.0);
         m.branch(start,angle,.10+rand(hash(bh,8))*.44,len,radius,0,bh);
       }
     }
@@ -376,7 +393,7 @@ public final class MotherWillowGeometry {
       long bh=hash(s,81112+j);P start=nodes[6+j%12];
       double a=wind+j*2.399963+rand(hash(bh,2))*.33;
       if(j<5)m.branch(start,a,.68,24+rand(hash(bh,3))*29,2.7,1,bh);
-      else m.segment(start,start.add(Math.cos(a)*9,-3,Math.sin(a)*9),3.2,1.4);
+      else m.branchSegment(start,start.add(Math.cos(a)*9,-3,Math.sin(a)*9),3.2,1.4);
     }
     m.flush();
   }
