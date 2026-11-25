@@ -1,4 +1,4 @@
-name: R14.26 Mushroom stalk restoration, ocean safety cap and generation stability QA
+name: R14.27 Mushroom leaning bole and grouped cap stems, ocean safety and generation QA
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: r14-26-${{ github.event.pull_request.number || github.ref }}
+  group: r14-27-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -39,7 +39,7 @@ jobs:
         run: sh QA/R14_14/run_bloomlands_province_size_probe.sh
       - name: Creek city-origin policy probe
         run: sh QA/R14_15/run_creek_city_origin_policy_probe.sh
-      - name: Mushroom cap and stalk occlusion probe
+      - name: Mushroom grouped cap-to-bole stem connection probe
         run: sh QA/R14_16/run_mushroom_cap_stem_probe.sh
       - name: Branch growth timeout lifecycle probe
         run: sh QA/R14_17/run_growth_timeout_shutdown_policy_probe.sh
@@ -47,7 +47,7 @@ jobs:
         run: |
           sh QA/R14_19/run_safe_branch_staging_probe.sh
           sh QA/R14_19/run_spatial_cache_probe.sh
-      - name: Mushroom bottom-only stalk extension probe
+      - name: Mushroom original-bole footprint grounding probe
         run: sh QA/R14_20/run_mushroom_ground_contact_probe.sh
       - name: Bloomlands negative-Y and uneven-ground trunk probe
         run: sh QA/R14_21/run_bloom_understory_probe.sh
@@ -73,25 +73,25 @@ jobs:
           javac -d target/qa-queue src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java QA/R14_6/DiskDeferredChunkQueueProbe.java
           java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
       - name: Assemble complete source archive
-        run: zip -r Metropolis_R14_26_Wilderness_Camp_Groups_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
+        run: zip -r Metropolis_R14_27_Wilderness_Camp_Groups_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
       - name: Assemble exact two-file development package
         run: |
-          mkdir -p r14-26-package
-          cp target/Metropolis_R14_26_Wilderness_Camp_Groups_DEV.jar r14-26-package/
-          cp Metropolis_R14_26_Wilderness_Camp_Groups_SOURCE.zip r14-26-package/
-          (cd r14-26-package && zip -q ../Metropolis_R14_26_Wilderness_Camp_Groups_DEV_PACKAGE.zip ./*)
+          mkdir -p r14-27-package
+          cp target/Metropolis_R14_27_Wilderness_Camp_Groups_DEV.jar r14-27-package/
+          cp Metropolis_R14_27_Wilderness_Camp_Groups_SOURCE.zip r14-27-package/
+          (cd r14-27-package && zip -q ../Metropolis_R14_27_Wilderness_Camp_Groups_DEV_PACKAGE.zip ./*)
       - name: Verify exact package contents
         run: |
-          unzip -Z1 Metropolis_R14_26_Wilderness_Camp_Groups_DEV_PACKAGE.zip | sort > package-files.txt
-          printf '%s\n' Metropolis_R14_26_Wilderness_Camp_Groups_DEV.jar Metropolis_R14_26_Wilderness_Camp_Groups_SOURCE.zip | sort > expected-files.txt
+          unzip -Z1 Metropolis_R14_27_Wilderness_Camp_Groups_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\n' Metropolis_R14_27_Wilderness_Camp_Groups_DEV.jar Metropolis_R14_27_Wilderness_Camp_Groups_SOURCE.zip | sort > expected-files.txt
           diff -u expected-files.txt package-files.txt
-          unzip -t Metropolis_R14_26_Wilderness_Camp_Groups_DEV_PACKAGE.zip
+          unzip -t Metropolis_R14_27_Wilderness_Camp_Groups_DEV_PACKAGE.zip
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_26_Wilderness_Camp_Groups_DEV
+          name: Metropolis_R14_27_Wilderness_Camp_Groups_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_26_Wilderness_Camp_Groups_DEV.jar
-            Metropolis_R14_26_Wilderness_Camp_Groups_SOURCE.zip
-            Metropolis_R14_26_Wilderness_Camp_Groups_DEV_PACKAGE.zip
+            target/Metropolis_R14_27_Wilderness_Camp_Groups_DEV.jar
+            Metropolis_R14_27_Wilderness_Camp_Groups_SOURCE.zip
+            Metropolis_R14_27_Wilderness_Camp_Groups_DEV_PACKAGE.zip
