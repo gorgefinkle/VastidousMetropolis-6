@@ -150,7 +150,7 @@ public final class ChunkyMemoryValve {
                     state.ourPause = true;
                     state.pausedAt = now;
                     state.initialPauseUsage = usage;
-                    state.stableAtUsage = usage;
+                    state.stableAtUsage = retainedUsage;
                     state.stableSince = ChunkyBackpressurePolicy.hasStableHeadroom(retainedUsage, remaining, max) ? now : 0L;
                     state.stableHighHeapMode = false;
                     state.probeUntil = 0;
@@ -186,7 +186,7 @@ public final class ChunkyMemoryValve {
                         state.stableAtUsage = retainedUsage;
                     } else if (state.stableSince == 0L) {
                         state.stableSince = now;
-                        state.stableAtUsage = usage;
+                        state.stableAtUsage = retainedUsage;
                     } else if (retainedUsage > state.stableAtUsage + 0.03) {
                         state.stableSince = now;
                         state.stableAtUsage = retainedUsage;
@@ -212,15 +212,16 @@ public final class ChunkyMemoryValve {
                             state.probeUntil = now + PROBE_NS;
                             state.probeCount++;
                             log.info("[Metropolis] Chunky limited recovery probe in " + name
-                                    + ": heap " + pct(usage) + "%, free headroom " + mib(remaining)
-                                    + " MiB, queue " + queue + "; hard pause at 86% during next 30s.");
+                                    + ": heap " + pct(usage) + "%, post-GC retained " + pct(retainedUsage)
+                                    + "%, free headroom " + mib(remaining)
+                                    + " MiB, queue " + queue + "; pause if retained heap exceeds 82% or free headroom falls below 8% during next 30s.");
                         } else {
                             state.probeUntil = 0;
                             log.info("[Metropolis] Chunky resumed after worker stop and recovery in " + name
                                     + ": heap " + pct(usage) + "%, pending " + queue + ".");
                         }
                     } else {
-                        status(log, name, state, now, usage, queue, max,
+                        status(log, name, state, now, usage, retainedUsage, queue, max,
                                 "Chunky saved task is not yet resumable");
                     }
                     continue;
@@ -229,8 +230,8 @@ public final class ChunkyMemoryValve {
                     state.ourPause = true;
                     state.pausedAt = now;
                     state.initialPauseUsage = usage;
-                    state.stableAtUsage = usage;
-                    state.stableSince = ChunkyBackpressurePolicy.hasStableHeadroom(usage, remaining, max) ? now : 0L;
+                    state.stableAtUsage = retainedUsage;
+                    state.stableSince = ChunkyBackpressurePolicy.hasStableHeadroom(retainedUsage, remaining, max) ? now : 0L;
                     state.stableHighHeapMode = false;
                     state.lastStatusNs = now;
                     state.probeUntil = 0;
