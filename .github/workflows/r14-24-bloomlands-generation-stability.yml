@@ -42,9 +42,9 @@ jobs:
       - name: Mushroom grouped cap-to-bole stem connection probe
         run: sh QA/R14_16/run_mushroom_cap_stem_probe.sh
       - name: Tree and FARM visual policy regression
-        run: sh QA/R14_33/run_tree_farm_visual_policy_probe.sh
-        - name: Named wilderness mountains, lakes and routed tributaries
-          run: sh QA/R14_33/run_wilderness_landmarks_probe.sh
+        run: sh QA/R14_32/run_tree_farm_visual_policy_probe.sh
+      - name: Named wilderness mountains, lakes and routed tributaries
+        run: sh QA/R14_33/run_wilderness_landmarks_probe.sh
       - name: Branch growth timeout lifecycle probe
         run: sh QA/R14_17/run_growth_timeout_shutdown_policy_probe.sh
       - name: Safe branch staging and spatial cache probes
