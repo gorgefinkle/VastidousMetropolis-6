@@ -37,6 +37,7 @@ public final class LakeParcel extends Parcel {
       if (chunk.getX() != this.chunkX || chunk.getZ() != this.chunkZ) return;
       World world = generator.getWorld();
       if (world == null) return;
+      WildernessFeatures.announceLake(lake, world.getName());
       int baseX = this.chunkX << 4;
       int baseZ = this.chunkZ << 4;
       int minY = Math.max(world.getMinHeight() + 1, 1);
