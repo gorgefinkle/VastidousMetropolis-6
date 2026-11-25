@@ -103,7 +103,7 @@ public final class MushroomCapStemProbe {
                         double boleEase=boleT*boleT*(3.0-2.0*boleT);
                         double boleX=x+Math.cos(angle)*lean*boleEase
                                 +Math.sin(boleT*4.1+geometrySeed%37)*boleT*1.3;
-                        double boleZ=z+Math.sin(angle)*lean*boleT
+                        double boleZ=z+Math.sin(angle)*lean*boleEase
                                 +Math.cos(boleT*3.5+geometrySeed%29)*boleT*1.5;
                         Voxel neck=null;
                         double bestPort=Double.POSITIVE_INFINITY;
