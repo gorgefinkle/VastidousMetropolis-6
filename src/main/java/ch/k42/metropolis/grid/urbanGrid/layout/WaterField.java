@@ -21,7 +21,7 @@ import java.util.Map;
 public final class WaterField implements WorldLayout.Mask {
 
    public enum Kind {
-      NONE, RIVER, OCEAN, CREEK
+      NONE, RIVER, OCEAN, CREEK, LAKE, STREAM
    }
 
    /** How far from the open ocean, in blocks, a chunk still counts as the ocean's (the beach and shallows). */
@@ -47,6 +47,59 @@ public final class WaterField implements WorldLayout.Mask {
       default double nearestBankDistanceBlocks(double blockX, double blockZ, double maxDistanceBlocks) { return Double.NaN; }
    }
    private CreekSource creeks;
+
+   /** Named wilderness lakes are independent of the river/creek channel field. */
+   public interface LakeSource {
+      boolean waterOrBank(int chunkX, int chunkZ);
+   }
+   private LakeSource lakes;
+
+   /** Small named-lake outlets routed through wilderness and permitted to cross highways. */
+   public interface StreamSource {
+      boolean waterOrBank(int chunkX, int chunkZ);
+      ch.k42.metropolis.grid.urbanGrid.river.RiverProvider carrierAt(int chunkX, int chunkZ);
+   }
+   private StreamSource streams;
+
+   public synchronized void setLakes(LakeSource source) {
+      this.lakes = source;
+      this.zoneCache.clear();
+   }
+
+   public synchronized void setStreams(StreamSource source) {
+      this.streams = source;
+      this.zoneCache.clear();
+   }
+
+   public ch.k42.metropolis.grid.urbanGrid.river.RiverProvider streamCarrierAt(int x, int z) {
+      StreamSource src = streams;
+      return src == null ? null : src.carrierAt(x, z);
+   }
+
+   public boolean isLake(int x, int z) {
+      LakeSource src = lakes;
+      return src != null && src.waterOrBank(x, z);
+   }
+
+   public boolean isStream(int x, int z) {
+      StreamSource src = streams;
+      return src != null && src.waterOrBank(x, z);
+   }
+
+   /** Exact open receiving water (not its bank): the outlet a wilderness stream must reach. */
+   public boolean isReceivingWaterAt(int x, int z) {
+      if (oceanOn) {
+         OceanProvider.Sample sample = ocean.sample(x * 16.0 + 8.0, z * 16.0 + 8.0);
+         if (sample != null && sample.distanceInside > 0.0) return true;
+         if (ocean.hasRivers() && ocean.hasSeaInfluence(x * 16.0 + 8.0, z * 16.0 + 8.0)) {
+            double merged = ocean.distanceInsideShoreBlock(x * 16.0 + 8.0, z * 16.0 + 8.0);
+            if (Double.isFinite(merged) && merged > 0.0) return true;
+         }
+      }
+      return riverOn && (main.isRiver(x, z) || (zBound != null && zBound.isRiver(x, z)));
+   }
+
+   public int lattice() { return lattice; }
 
    /** These additional reservations are part of the original river-style creek handoff. */
    public boolean hasRiverStyleCreekPlanning() {
@@ -164,10 +217,14 @@ public final class WaterField implements WorldLayout.Mask {
       Kind base = baseKindAt(x, z);
       if (base != Kind.NONE) return base;
       CreekSource src = creeks;
-      return src != null && src.waterOrBank(x, z) ? Kind.CREEK : Kind.NONE;
+      if (src != null && src.waterOrBank(x, z)) return Kind.CREEK;
+      StreamSource stream = streams;
+      if (stream != null && stream.waterOrBank(x, z)) return Kind.STREAM;
+      LakeSource lake = lakes;
+      return lake != null && lake.waterOrBank(x, z) ? Kind.LAKE : Kind.NONE;
    }
 
-   private Kind baseKindAt(int x, int z) {
+   public Kind baseKindAt(int x, int z) {
       if (this.oceanOn) {
          double bx = x * 16.0 + 8.0, bz = z * 16.0 + 8.0;
          double d = this.ocean.oceanDistanceInsideShoreBlock(bx, bz);
@@ -285,9 +342,14 @@ public final class WaterField implements WorldLayout.Mask {
       Kind base = baseZoneKind(x, z);
       if (base != Kind.NONE) return base;
       CreekSource src = creeks;
-      if (src == null) return Kind.NONE;
-      if (src.reservedBankAt(x, z)) return Kind.CREEK;
-      return src.useRiverPlanningLattice() && hasCreekInLattice(x, z, src)
-              && !src.protectedDryParkAt(x, z) ? Kind.CREEK : Kind.NONE;
+      if (src != null) {
+         if (src.reservedBankAt(x, z)) return Kind.CREEK;
+         if (src.useRiverPlanningLattice() && hasCreekInLattice(x, z, src)
+                 && !src.protectedDryParkAt(x, z)) return Kind.CREEK;
+      }
+      StreamSource stream = streams;
+      if (stream != null && stream.waterOrBank(x, z)) return Kind.STREAM;
+      LakeSource lake = lakes;
+      return lake != null && lake.waterOrBank(x, z) ? Kind.LAKE : Kind.NONE;
    }
 }
