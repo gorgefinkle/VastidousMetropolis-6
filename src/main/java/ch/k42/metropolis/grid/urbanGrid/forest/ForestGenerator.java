@@ -2327,6 +2327,7 @@ public final class ForestGenerator {
           ForestTerrain terrain, boolean plannedNaturalRoot) {
          this.plannedNaturalRoot = plannedNaturalRoot;
          this.wildernessFeatures = generator == null || generator.getWorldSeed() == null
+                 || !PluginConfig.isCityRingsEnabled()
                  ? null : WildernessFeatures.forSeed(generator.getWorldSeed());
          this.wild = wildFor(generator);
          if (this.wild == null && PluginConfig.isForestMountainsEnabled()) {
