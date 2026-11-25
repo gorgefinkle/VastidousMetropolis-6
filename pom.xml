@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.9-R14.31-Deferred-Retry-and-Clock-Fix-DEV</version>
+    <version>0.1.9-R14.32-Tree-Form-and-Farm-Vehicle-Removal-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.31 Deferred Retry and Clock Fix)</name>
-    <description>Fixes Bloomlands negative-Y vegetation grounding and deferred population chunk staging; adds farmhouses, root cellars, hidden bunkers and a sealed missile silo</description>
+    <name>Metropolis for Paper 26.2 (R14.32 Tree Form and Farm Vehicle Removal)</name>
+    <description>Refines grouped mushroom stalks and Mother Willow branching, adds connected willow trails, and removes multiblock vehicles from FARM layouts</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV</finalName>
+        <finalName>Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
