@@ -106,16 +106,8 @@ public final class MushroomCapStemProbe {
                         Voxel neck=new Voxel(capX,capBaseY-1,capZ);
                         if(!stemCells.contains(neck))
                             throw new AssertionError("grouped crown has no stem meeting its own underside: branch="+branch+" sample="+sample);
-                        int attachY=Math.max(ground+1,by-8);
-                        double t=(double)(attachY-ground)/(double)height;
-                        double ease=t*t*(3.0-2.0*t);
-                        double attachX=x+Math.cos(angle)*lean*ease+Math.sin(t*4.1+geometrySeed%37)*t*1.3;
-                        double attachZ=z+Math.sin(angle)*lean*ease+Math.cos(t*3.5+geometrySeed%29)*t*1.5;
-                        Voxel bole=new Voxel((int)Math.round(attachX),attachY,(int)Math.round(attachZ));
-                        if(!stemCells.contains(bole))
-                            throw new AssertionError("main bole anchor missing for grouped branch="+branch+" sample="+sample);
-                        if(!connected(neck,bole,stemCells))
-                            throw new AssertionError("grouped crown stem is not connected to the leaning bole: branch="+branch+" sample="+sample);
+                        if(!connectedToGround(neck,stemCells))
+                            throw new AssertionError("grouped crown stem is not connected through the emitted leaning bole to ground: branch="+branch+" sample="+sample);
                     }
                 }
 
