@@ -31,6 +31,7 @@ public final class MushroomCapStemProbe {
             long seed=0x4D555348524F4F4DL ^ (sample*0x9E3779B97F4A7C15L);
             int x=sample*137-6200;
             int z=sample*83-3900;
+            int ground=62+Math.floorMod(x*31+z*17,5)-2;
             for(int variant=0;variant<6;variant++) {
                 Map<Voxel,String> voxels=new HashMap<>();
                 MushroomGeometry.grow((vx,vy,vz,state)->voxels.put(new Voxel(vx,vy,vz),state),
