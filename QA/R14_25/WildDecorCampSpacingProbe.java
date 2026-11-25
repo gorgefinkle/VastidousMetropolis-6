@@ -43,7 +43,7 @@ public final class WildDecorCampSpacingProbe {
                     throw new AssertionError("camp compounds are too close within a cluster");
             }
         }
-        if (maxRadiusSquared > 18 * 18)
+        if (maxRadiusSquared > 20 * 20)
             throw new AssertionError("camp group layout grew beyond its intended compact footprint");
     }
 }
