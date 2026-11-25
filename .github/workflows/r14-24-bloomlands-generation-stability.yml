@@ -1,4 +1,4 @@
-name: R14.28 Karst landbridge removal, full-scale missile silo, mushroom geometry and ocean safety QA
+name: R14.29 Karst landbridge removal, full-scale missile silo, mushroom geometry and ocean safety QA
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: r14-28-${{ github.event.pull_request.number || github.ref }}
+  group: r14-29-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -73,25 +73,25 @@ jobs:
           javac -d target/qa-queue src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java QA/R14_6/DiskDeferredChunkQueueProbe.java
           java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
       - name: Assemble complete source archive
-        run: zip -r Metropolis_R14_28_Karst_Removal_Strategic_Silo_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
+        run: zip -r Metropolis_R14_29_Karst_Removal_Strategic_Silo_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
       - name: Assemble exact two-file development package
         run: |
-          mkdir -p r14-28-package
-          cp target/Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV.jar r14-28-package/
-          cp Metropolis_R14_28_Karst_Removal_Strategic_Silo_SOURCE.zip r14-28-package/
-          (cd r14-28-package && zip -q ../Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip ./*)
+          mkdir -p r14-29-package
+          cp target/Metropolis_R14_29_Karst_Removal_Strategic_Silo_DEV.jar r14-29-package/
+          cp Metropolis_R14_29_Karst_Removal_Strategic_Silo_SOURCE.zip r14-29-package/
+          (cd r14-29-package && zip -q ../Metropolis_R14_29_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip ./*)
       - name: Verify exact package contents
         run: |
-          unzip -Z1 Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip | sort > package-files.txt
-          printf '%s\n' Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV.jar Metropolis_R14_28_Karst_Removal_Strategic_Silo_SOURCE.zip | sort > expected-files.txt
+          unzip -Z1 Metropolis_R14_29_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\n' Metropolis_R14_29_Karst_Removal_Strategic_Silo_DEV.jar Metropolis_R14_29_Karst_Removal_Strategic_Silo_SOURCE.zip | sort > expected-files.txt
           diff -u expected-files.txt package-files.txt
-          unzip -t Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip
+          unzip -t Metropolis_R14_29_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV
+          name: Metropolis_R14_29_Karst_Removal_Strategic_Silo_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV.jar
-            Metropolis_R14_28_Karst_Removal_Strategic_Silo_SOURCE.zip
-            Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip
+            target/Metropolis_R14_29_Karst_Removal_Strategic_Silo_DEV.jar
+            Metropolis_R14_29_Karst_Removal_Strategic_Silo_SOURCE.zip
+            Metropolis_R14_29_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip
