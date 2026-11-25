@@ -398,7 +398,7 @@ public class PluginConfig {
    private static int wildSmoothBlocks = 192;
    private static int wildDecorations = 100;
    private static int wildSpacingAll = 100;
-   private static final int[] wildSpacing = {100, 100, 250, 100, 100, 100, 100, 100};
+   private static final int[] wildSpacing = {100, 100, 400, 100, 100, 100, 100, 100};
    private static int wildChestOdds = 75;
    private static int wildLootMin = 1;
    private static int wildLootMax = 4;
