@@ -101,10 +101,19 @@ public final class KarstLandforms {
   /** Broad highland mass: long, low-gradient benches suitable for building,
    * with progressively finer relief that never reduces the massif to narrow fins. */
   static double massifUpland(long seed,int x,int z){
-    return 28*(noise(seed,x,z,1800,0x4d415353494631L)-.5)
-          +18*(noise(seed,x,z,700,0x4d415353494632L)-.5)
-           +8*(noise(seed,x,z,250,0x4d415353494633L)-.5)
-           +2.5*(noise(seed,x,z,80,0x4d415353494634L)-.5);
+    double broad=28*(noise(seed,x,z,1800,0x4d415353494631L)-.5)
+                +18*(noise(seed,x,z,700,0x4d415353494632L)-.5);
+    double fine=8*(noise(seed,x,z,250,0x4d415353494633L)-.5)
+               +2.5*(noise(seed,x,z,80,0x4d415353494634L)-.5);
+    // Break the old broad plateau into long, weathered limestone ridges.
+    // An anisotropic ridged field forms connected high spines rather than
+    // isolated cone peaks; the amplitudes are low enough to retain wide,
+    // buildable benches between those spines.
+    double a=along(seed,x,z),c=cross(seed,x,z);
+    double ridgeSignal=1.0-Math.abs(2.0*noise(seed,a*.55,c,1180,0x4b41525354524944L)-1.0);
+    double shoulderSignal=1.0-Math.abs(2.0*noise(seed,a*.82,c*1.28,510,0x4b4152535455524cL)-1.0);
+    double ridges=18.0*(ridgeSignal-.5)+5.0*(shoulderSignal-.5);
+    return broad+fine+ridges;
   }
   public static double depth(long seed,int x,int z){
     double v=valley(seed,x,z);
