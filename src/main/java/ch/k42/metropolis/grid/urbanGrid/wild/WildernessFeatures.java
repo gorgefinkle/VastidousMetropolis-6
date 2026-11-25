@@ -152,6 +152,9 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          return FeatureCell.EMPTY;
       }
 
+      // BoundedRiverSegment deliberately follows the server's river enable
+      // switch; without a receiving river system there can be no connected lake outlet.
+      if (!RiverConfig.isRiverEnabled()) return FeatureCell.EMPTY;
       int radius = 14 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
       double ratio = 0.76 + unit(mix(h ^ 0x454C4C49505345L)) * 0.20;
       double angle = unit(mix(h ^ 0x4C414B45414E474CL)) * Math.PI;
