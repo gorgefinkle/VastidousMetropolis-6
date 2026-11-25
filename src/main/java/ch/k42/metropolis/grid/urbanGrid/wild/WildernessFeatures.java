@@ -33,8 +33,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private static final int MAX_STREAM_RANGE = 220;
    private static final int MAX_ROUTE_EXPANSIONS = 40000;
    private static final int MAX_HIGHWAY_CROSSING_CHUNKS = 2;
-   private static final int MOUNTAIN_THRESHOLD = 14;
-   private static final int LAKE_THRESHOLD = 42;
+   private static final int MOUNTAIN_THRESHOLD = 2;
+   private static final int LAKE_THRESHOLD = 10;
 
    private static final Map<String, WildernessFeatures> CACHE = new HashMap<>();
    private static final String[] ROOTS = {
@@ -208,7 +208,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    public MountainSite mountainAt(int blockX, int blockZ) {
       int gx = Math.floorDiv(Math.floorDiv(blockX, 16), this.cellSize);
       int gz = Math.floorDiv(Math.floorDiv(blockZ, 16), this.cellSize);
-      return cell(gx, gz).mountain;
+      MountainSite site = cell(gx, gz).mountain;
+      return site != null && site.contains(blockX, blockZ) ? site : null;
    }
 
    public LakeSite lakeAt(int chunkX, int chunkZ) {
@@ -267,8 +268,9 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       double dx = nearest.x - lake.centerX / 16.0;
       double dz = nearest.z - lake.centerZ / 16.0;
       double length = Math.max(1.0, Math.hypot(dx, dz));
-      int startX = (int)Math.round(lake.centerX / 16.0 + dx / length * lake.radiusX / 16.0 * 0.86);
-      int startZ = (int)Math.round(lake.centerZ / 16.0 + dz / length * lake.radiusZ / 16.0 * 0.86);
+      double inset = Math.min(lake.radiusX, lake.radiusZ) / 16.0 * 0.68;
+      int startX = (int)Math.round(lake.centerX / 16.0 + dx / length * inset);
+      int startZ = (int)Math.round(lake.centerZ / 16.0 + dz / length * inset);
       List<int[]> path = route(startX, startZ, targets);
       if (path == null || path.size() < 2) return null;
 
@@ -483,7 +485,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          // One dominant summit with broken shoulders, rather than a smooth cone or a flat plateau.
          double summit = 12.0 * Math.pow(Math.max(0.0, 1.0 - r * 1.45), 2.0);
          double value = baseY + relief * fade + rough + summit;
-         return (int)Math.max(baseY, Math.min(maxHeight - 8, Math.round(value)));
+         return (int)Math.max(baseY, Math.min(maxHeight - this.peakClearance, Math.round(value)));
       }
 
       public boolean snowy(int y, int baseY, int maxHeight) {
