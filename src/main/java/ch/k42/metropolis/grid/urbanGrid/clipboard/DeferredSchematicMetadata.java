@@ -151,6 +151,9 @@ public final class DeferredSchematicMetadata {
         boolean loading;
         Slot staging;
         long stagingSince;
+        long loadGeneration, loadTarget, lastSweepTick, loadTimeoutsSinceLog;
+        long sourceWaitsSinceLog, chunkWaitsSinceLog, blockedLoadsSinceLog;
+        long asyncLoadFailuresSinceLog, ticketWaitsSinceLog, retryWaitsSinceLog;
         int successesSinceLog;
         long createdSinceLog,scannedInCurrentSweep,observedPendingLastSweep,lastMissingSourceWarn;
         Scope(World world,Plugin plugin){
@@ -203,7 +206,7 @@ public final class DeferredSchematicMetadata {
                 }
                 closeListing();String prefix=String.format(Locale.ROOT,"%02x",nextShard);
                 nextShard=(nextShard+1)%SHARDS;
-                if(nextShard==0){observedPendingLastSweep=scannedInCurrentSweep;scannedInCurrentSweep=0;}
+                if(nextShard==0){observedPendingLastSweep=scannedInCurrentSweep;scannedInCurrentSweep=0;lastSweepTick=ticks;}
                 Path folder=base.resolve(prefix);if(!Files.isDirectory(folder))continue;
                 try{listing=Files.newDirectoryStream(folder,"*.job");iterator=listing.iterator();}
                 catch(IOException ex){plugin.getLogger().warning("Deferred metadata scan failed: "+ex);closeListing();}
@@ -227,24 +230,43 @@ public final class DeferredSchematicMetadata {
             slot.tickets.clear();if(staging==slot)staging=null;
         }
         private void loadLater(Slot slot,long id){
-            if(loading||!plugin.isEnabled()||(staging!=null&&staging!=slot))return;
-            staging=slot;stagingSince=ticks;loading=true;
+            if(!plugin.isEnabled())return;
+            if(loading||(staging!=null&&staging!=slot)){
+                blockedLoadsSinceLog++;
+                return;
+            }
+            staging=slot;stagingSince=ticks;loading=true;loadTarget=id;
+            long generation=++loadGeneration;
             int x=(int)(id>>32),z=(int)id;
             CompletableFuture<Chunk> future;
             try{future=world.getChunkAtAsync(x,z,false);}
-            catch(RuntimeException ex){loading=false;release(slot);slot.nextTry=ticks+100;return;}
+            catch(RuntimeException ex){
+                loading=false;loadGeneration++;release(slot);slot.nextTry=ticks+100;
+                asyncLoadFailuresSinceLog++;
+                return;
+            }
             future.whenComplete((chunk,error)->{
                 if(!plugin.isEnabled())return;
-                Bukkit.getScheduler().runTask(plugin,()->{
-                    loading=false;if(staging!=slot)return;
-                    if(error!=null||chunk==null||!world.isChunkLoaded(x,z)){
-                        release(slot);slot.nextTry=ticks+100;
-                        if(error!=null&&++slot.failures%40==1)plugin.getLogger().warning("Deferred metadata load failed "+x+","+z+": "+error);
-                    }else{
-                        if(world.addPluginChunkTicket(x,z,plugin))slot.tickets.add(id);
-                        else if(!world.isChunkLoaded(x,z)){release(slot);slot.nextTry=ticks+100;}
-                    }
-                });
+                try {
+                    Bukkit.getScheduler().runTask(plugin,()->{
+                        // A timed-out request may complete after a newer request has
+                        // started. Its callback must not clear or mutate the newer load.
+                        if(generation!=loadGeneration)return;
+                        loading=false;
+                        if(staging!=slot)return;
+                        if(error!=null||chunk==null||!world.isChunkLoaded(x,z)){
+                            release(slot);slot.nextTry=ticks+100;
+                            asyncLoadFailuresSinceLog++;
+                            if(error!=null&&++slot.failures%40==1)plugin.getLogger().warning("Deferred metadata load failed "+x+","+z+": "+error);
+                        }else{
+                            if(world.addPluginChunkTicket(x,z,plugin))slot.tickets.add(id);
+                            else if(!world.isChunkLoaded(x,z)){release(slot);slot.nextTry=ticks+100;ticketWaitsSinceLog++;}
+                        }
+                    });
+                } catch (RuntimeException scheduleFailure) {
+                    // The main-thread watchdog below will expire this generation
+                    // safely if Bukkit can no longer accept the completion callback.
+                }
             });
         }
         void shutdown(){
@@ -255,7 +277,20 @@ public final class DeferredSchematicMetadata {
         @Override public void run(){
             if(!plugin.isEnabled()){shutdown();return;}
             ticks++;findGenerator();if(generator==null)return;
-            if(staging!=null&&ticks-stagingSince>100)release(staging);
+            if(staging!=null&&ticks-stagingSince>100){
+                Slot expired=staging;
+                long expiredTarget=loadTarget;
+                loadGeneration++; // invalidate a late completion callback
+                loading=false;
+                expired.nextTry=ticks+100;
+                release(expired);
+                loadTimeoutsSinceLog++;
+                if(loadTimeoutsSinceLog==1||loadTimeoutsSinceLog%10==0){
+                    plugin.getLogger().warning("Deferred metadata chunk load timed out at "
+                            +(int)(expiredTarget>>32)+","+(int)expiredTarget
+                            +" after 100 ticks; job retained for retry.");
+                }
+            }
             if(window.isEmpty()&&ticks%20!=1)return;
             refill();long started=System.nanoTime();int complete=0;
             int scanned=Math.min(window.size(),SCANS_PER_TICK);
@@ -264,12 +299,13 @@ public final class DeferredSchematicMetadata {
                 if(!Files.isRegularFile(slot.path)){
                     inWindow.remove(slot.path);release(slot);continue;
                 }
-                if(ticks<slot.nextTry){requeueOrReturn(slot);continue;}
+                if(ticks<slot.nextTry){retryWaitsSinceLog++;requeueOrReturn(slot);continue;}
                 try{
                     if(Files.size(slot.path)>MAX_FILE)throw new IOException("Oversized metadata job file");
                     Placement job=decode(Files.readAllBytes(slot.path));
                     FileClipboard source=FileClipboard.deferredSource(job.source());
                     if(source==null){
+                        sourceWaitsSinceLog++;
                         if(ticks-lastMissingSourceWarn>400){
                             plugin.getLogger().warning("Deferred metadata source unavailable: "+job.source());
                             lastMissingSourceWarn=ticks;
@@ -281,6 +317,7 @@ public final class DeferredSchematicMetadata {
                         if(!world.isChunkLoaded((int)(id>>32),(int)id)){missing=id;break;}
                     }
                     if(missing!=Long.MIN_VALUE){
+                        chunkWaitsSinceLog++;
                         loadLater(slot,missing);slot.nextTry=ticks+2;requeueOrReturn(slot);continue;
                     }
                     Set<Long> acquired=new HashSet<>();boolean okay=true;
@@ -293,6 +330,7 @@ public final class DeferredSchematicMetadata {
                             else if(!world.isChunkLoaded(x,z)){okay=false;break;}
                         }
                         if(!okay){
+                            ticketWaitsSinceLog++;
                             slot.nextTry=ticks+20;requeueOrReturn(slot);continue;
                         }
                         source.restoreDeferredMetadata(generator,job);
@@ -315,8 +353,17 @@ public final class DeferredSchematicMetadata {
                 if(System.nanoTime()-started>BUDGET_NS)break;
             }
             if(ticks-lastLog>=400){
-                if(!window.isEmpty()||successesSinceLog>0)plugin.getLogger().info("Deferred metadata queue: window="+window.size()+" created="+createdSinceLog+" complete="+successesSinceLog+" pending="+observedPendingLastSweep);
+                if(!window.isEmpty()||successesSinceLog>0)plugin.getLogger().info("Deferred metadata queue: window="+window.size()
+                        +" created="+createdSinceLog+" complete="+successesSinceLog
+                        +" diskJobsLastSweep="+observedPendingLastSweep+" sweepAgeTicks="+(ticks-lastSweepTick)
+                        +" asyncLoad="+(loading?"active":"idle")+" loadAgeTicks="+(staging==null?0:(ticks-stagingSince))
+                        +" loadTimeouts="+loadTimeoutsSinceLog+" waits[source="+sourceWaitsSinceLog
+                        +",chunk="+chunkWaitsSinceLog+",blockedLoad="+blockedLoadsSinceLog
+                        +",asyncFail="+asyncLoadFailuresSinceLog+",ticket="+ticketWaitsSinceLog
+                        +",retryCooldown="+retryWaitsSinceLog+"]");
                 lastLog=ticks;successesSinceLog=0;createdSinceLog=0;
+                loadTimeoutsSinceLog=sourceWaitsSinceLog=chunkWaitsSinceLog=blockedLoadsSinceLog=0;
+                asyncLoadFailuresSinceLog=ticketWaitsSinceLog=retryWaitsSinceLog=0;
             }
         }
     }
