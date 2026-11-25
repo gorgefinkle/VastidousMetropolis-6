@@ -121,7 +121,7 @@ generator:
       all: 100            # percent of the default distance between wilderness pieces, applied to every kind. 100 = default, 200 = twice as far apart (a quarter as many), 50 = half the distance
       planes: 100         # each kind multiplies with "all": planes: 200 and all: 100 puts crashed aircraft twice as far apart
       helicopters: 100
-      camps: 100
+      camps: 250
       mines: 100
       windFarms: 100
       masts: 100
