@@ -3,6 +3,8 @@ package ch.k42.metropolis.grid.urbanGrid.forest;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -23,6 +25,7 @@ public final class MushroomGeometry {
         @Override public int hashCode(){return x*9176 ^ z*1709 ^ y*19307;}
         @Override public boolean equals(Object o){return o instanceof P p && p.x==x&&p.y==y&&p.z==z;}
     }
+    private record GroupedCapAnchor(int capX,int capZ,double boleX,double boleZ,int boleY) {}
     static long mix(long v){ v^=v>>>30;v*= -4658895280553007687L; v^=v>>>27;v*= -7723592293110705685L;return v^(v>>>31); }
     static double unit(long v) {return (mix(v)>>>11)*0x1.0p-53;}
     public static String species(long seed) {return unit(seed ^ 131L)<.52?"minecraft:red_mushroom_block":"minecraft:brown_mushroom_block";}
@@ -32,12 +35,13 @@ public final class MushroomGeometry {
     }
 
     /**
-     * Preserve the authored trunk silhouette. Extend only beneath the lowest
-     * already-existing visible stem block in each occupied column.
+     * Emit the original leaning bole unchanged. Terrain extensions are allowed
+     * only under columns that were already occupied on its original first row.
+     * Higher, laterally-shifted bole columns are never filled down to ground.
      */
     static void emitTrunkStems(Sink sink,Terrain terrain,Set<P> trunk,
-                               Map<Long,Integer> capBottomByColumn) {
-        Map<Long,Integer> lowestVisibleByColumn=new HashMap<>();
+                               Map<Long,Integer> capBottomByColumn,int rootY) {
+        Set<Long> originalFootprint=new HashSet<>();
         for(P q:trunk) {
             long key=columnKey(q.x,q.z);
             Integer capBottom=capBottomByColumn.get(key);
@@ -46,15 +50,43 @@ public final class MushroomGeometry {
             int groundY=terrain.groundAt(q.x,q.z);
             if(q.y<=groundY)continue;
             sink.set(q.x,q.y,q.z,STEM);
-            lowestVisibleByColumn.merge(key,q.y,Math::min);
+            if(q.y==rootY)originalFootprint.add(key);
         }
-        for(Map.Entry<Long,Integer> entry:lowestVisibleByColumn.entrySet()) {
-            int tx=(int)(entry.getKey()>>32),tz=(int)(long)entry.getKey();
+        for(long key:originalFootprint) {
+            int tx=(int)(key>>32),tz=(int)key;
             int floor=terrain.groundAt(tx,tz)+1;
-            int firstExisting=entry.getValue();
-            for(int ty=floor;ty<firstExisting;ty++)sink.set(tx,ty,tz,STEM);
+            for(int y=floor;y<rootY;y++)sink.set(tx,y,tz,STEM);
         }
     }
+
+    /**
+     * A side crown is a branch of the leaning bole, not a separate tree.
+     * Build a short, tapered, rising stem from the bole into the cap underside.
+     */
+    private static void addGroupedCapBranch(Set<P> output,GroupedCapAnchor anchor,
+                                            Map<Long,Integer> capBottomByColumn) {
+        Integer underside=capBottomByColumn.get(columnKey(anchor.capX(),anchor.capZ()));
+        if(underside==null)return;
+        double sx=anchor.boleX(),sy=anchor.boleY(),sz=anchor.boleZ();
+        double ex=anchor.capX(),ey=underside-1,ez=anchor.capZ();
+        double dx=ex-sx,dy=ey-sy,dz=ez-sz;
+        double length=Math.sqrt(dx*dx+dy*dy+dz*dz);
+        int steps=Math.max(1,(int)Math.ceil(length*3.0));
+        for(int i=0;i<=steps;i++) {
+            double t=(double)i/steps;
+            double cx=sx+dx*t,cy=sy+dy*t,cz=sz+dz*t;
+            double radius=2.05-.70*t;
+            int reach=(int)Math.ceil(radius);
+            int ix=(int)Math.round(cx),iy=(int)Math.round(cy),iz=(int)Math.round(cz);
+            for(int ox=-reach;ox<=reach;ox++)
+                for(int oy=-reach;oy<=reach;oy++)
+                    for(int oz=-reach;oz<=reach;oz++) {
+                        if(ox*ox+oy*oy+oz*oz<=radius*radius+.30)
+                            output.add(new P(ix+ox,iy+oy,iz+oz));
+                    }
+        }
+    }
+
 
     public static void grow(Sink sink,Terrain terrain,int x,int z,long worldSeed,int variant) {
         long seed=mix(worldSeed ^ mix(x*-7046029254386353131L + z*-4417276706812531889L));
@@ -67,6 +99,7 @@ public final class MushroomGeometry {
         double lean=3.0+unit(seed+15)*10.0;
         double centerX=x+Math.cos(angle)*lean,centerZ=z+Math.sin(angle)*lean;
         Set<P> crown=new HashSet<>(), trunk=new HashSet<>();
+        List<GroupedCapAnchor> groupedCapAnchors=new ArrayList<>();
         for(int y=ground+1;y<=ground+height+1;y++) {
             double t=(double)(y-ground)/(double)height;
             double ease=t*t*(3.0-2.0*t);
@@ -110,6 +143,15 @@ public final class MushroomGeometry {
                 int by=ground+(int)(height*fraction);
                 double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                 double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
+                int capX=(int)Math.round(bx),capZ=(int)Math.round(bz);
+                int boleY=Math.max(ground+1,by-4);
+                double boleT=(double)(boleY-ground)/(double)height;
+                double boleEase=boleT*boleT*(3.0-2.0*boleT);
+                double boleX=x+Math.cos(angle)*lean*boleEase
+                        +Math.sin(boleT*4.1+seed%37)*boleT*1.3;
+                double boleZ=z+Math.sin(angle)*lean*boleEase
+                        +Math.cos(boleT*3.5+seed%29)*boleT*1.5;
+                groupedCapAnchors.add(new GroupedCapAnchor(capX,capZ,boleX,boleZ,boleY));
                 int radius=5+(int)(unit(seed+j*199)*5.0);
                 for(int px=(int)bx-radius;px<=bx+radius;px++)for(int pz=(int)bz-radius;pz<=bz+radius;pz++) {
                     double dist=Math.hypot(px-bx,pz-bz),theta2=Math.atan2(pz-bz,px-bx);
@@ -145,7 +187,16 @@ public final class MushroomGeometry {
             Integer previous=capBottomByColumn.get(key);
             if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
         }
-        emitTrunkStems(sink,terrain,trunk,capBottomByColumn);
+        emitTrunkStems(sink,terrain,trunk,capBottomByColumn,ground+1);
+        Set<P> groupedCapStems=new HashSet<>();
+        for(GroupedCapAnchor anchor:groupedCapAnchors)
+            addGroupedCapBranch(groupedCapStems,anchor,capBottomByColumn);
+        for(P q:groupedCapStems) {
+            Integer capBottom=capBottomByColumn.get(columnKey(q.x,q.z));
+            if(capBottom!=null&&q.y>=capBottom)continue;
+            if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
+                sink.set(q.x,q.y,q.z,STEM);
+        }
         for(P q:crown)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z)) {
             StringBuilder state=new StringBuilder(cap).append('[');
             for(int i=0;i<6;i++) {
