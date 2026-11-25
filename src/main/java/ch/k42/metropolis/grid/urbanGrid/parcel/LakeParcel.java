@@ -75,7 +75,9 @@ public final class LakeParcel extends Parcel {
             double shoreT = (radius - WildernessFeatures.LakeSite.WATER_EDGE)
                     / (1.0 - WildernessFeatures.LakeSite.WATER_EDGE);
             shoreT = smooth(shoreT);
-            int targetY = Math.min(maxY - 3, waterY + 1 + (int)Math.round(4.0 * shoreT));
+            int naturalRim = Math.max(waterY + 1, Math.min(maxY - 3, oldTop));
+            int targetY = waterY + 1 + (int)Math.round((naturalRim - waterY - 1) * shoreT);
+            targetY = Math.max(minY + 1, Math.min(maxY - 3, targetY));
             if (targetY < oldTop) {
                Parcel.clearAboveKeepingTrees(world, x, z, targetY + 1, oldTop);
             } else if (targetY > oldTop) {
