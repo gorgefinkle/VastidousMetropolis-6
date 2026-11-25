@@ -71,16 +71,18 @@ public final class MushroomCapStemProbe {
                         stemTop.merge(c,v.y(),Math::max);
                     }
                 }
-                if(variant==5) {
+                if(variant==5||(variant==4&&MushroomGeometry.unit(MushroomGeometry.mix(seed ^ MushroomGeometry.mix(
+                        x*-7046029254386353131L + z*-4417276706812531889L))+55)>.4)) {
                     long geometrySeed=MushroomGeometry.mix(seed ^ MushroomGeometry.mix(
                         x*-7046029254386353131L + z*-4417276706812531889L));
-                    int height=29+(int)(MushroomGeometry.unit(geometrySeed+2)*21);
+                    int height=(variant==5?29:24)+(int)(MushroomGeometry.unit(geometrySeed+2)*21);
                     double angle=MushroomGeometry.unit(geometrySeed+11)*6.28318530718;
                     double lean=3.0+MushroomGeometry.unit(geometrySeed+15)*10.0;
                     java.util.Set<Voxel> stemCells=new java.util.HashSet<>();
                     for(Map.Entry<Voxel,String> entry:voxels.entrySet())
                         if(entry.getValue().startsWith("minecraft:mushroom_stem["))stemCells.add(entry.getKey());
-                    for(int branch=0;branch<5;branch++) {
+                    int groupedCaps=variant==5?5:3;
+                    for(int branch=0;branch<groupedCaps;branch++) {
                         double theta=branch*2.399963+MushroomGeometry.unit(geometrySeed+branch*421)*.7;
                         double fraction=.3+branch*.11;
                         int by=ground+(int)(height*fraction);
@@ -126,6 +128,6 @@ public final class MushroomCapStemProbe {
         }
         System.out.println("MushroomCapStemProbe: PASS shapes="+shapes
                 +" overlappingColumns="+overlappingColumns
-                +" (96 sites x all 6 profiles; no stem reaches or crosses cap underside)");
+                +" (96 sites x all 6 profiles; grouped caps connect to bole and no stem pierces cap underside)");
     }
 }
