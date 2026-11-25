@@ -371,17 +371,18 @@ final class FarmLayout {
       }
    }
 
-   /** Extremely rare sealed military installation; never replaces a farmstead or greenhouse. */
+   /** Rare full-scale sealed military installation; reserve its complete 3x3-chunk footprint. */
    private void planMissileSilo(int[][] gy, boolean[][] used) {
       if (this.extra.nextInt(100) >= 4) return;
-      int startX=this.extra.nextInt(CELL_CHUNKS-1), startZ=this.extra.nextInt(CELL_CHUNKS-1);
-      for(int n=0;n<(CELL_CHUNKS-1)*(CELL_CHUNKS-1);n++) {
-         int a=(startX+n)%(CELL_CHUNKS-1);
-         int c=(startZ+(startX+n)/(CELL_CHUNKS-1))%(CELL_CHUNKS-1);
-         if(!this.rectFree(gy,used,a,a+1,c,c+1)) continue;
-         int cx=this.x0+a*16+16, cz=this.z0+c*16+16;
+      int side=CELL_CHUNKS-2;
+      int startX=this.extra.nextInt(side), startZ=this.extra.nextInt(side);
+      for(int n=0;n<side*side;n++) {
+         int a=(startX+n)%side;
+         int c=(startZ+(startX+n)/side)%side;
+         if(!this.rectFree(gy,used,a,a+2,c,c+2)) continue;
+         int cx=this.x0+a*16+24, cz=this.z0+c*16+24;
          this.features.add(new FarmMissileSilo(cx,cz,gy[a][c],this.seed));
-         this.markUsed(used,a,a+1,c,c+1);
+         this.markUsed(used,a,a+2,c,c+2);
          return;
       }
    }
