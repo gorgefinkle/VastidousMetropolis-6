@@ -25,9 +25,7 @@ public final class MushroomGeometry {
         @Override public int hashCode(){return x*9176 ^ z*1709 ^ y*19307;}
         @Override public boolean equals(Object o){return o instanceof P p && p.x==x&&p.y==y&&p.z==z;}
     }
-    static record GroupedCapAnchor(double capX,double capZ,int capY,int radius,int branch,
-                                    double boleX,double boleZ,int boleY) {}
-    static record CapPort(int x,int undersideY,int z) {}
+    static record GroupedCapAnchor(double capX,double capZ,int capY,int radius,int branch) {}
     static long mix(long v){ v^=v>>>30;v*= -4658895280553007687L; v^=v>>>27;v*= -7723592293110705685L;return v^(v>>>31); }
     static double unit(long v) {return (mix(v)>>>11)*0x1.0p-53;}
     public static String species(long seed) {return unit(seed ^ 131L)<.52?"minecraft:red_mushroom_block":"minecraft:brown_mushroom_block";}
@@ -42,108 +40,96 @@ public final class MushroomGeometry {
      * Higher, laterally-shifted bole columns are never filled down to ground.
      */
     /**
-     * Preserve each authored stem column, then extend its two terminal gaps:
-     * bottommost block to local terrain and topmost block to the cap underside.
+     * Preserve the authored leaning bole. Extend only its original bottom
+     * footprint down to local terrain, and extend each existing stem column's
+     * topmost layer upward to the cap underside. Never fill beneath upper,
+     * laterally-shifted trunk columns.
      */
     static Set<P> emitTrunkStems(Sink sink,Terrain terrain,Set<P> trunk,
-                                 Map<Long,Integer> capBottomByColumn,int ignoredRootY) {
-        Map<Long,int[]> boundsByColumn=new HashMap<>();
+                                 Map<Long,Integer> capBottomByColumn,int rootY) {
+        Map<Long,Integer> highestByColumn=new HashMap<>();
+        Set<Long> originalBottomFootprint=new HashSet<>();
         Set<P> emitted=new HashSet<>();
         for(P q:trunk) {
             long key=columnKey(q.x,q.z);
             Integer capBottom=capBottomByColumn.get(key);
             if(capBottom!=null&&q.y>=capBottom)continue;
             if(!terrain.allows(q.x,q.z))continue;
-            int groundY=terrain.groundAt(q.x,q.z);
-            if(q.y<=groundY)continue;
+            if(q.y<=terrain.groundAt(q.x,q.z))continue;
             sink.set(q.x,q.y,q.z,STEM);
             emitted.add(q);
-            int[] bounds=boundsByColumn.computeIfAbsent(key,k->new int[]{q.y,q.y});
-            bounds[0]=Math.min(bounds[0],q.y);
-            bounds[1]=Math.max(bounds[1],q.y);
+            highestByColumn.merge(key,q.y,Math::max);
+            if(q.y==rootY)originalBottomFootprint.add(key);
         }
-        for(Map.Entry<Long,int[]> entry:boundsByColumn.entrySet()) {
-            int tx=(int)(entry.getKey()>>32),tz=(int)(long)entry.getKey();
-            if(!terrain.allows(tx,tz))continue;
-            int groundY=terrain.groundAt(tx,tz);
-            int[] bounds=entry.getValue();
-            for(int y=groundY+1;y<bounds[0];y++) {
-                P root=new P(tx,y,tz);
-                sink.set(tx,y,tz,STEM);
-                emitted.add(root);
+        // Bottom correction: only columns in the original lowest layer.
+        for(long key:originalBottomFootprint) {
+            int x=(int)(key>>32),z=(int)key;
+            int groundY=terrain.groundAt(x,z);
+            for(int y=groundY+1;y<rootY;y++) {
+                P q=new P(x,y,z);
+                sink.set(x,y,z,STEM);
+                emitted.add(q);
             }
+        }
+        // Top correction: continue only columns that already contain stem,
+        // from their highest authored block to the cap's actual underside.
+        for(Map.Entry<Long,Integer> entry:highestByColumn.entrySet()) {
             Integer capBottom=capBottomByColumn.get(entry.getKey());
-            if(capBottom!=null) {
-                for(int y=bounds[1]+1;y<capBottom;y++) {
-                    P capJoin=new P(tx,y,tz);
-                    sink.set(tx,y,tz,STEM);
-                    emitted.add(capJoin);
-                }
+            if(capBottom==null)continue;
+            int x=(int)(entry.getKey()>>32),z=(int)(long)entry.getKey();
+            int top=entry.getValue();
+            for(int y=top+1;y<capBottom;y++) {
+                P q=new P(x,y,z);
+                if(q.y<=terrain.groundAt(x,z))continue;
+                sink.set(x,y,z,STEM);
+                emitted.add(q);
             }
         }
         return emitted;
     }
 
     /**
-     * Find an exposed underside point on this specific grouped cap. Its centre
-     * can be covered by a lower cap, so use a real unoccupied edge port.
+     * For each grouped crown, continue only stem columns already present under
+     * that crown. Fill the vertical air gap from the column's topmost stem block
+     * to that crown's own underside; do not create ground-to-cap support pillars.
      */
-    /**
-     * Find an exposed underside point on this grouped cap. A direct support
-     * needs a completely clear vertical column below the underside.
-     */
-    static CapPort findGroupedCapPort(GroupedCapAnchor anchor,Set<P> crown,Terrain terrain) {
-        CapPort best=null;
-        double bestScore=Double.POSITIVE_INFINITY;
-        int minX=(int)Math.floor(anchor.capX()-anchor.radius()-1);
-        int maxX=(int)Math.ceil(anchor.capX()+anchor.radius()+1);
-        int minZ=(int)Math.floor(anchor.capZ()-anchor.radius()-1);
-        int maxZ=(int)Math.ceil(anchor.capZ()+anchor.radius()+1);
-        for(int px=minX;px<=maxX;px++)for(int pz=minZ;pz<=maxZ;pz++) {
-            if(!terrain.allows(px,pz))continue;
-            double dx=px-anchor.capX(),dz=pz-anchor.capZ();
-            double dist=Math.hypot(dx,dz);
-            double theta=Math.atan2(dz,dx);
-            if(dist>anchor.radius()*(1.0+.14*Math.sin(theta*5.0+anchor.branch())))continue;
-            int top=anchor.capY()+3-(int)((dist/anchor.radius())*4.0);
-            int underside=top-2;
-            P capBlock=new P(px,underside,pz);
-            if(!crown.contains(capBlock))continue;
-            int groundY=terrain.groundAt(px,pz);
-            boolean clearColumn=true;
-            for(int y=groundY+1;y<underside;y++) {
-                if(crown.contains(new P(px,y,pz))) {
-                    clearColumn=false;
-                    break;
+    private static void connectGroupedCapTops(Sink sink,Terrain terrain,Set<P> stems,
+                                                Set<P> crown,List<GroupedCapAnchor> anchors) {
+        Map<Long,Integer> highestByColumn=new HashMap<>();
+        for(P q:stems)highestByColumn.merge(columnKey(q.x,q.z),q.y,Math::max);
+        for(GroupedCapAnchor anchor:anchors) {
+            int radius=anchor.radius();
+            int minX=(int)Math.floor(anchor.capX()-radius-1);
+            int maxX=(int)Math.ceil(anchor.capX()+radius+1);
+            int minZ=(int)Math.floor(anchor.capZ()-radius-1);
+            int maxZ=(int)Math.ceil(anchor.capZ()+radius+1);
+            for(int x=minX;x<=maxX;x++)for(int z=minZ;z<=maxZ;z++) {
+                long key=columnKey(x,z);
+                Integer top=highestByColumn.get(key);
+                if(top==null||!terrain.allows(x,z))continue;
+                double dx=x-anchor.capX(),dz=z-anchor.capZ();
+                double dist=Math.hypot(dx,dz);
+                double theta=Math.atan2(dz,dx);
+                if(dist>radius*(1.0+.14*Math.sin(theta*5.0+anchor.branch())))continue;
+                int capTop=anchor.capY()+3-(int)((dist/radius)*4.0);
+                int underside=capTop-2;
+                if(!crown.contains(new P(x,underside,z))||top>=underside-1)continue;
+                boolean clear=true;
+                for(int y=top+1;y<underside;y++) {
+                    if(crown.contains(new P(x,y,z))||y<=terrain.groundAt(x,z)) {
+                        clear=false;
+                        break;
+                    }
                 }
-            }
-            if(!clearColumn)continue;
-            double bx=px-anchor.boleX(),by=(underside-1)-anchor.boleY(),bz=pz-anchor.boleZ();
-            double score=bx*bx+by*by+bz*bz;
-            if(score<bestScore) {
-                bestScore=score;
-                best=new CapPort(px,underside,pz);
+                if(!clear)continue;
+                for(int y=top+1;y<underside;y++) {
+                    P q=new P(x,y,z);
+                    sink.set(x,y,z,STEM);
+                    stems.add(q);
+                }
+                highestByColumn.put(key,underside-1);
             }
         }
-        return best;
-    }
-
-    /**
-     * Give each grouped cap a straight rooted support. Fill the complete clear
-     * vertical gap from local ground to that cap's exposed underside.
-     */
-    private static Set<P> addGroupedCapSupport(GroupedCapAnchor anchor,
-                                                Set<P> crown,Terrain terrain) {
-        CapPort port=findGroupedCapPort(anchor,crown,terrain);
-        if(port==null)return Set.of();
-        Set<P> support=new HashSet<>();
-        int groundY=terrain.groundAt(port.x(),port.z());
-        for(int y=groundY+1;y<port.undersideY();y++) {
-            P cell=new P(port.x(),y,port.z());
-            if(crown.contains(cell))return Set.of();
-            support.add(cell);
-        }
-        return support;
     }
 
     public static void grow(Sink sink,Terrain terrain,int x,int z,long worldSeed,int variant) {
@@ -201,15 +187,8 @@ public final class MushroomGeometry {
                 int by=ground+(int)(height*fraction);
                 double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                 double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
-                int boleY=Math.max(ground+1,by-8);
-                double boleT=(double)(boleY-ground)/(double)height;
-                double boleEase=boleT*boleT*(3.0-2.0*boleT);
-                double boleX=x+Math.cos(angle)*lean*boleEase
-                        +Math.sin(boleT*4.1+seed%37)*boleT*1.3;
-                double boleZ=z+Math.sin(angle)*lean*boleEase
-                        +Math.cos(boleT*3.5+seed%29)*boleT*1.5;
                 int radius=5+(int)(unit(seed+j*199)*5.0);
-                groupedCapAnchors.add(new GroupedCapAnchor(bx,bz,by,radius,j,boleX,boleZ,boleY));
+                groupedCapAnchors.add(new GroupedCapAnchor(bx,bz,by,radius,j));
                 for(int px=(int)bx-radius;px<=bx+radius;px++)for(int pz=(int)bz-radius;pz<=bz+radius;pz++) {
                     double dist=Math.hypot(px-bx,pz-bz),theta2=Math.atan2(pz-bz,px-bx);
                     if(dist>radius*(1.0+.14*Math.sin(theta2*5.0+j)))continue;
@@ -244,14 +223,8 @@ public final class MushroomGeometry {
             Integer previous=capBottomByColumn.get(key);
             if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
         }
-        emitTrunkStems(sink,terrain,trunk,capBottomByColumn,ground+1);
-        Set<P> groupedCapStems=new HashSet<>();
-        for(GroupedCapAnchor anchor:groupedCapAnchors)
-            groupedCapStems.addAll(addGroupedCapSupport(anchor,crown,terrain));
-        for(P q:groupedCapStems) {
-            if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
-                sink.set(q.x,q.y,q.z,STEM);
-        }
+        Set<P> emittedStems=emitTrunkStems(sink,terrain,trunk,capBottomByColumn,ground+1);
+        connectGroupedCapTops(sink,terrain,emittedStems,crown,groupedCapAnchors);
         for(P q:crown)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z)) {
             StringBuilder state=new StringBuilder(cap).append('[');
             for(int i=0;i<6;i++) {
