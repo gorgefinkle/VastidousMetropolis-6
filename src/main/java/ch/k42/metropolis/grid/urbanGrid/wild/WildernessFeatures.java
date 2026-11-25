@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class WildernessFeatures implements WaterField.LakeSource, WaterField.StreamSource {
    private static final int FEATURE_CELL_MULTIPLIER = 2;
-   private static final int MOUNTAIN_CLEARANCE = 28;
+   private static final int MOUNTAIN_CLEARANCE = 18;
    private static final int MAX_STREAM_RANGE = 220;
    private static final int MAX_ROUTE_EXPANSIONS = 40000;
    private static final int MAX_HIGHWAY_CROSSING_CHUNKS = 2;
@@ -147,7 +147,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
             int x = idealX + offset[0], z = idealZ + offset[1];
             if (!footprintClear(x, z, radius, radius, highwayMask, 3)) continue;
             if (!footprintClear(x, z, radius, radius, highwayMask, 1)) continue;
-            int peakDrop = 8 + (int)(mix(h ^ 0x5045414B4C494E45L) >>> 61);
+            int peakDrop = 2 + (int)(mix(h ^ 0x5045414B4C494E45L) >>> 61);
             MountainSite site = new MountainSite(this.seed, gx, gz, x * 16.0 + 8.0, z * 16.0 + 8.0,
                     radius * 16.0, radius * 16.0, unit(mix(h ^ 0x524944474553L)) * Math.PI,
                     MOUNTAIN_CLEARANCE + peakDrop);
