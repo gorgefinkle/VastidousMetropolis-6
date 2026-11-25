@@ -227,7 +227,12 @@ public final class DeferredSchematicMetadata {
         private void release(Slot slot){
             for(long id:slot.tickets)try{world.removePluginChunkTicket((int)(id>>32),(int)id,plugin);}
             catch(RuntimeException ex){plugin.getLogger().warning("Could not release deferred metadata chunk ticket: "+ex);}
-            slot.tickets.clear();if(staging==slot)staging=null;
+            slot.tickets.clear();
+            if(staging==slot){
+                staging=null;
+                loading=false;
+                loadGeneration++; // invalidate callbacks if the job completed by another path
+            }
         }
         private void loadLater(Slot slot,long id){
             if(!plugin.isEnabled())return;
