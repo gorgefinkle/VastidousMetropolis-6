@@ -31,7 +31,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * world-coordinate lookup and is shared by all UrbanGrid tiles.
  */
 public final class WildernessFeatures implements WaterField.LakeSource, WaterField.StreamSource {
-   private static final int FEATURE_CELL_MULTIPLIER = 2;
    private static final int MOUNTAIN_CLEARANCE = 18;
    private static final int MAX_STREAM_RANGE = 220;
    private static final int MAX_ROUTE_EXPANSIONS = 40000;
@@ -95,7 +94,9 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private WildernessFeatures(long seed, int spacing, WaterField water, HighwayNetwork highways) {
       this.seed = seed;
       this.spacing = Math.max(16, spacing);
-      this.cellSize = this.spacing * FEATURE_CELL_MULTIPLIER;
+      // Keep one route's full 220-chunk search radius inside the neighbouring
+      // feature-cell halo, even when city spacing is configured unusually low.
+      this.cellSize = Math.max(this.spacing * 2, MAX_STREAM_RANGE + 64);
       this.water = water;
       this.highways = highways;
       this.cities = new CityRingField(seed);
@@ -134,8 +135,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       int kind = (int)Math.floor(unit(h) * 100.0);
       if (kind >= LAKE_THRESHOLD) return FeatureCell.EMPTY;
 
-      int idealX = gx * this.cellSize + this.spacing;
-      int idealZ = gz * this.cellSize + this.spacing;
+      int idealX = gx * this.cellSize + this.cellSize / 2;
+      int idealZ = gz * this.cellSize + this.cellSize / 2;
       int attempts = 4;
       HighwayNetwork.Snapshot highwayMask = this.highways.snapshot(
               idealX - 72, idealZ - 72, idealX + 72, idealZ + 72);
@@ -162,8 +163,6 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       int radius = 14 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
       double ratio = 0.76 + unit(mix(h ^ 0x454C4C49505345L)) * 0.20;
       double angle = unit(mix(h ^ 0x4C414B45414E474CL)) * Math.PI;
-      List<WaterTarget> targets = findTargets(idealX, idealZ);
-      if (targets.isEmpty()) return FeatureCell.EMPTY;
       for (int attempt = 0; attempt < attempts; attempt++) {
          int[] offset = candidateOffset(h, attempt, 20);
          int x = idealX + offset[0], z = idealZ + offset[1];
@@ -172,6 +171,10 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          LakeSite lake = new LakeSite(this.seed, gx, gz, x * 16.0 + 8.0, z * 16.0 + 8.0,
                  radius * 16.0, radius * ratio * 16.0, angle,
                  RiverConfig.getRiverBuildHeight());
+         // Search from the final accepted lake position, not the feature-cell
+         // centre, so the A* bounds and its receiving-water heuristic agree.
+         List<WaterTarget> targets = findTargets(x, z);
+         if (targets.isEmpty()) continue;
          List<StreamSegment> stream = this.buildOutlet(lake, h, targets);
          if (stream != null && !stream.isEmpty()) {
             lake.streams = stream;
