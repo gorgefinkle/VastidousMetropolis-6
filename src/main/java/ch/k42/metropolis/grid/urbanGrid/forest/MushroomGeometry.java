@@ -25,9 +25,9 @@ public final class MushroomGeometry {
         @Override public int hashCode(){return x*9176 ^ z*1709 ^ y*19307;}
         @Override public boolean equals(Object o){return o instanceof P p && p.x==x&&p.y==y&&p.z==z;}
     }
-    private record GroupedCapAnchor(double capX,double capZ,int capY,int radius,int branch,
+    static record GroupedCapAnchor(double capX,double capZ,int capY,int radius,int branch,
                                     double boleX,double boleZ,int boleY) {}
-    private record CapPort(int x,int undersideY,int z) {}
+    static record CapPort(int x,int undersideY,int z) {}
     static long mix(long v){ v^=v>>>30;v*= -4658895280553007687L; v^=v>>>27;v*= -7723592293110705685L;return v^(v>>>31); }
     static double unit(long v) {return (mix(v)>>>11)*0x1.0p-53;}
     public static String species(long seed) {return unit(seed ^ 131L)<.52?"minecraft:red_mushroom_block":"minecraft:brown_mushroom_block";}
@@ -41,9 +41,13 @@ public final class MushroomGeometry {
      * only under columns that were already occupied on its original first row.
      * Higher, laterally-shifted bole columns are never filled down to ground.
      */
+    /**
+     * Preserve each authored stem column, then extend its two terminal gaps:
+     * bottommost block to local terrain and topmost block to the cap underside.
+     */
     static Set<P> emitTrunkStems(Sink sink,Terrain terrain,Set<P> trunk,
-                                 Map<Long,Integer> capBottomByColumn,int rootY) {
-        Set<Long> originalFootprint=new HashSet<>();
+                                 Map<Long,Integer> capBottomByColumn,int ignoredRootY) {
+        Map<Long,int[]> boundsByColumn=new HashMap<>();
         Set<P> emitted=new HashSet<>();
         for(P q:trunk) {
             long key=columnKey(q.x,q.z);
@@ -54,76 +58,41 @@ public final class MushroomGeometry {
             if(q.y<=groundY)continue;
             sink.set(q.x,q.y,q.z,STEM);
             emitted.add(q);
-            if(q.y==rootY)originalFootprint.add(key);
+            int[] bounds=boundsByColumn.computeIfAbsent(key,k->new int[]{q.y,q.y});
+            bounds[0]=Math.min(bounds[0],q.y);
+            bounds[1]=Math.max(bounds[1],q.y);
         }
-        for(long key:originalFootprint) {
-            int tx=(int)(key>>32),tz=(int)key;
-            int floor=terrain.groundAt(tx,tz)+1;
-            for(int y=floor;y<rootY;y++) {
+        for(Map.Entry<Long,int[]> entry:boundsByColumn.entrySet()) {
+            int tx=(int)(entry.getKey()>>32),tz=(int)(long)entry.getKey();
+            if(!terrain.allows(tx,tz))continue;
+            int groundY=terrain.groundAt(tx,tz);
+            int[] bounds=entry.getValue();
+            for(int y=groundY+1;y<bounds[0];y++) {
                 P root=new P(tx,y,tz);
                 sink.set(tx,y,tz,STEM);
                 emitted.add(root);
+            }
+            Integer capBottom=capBottomByColumn.get(entry.getKey());
+            if(capBottom!=null) {
+                for(int y=bounds[1]+1;y<capBottom;y++) {
+                    P capJoin=new P(tx,y,tz);
+                    sink.set(tx,y,tz,STEM);
+                    emitted.add(capJoin);
+                }
             }
         }
         return emitted;
     }
 
     /**
-     * Cap clipping can split the authored bole into several visible pieces.
-     * Only the component physically rooted at the local terrain is a valid
-     * anchor for grouped-crown branches.
-     */
-    private static Set<P> groundConnectedBole(Set<P> emitted,Terrain terrain) {
-        Set<P> connected=new HashSet<>();
-        java.util.ArrayDeque<P> queue=new java.util.ArrayDeque<>();
-        for(P q:emitted) {
-            if(q.y==terrain.groundAt(q.x,q.z)+1 && connected.add(q))queue.addLast(q);
-        }
-        while(!queue.isEmpty()) {
-            P current=queue.removeFirst();
-            for(int[] d:DIR) {
-                P next=new P(current.x+d[0],current.y+d[1],current.z+d[2]);
-                if(emitted.contains(next)&&connected.add(next))queue.addLast(next);
-            }
-        }
-        return connected;
-    }
-
-    private static P nearestEmittedBoleBlock(GroupedCapAnchor anchor,Set<P> emittedMainBole) {
-        P best=null;
-        double bestDistance=Double.POSITIVE_INFINITY;
-        for(P q:emittedMainBole) {
-            double dx=q.x-anchor.boleX(),dy=q.y-anchor.boleY(),dz=q.z-anchor.boleZ();
-            double distance=dx*dx+dy*dy+dz*dz;
-            if(distance<bestDistance) {
-                bestDistance=distance;
-                best=q;
-            }
-        }
-        return best;
-    }
-
-    private static boolean connected(Set<P> cells,P start,P target) {
-        if(!cells.contains(start)||!cells.contains(target))return false;
-        java.util.ArrayDeque<P> queue=new java.util.ArrayDeque<>();
-        Set<P> seen=new HashSet<>();
-        queue.add(start);seen.add(start);
-        while(!queue.isEmpty()) {
-            P q=queue.removeFirst();
-            if(q.equals(target))return true;
-            for(int[] d:DIR) {
-                P next=new P(q.x+d[0],q.y+d[1],q.z+d[2]);
-                if(seen.add(next)&&cells.contains(next))queue.addLast(next);
-            }
-        }
-        return false;
-    }
-
-    /**
      * Find an exposed underside point on this specific grouped cap. Its centre
      * can be covered by a lower cap, so use a real unoccupied edge port.
      */
-    private static CapPort findGroupedCapPort(GroupedCapAnchor anchor,Set<P> crown) {
+    /**
+     * Find an exposed underside point on this grouped cap. A direct support
+     * needs a completely clear vertical column below the underside.
+     */
+    static CapPort findGroupedCapPort(GroupedCapAnchor anchor,Set<P> crown,Terrain terrain) {
         CapPort best=null;
         double bestScore=Double.POSITIVE_INFINITY;
         int minX=(int)Math.floor(anchor.capX()-anchor.radius()-1);
@@ -131,6 +100,7 @@ public final class MushroomGeometry {
         int minZ=(int)Math.floor(anchor.capZ()-anchor.radius()-1);
         int maxZ=(int)Math.ceil(anchor.capZ()+anchor.radius()+1);
         for(int px=minX;px<=maxX;px++)for(int pz=minZ;pz<=maxZ;pz++) {
+            if(!terrain.allows(px,pz))continue;
             double dx=px-anchor.capX(),dz=pz-anchor.capZ();
             double dist=Math.hypot(dx,dz);
             double theta=Math.atan2(dz,dx);
@@ -138,9 +108,17 @@ public final class MushroomGeometry {
             int top=anchor.capY()+3-(int)((dist/anchor.radius())*4.0);
             int underside=top-2;
             P capBlock=new P(px,underside,pz);
-            P neck=new P(px,underside-1,pz);
-            if(!crown.contains(capBlock)||crown.contains(neck))continue;
-            double bx=px-anchor.boleX(),by=neck.y-anchor.boleY(),bz=pz-anchor.boleZ();
+            if(!crown.contains(capBlock))continue;
+            int groundY=terrain.groundAt(px,pz);
+            boolean clearColumn=true;
+            for(int y=groundY+1;y<underside;y++) {
+                if(crown.contains(new P(px,y,pz))) {
+                    clearColumn=false;
+                    break;
+                }
+            }
+            if(!clearColumn)continue;
+            double bx=px-anchor.boleX(),by=(underside-1)-anchor.boleY(),bz=pz-anchor.boleZ();
             double score=bx*bx+by*by+bz*bz;
             if(score<bestScore) {
                 bestScore=score;
@@ -151,65 +129,22 @@ public final class MushroomGeometry {
     }
 
     /**
-     * Build a side-crown branch from an actual ground-connected block of the
-     * leaning bole. The branch approaches an exposed point on the individual
-     * cap underside and detours around all intervening cap blocks.
+     * Give each grouped cap a straight rooted support. Fill the complete clear
+     * vertical gap from local ground to that cap's exposed underside.
      */
-    private static Set<P> addGroupedCapBranch(GroupedCapAnchor anchor,
-                                               Set<P> rootedMainBole,
-                                               Set<P> crown,Terrain terrain) {
-        P actualBole=nearestEmittedBoleBlock(anchor,rootedMainBole);
-        if(actualBole==null)return Set.of();
-        CapPort port=findGroupedCapPort(anchor,crown);
+    private static Set<P> addGroupedCapSupport(GroupedCapAnchor anchor,
+                                                Set<P> crown,Terrain terrain) {
+        CapPort port=findGroupedCapPort(anchor,crown,terrain);
         if(port==null)return Set.of();
-        P target=new P(port.x(),port.undersideY()-1,port.z());
-        double dx=target.x-actualBole.x,dz=target.z-actualBole.z;
-        double horizontal=Math.hypot(dx,dz);
-        double px=horizontal<.001?1.0:-dz/horizontal;
-        double pz=horizontal<.001?0.0:dx/horizontal;
-        int[] detours={0,4,7,10,13,16,20};
-        for(int detour:detours) {
-            int[] sides=detour==0?new int[]{0}:new int[]{-1,1};
-            for(int side:sides) {
-                double controlX=(actualBole.x+target.x)*.5+px*detour*side;
-                double controlY=(actualBole.y+target.y)*.5+2.0;
-                double controlZ=(actualBole.z+target.z)*.5+pz*detour*side;
-                double estimate=Math.sqrt(dx*dx+Math.pow(target.y-actualBole.y,2)+dz*dz)+detour*1.5;
-                int steps=Math.max(3,(int)Math.ceil(estimate*3.0));
-                Set<P> candidate=new HashSet<>();
-                int startClearance=Math.max(actualBole.y,
-                        terrain.groundAt(actualBole.x,actualBole.z)+3);
-                for(int y=actualBole.y;y<=startClearance;y++) {
-                    P q=new P(actualBole.x,y,actualBole.z);
-                    if(q.y<port.undersideY()&&!crown.contains(q)
-                            &&q.y>terrain.groundAt(q.x,q.z))candidate.add(q);
-                }
-                for(int i=0;i<=steps;i++) {
-                    double t=(double)i/steps,u=1.0-t;
-                    double cx=u*u*actualBole.x+2*u*t*controlX+t*t*target.x;
-                    double cy=u*u*startClearance+2*u*t*controlY+t*t*target.y;
-                    double cz=u*u*actualBole.z+2*u*t*controlZ+t*t*target.z;
-                    double radius=2.0-.55*t;
-                    int ix=(int)Math.round(cx),iy=(int)Math.round(cy),iz=(int)Math.round(cz);
-                    int reach=(int)Math.ceil(radius);
-                    for(int ox=-reach;ox<=reach;ox++)
-                        for(int oy=-reach;oy<=reach;oy++)
-                            for(int oz=-reach;oz<=reach;oz++) {
-                                if(ox*ox+oy*oy+oz*oz>radius*radius+.30)continue;
-                                P q=new P(ix+ox,iy+oy,iz+oz);
-                                if(q.y>=port.undersideY()||crown.contains(q))continue;
-                                if(q.y<=terrain.groundAt(q.x,q.z))continue;
-                                candidate.add(q);
-                            }
-                }
-                Set<P> combined=new HashSet<>(rootedMainBole);
-                combined.addAll(candidate);
-                if(connected(combined,actualBole,target))return candidate;
-            }
+        Set<P> support=new HashSet<>();
+        int groundY=terrain.groundAt(port.x(),port.z());
+        for(int y=groundY+1;y<port.undersideY();y++) {
+            P cell=new P(port.x(),y,port.z());
+            if(crown.contains(cell))return Set.of();
+            support.add(cell);
         }
-        return Set.of();
+        return support;
     }
-
 
     public static void grow(Sink sink,Terrain terrain,int x,int z,long worldSeed,int variant) {
         long seed=mix(worldSeed ^ mix(x*-7046029254386353131L + z*-4417276706812531889L));
@@ -235,10 +170,7 @@ public final class MushroomGeometry {
                 if(dist<rad*(.94+.08*unit(mix(seed ^ px*257L ^ pz*433L))))trunk.add(new P(px,y,pz));
             }
         }
-        // Snapshot only the original leaning bole. Later auxiliary stems are
-        // kept separate so grouped caps cannot silently anchor to a ground spur.
-        Set<P> primaryBole=new HashSet<>(trunk);
-        for(int px=(int)(centerX-spread-4);px<=centerX+spread+4;px++)for(int pz=(int)(centerZ-spread-4);pz<=centerZ+spread+4;pz++) {
+         for(int px=(int)(centerX-spread-4);px<=centerX+spread+4;px++)for(int pz=(int)(centerZ-spread-4);pz<=centerZ+spread+4;pz++) {
             double offsetX=px-centerX,offsetZ=pz-centerZ;
             double a=Math.atan2(offsetZ,offsetX), dist=Math.hypot(offsetX,offsetZ);
             double ripples=.08*Math.sin(a*5.0+(seed%43)*.1)+.065*Math.sin(a*9.0+(seed%31)*.13);
@@ -312,22 +244,10 @@ public final class MushroomGeometry {
             Integer previous=capBottomByColumn.get(key);
             if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
         }
-        Set<P> emittedMainBole=emitTrunkStems(sink,terrain,primaryBole,
-                capBottomByColumn,ground+1);
-        Set<P> rootedMainBole=groundConnectedBole(emittedMainBole,terrain);
-        // Mode-specific satellite stalks keep their authored shape and are
-        // emitted separately; only the primary leaning bole gets base-row
-        // terrain extension and only it may anchor stacked crown branches.
-        for(P q:trunk) {
-            if(primaryBole.contains(q))continue;
-            Integer capBottom=capBottomByColumn.get(columnKey(q.x,q.z));
-            if(capBottom!=null&&q.y>=capBottom)continue;
-            if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
-                sink.set(q.x,q.y,q.z,STEM);
-        }
+        emitTrunkStems(sink,terrain,trunk,capBottomByColumn,ground+1);
         Set<P> groupedCapStems=new HashSet<>();
         for(GroupedCapAnchor anchor:groupedCapAnchors)
-            groupedCapStems.addAll(addGroupedCapBranch(anchor,rootedMainBole,crown,terrain));
+            groupedCapStems.addAll(addGroupedCapSupport(anchor,crown,terrain));
         for(P q:groupedCapStems) {
             if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
                 sink.set(q.x,q.y,q.z,STEM);
