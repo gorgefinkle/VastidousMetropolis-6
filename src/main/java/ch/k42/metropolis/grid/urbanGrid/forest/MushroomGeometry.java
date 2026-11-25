@@ -47,14 +47,12 @@ public final class MushroomGeometry {
      */
     static Set<P> emitTrunkStems(Sink sink,Terrain terrain,Set<P> trunk,
                                  Map<Long,Integer> capBottomByColumn,int rootY) {
-        Map<Long,Integer> highestByColumn=new HashMap<>();
         Set<Long> originalBottomFootprint=new HashSet<>();
         Set<P> emitted=new HashSet<>();
         for(P q:trunk) {
             long key=columnKey(q.x,q.z);
-            // Capture the authored first-row footprint before terrain or cap
-            // clipping. Those terminal corrections must not erase the fact
-            // that this column belongs to the original leaning bole base.
+            // Capture only the authored lowest footprint before terrain
+            // clipping, so its roots can be extended down over uneven ground.
             if(q.y==rootY&&terrain.allows(q.x,q.z))originalBottomFootprint.add(key);
             Integer capBottom=capBottomByColumn.get(key);
             if(capBottom!=null&&q.y>=capBottom)continue;
@@ -62,28 +60,15 @@ public final class MushroomGeometry {
             if(q.y<=terrain.groundAt(q.x,q.z))continue;
             sink.set(q.x,q.y,q.z,STEM);
             emitted.add(q);
-            highestByColumn.merge(key,q.y,Math::max);
         }
-        // Bottom correction: only columns in the original lowest layer.
+        // Bottom-only correction: extend the original base footprint down
+        // to local terrain. Never extend leaning bole columns upward; those
+        // vertical fills erase the authored taper, curve, and trunk silhouette.
         for(long key:originalBottomFootprint) {
             int x=(int)(key>>32),z=(int)key;
             int groundY=terrain.groundAt(x,z);
             for(int y=groundY+1;y<rootY;y++) {
                 P q=new P(x,y,z);
-                sink.set(x,y,z,STEM);
-                emitted.add(q);
-            }
-        }
-        // Top correction: continue only columns that already contain stem,
-        // from their highest authored block to the cap's actual underside.
-        for(Map.Entry<Long,Integer> entry:highestByColumn.entrySet()) {
-            Integer capBottom=capBottomByColumn.get(entry.getKey());
-            if(capBottom==null)continue;
-            int x=(int)(entry.getKey()>>32),z=(int)(long)entry.getKey();
-            int top=entry.getValue();
-            for(int y=top+1;y<capBottom;y++) {
-                P q=new P(x,y,z);
-                if(q.y<=terrain.groundAt(x,z))continue;
                 sink.set(x,y,z,STEM);
                 emitted.add(q);
             }
