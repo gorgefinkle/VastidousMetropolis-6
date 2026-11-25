@@ -1,27 +1,26 @@
-# R14.22 — Remove the buried Smooth Stone seam
+# R14.22 — Preserve the pre-paint smoothstone safety cap
 
-## Root cause
+## Purpose
 
-The base generator wrote a special `SMOOTH_STONE` block at Y=64 in every
-normal-overworld chunk, while all surrounding base-fill layers were ordinary
-stone. Raised biome terrain could bury this cap: the forest column painter
-resets buried substrate from Y=65 upward, leaving the single Y=64 smooth-stone
-band inside hills and other raised biome surfaces.
+The normal-overworld Y=64 smoothstone layer is intentional. It is written
+during base chunk generation, before any parcel or district populates. It
+protects unpopulated chunk caps from exposing a grass-cap surface and must not
+be moved into parcel painting, because chunks that never receive a parcel
+would never get it.
 
-## Fix
+## Seam handling
 
-- Base terrain now uses the same environment-provided material/fallback-stone
-  rule at every generated Y level. The normal overworld has no environment
-  override, so Y=64 is ordinary stone like Y=63 and the rest of the substrate.
-- During the existing per-column forest paint, a legacy smooth-stone cap at
-  Y=64 is converted to stone only when it is below that column's surface.
-  This handles chunks generated with the previous code when they are naturally
-  repainted, without moving the surface or adding a cleanup pass.
-- R14.21's mushroom contact, Mother Willow junction, Bloomlands understory,
-  and safe asynchronous branch-growth changes remain intact.
+- Keep the pre-paint SMOOTH_STONE cap at Y=64 in normal-overworld chunks.
+- Parcel painters may replace the cap when they paint their own water or land.
+- When the regular forest painter raises a column above Y=64, the cap is now
+  buried substrate; normalize only that buried block to ordinary stone. This
+  removes the internal seam while retaining exposed safety caps in chunks
+  that have not been raised and populated.
+- Do not remove the base-generation cap as a seam fix.
 
 ## Validation
 
-The R14.22 probes verify the uniform base fill, environment overrides, and
-selective conversion of only a buried legacy Y=64 cap. The complete inherited
-Java 25 and world-generation suite runs alongside them.
+`SmoothstoneSeamProbe` verifies the overworld Y=64 cap is emitted as part of
+base generation while ordinary fallback stone and non-overworld overrides
+remain unchanged. `BuriedFallbackCapProbe` separately verifies that only a
+buried legacy cap is normalized during raised forest-column painting.
