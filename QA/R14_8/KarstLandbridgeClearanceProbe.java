@@ -19,6 +19,14 @@ public final class KarstLandbridgeClearanceProbe {
         int minimumClearance = Integer.MAX_VALUE;
         int maximumCoreThickness = 0;
 
+        double crestAtMidspan=KarstSpanVolume.archCrownRise(0.0,0.0);
+        double crestAtPortal=KarstSpanVolume.archCrownRise(.90,0.0);
+        check(crestAtMidspan>=10.5,
+                "landbridge no longer has a recognizable raised midspan crest: "+crestAtMidspan);
+        check(crestAtMidspan-crestAtPortal>=9.5,
+                "landbridge crest does not settle clearly into its portals: mid="+crestAtMidspan
+                        +" portal="+crestAtPortal);
+
         for (long seed : seeds) {
             Random random = new Random(seed ^ 0x4b41525354535041L);
             long seedChecked = 0;
