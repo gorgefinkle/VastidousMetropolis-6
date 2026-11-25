@@ -64,6 +64,19 @@ public final class MotherWillowGeometry {
     double offset=Math.max(1.0,branchRadius*.78);
     return boleCenter.add(ox/outward*offset,0.0,oz/outward*offset);
   }
+  /**
+   * Keep each reiterated leader subordinate to the local bole diameter.
+   * The upper three leaders are deliberately reduced against the trunk's
+   * own taper, rather than retaining the same near-constant branch radius.
+   */
+  static double leaderRootRadius(int leaderIndex,int attachNode) {
+    double nominal=5.8-leaderIndex*.56;
+    double trunkAtAttach=15.0*Math.pow(1.0-.80*(attachNode/19.0),.82);
+    return Math.min(nominal,trunkAtAttach*.58);
+  }
+  static double leaderScale(int leaderIndex,int attachNode) {
+    return leaderRootRadius(leaderIndex,attachNode)/(5.8-leaderIndex*.56);
+  }
   private static double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
   private static class Maker {
     final Sink out;final Terrain land;final long seed;
@@ -339,9 +352,13 @@ public final class MotherWillowGeometry {
       P p0=nodes[attach];double a=wind+i*2.399963+(.5-rand(hash(sh,3)))*.50;
       P mid=p0.add(Math.cos(a)*(10+i*2),24-i*2,Math.sin(a)*(10+i*2));
       P top=mid.add(Math.cos(a+0.28)*(11+i*2),20+rand(hash(sh,4))*11,Math.sin(a+.28)*(11+i*2));
-      if(i==3) m.smoothLeaderJunction(p0,mid,nodes[attach-1],nodes[attach+1],5.8-i*.56,3.7-i*.35);
-      else m.segment(p0,mid,5.8-i*.56,3.7-i*.35);
-      m.segment(mid,top,3.7-i*.35,1.35);
+      double leaderRoot=leaderRootRadius(i,attach);
+      double leaderMid=leaderRoot*.638;
+      double leaderTip=leaderMid*.365;
+      double leaderScale=leaderScale(i,attach);
+      if(i==3) m.smoothLeaderJunction(p0,mid,nodes[attach-1],nodes[attach+1],leaderRoot,leaderMid);
+      else m.segment(p0,mid,leaderRoot,leaderMid);
+      m.segment(mid,top,leaderMid,leaderTip);
       // Primary scaffolds arise along the leaders at staggered heights;
       // asymmetric crowding and self-pruning prevent a symmetric umbrella.
       for(int j=0;j<5;j++){
@@ -349,7 +366,7 @@ public final class MotherWillowGeometry {
         double height=(j+.5)/6.0;
         P start=lerp(j%2==0?p0:mid, j%2==0?mid:top, height);
         double len=47+rand(hash(bh,6))*57-(j==0?11:0);
-        double radius=3.45+rand(hash(bh,9))*1.25;
+        double radius=(3.45+rand(hash(bh,9))*1.25)*leaderScale;
         m.branch(start,angle,.10+rand(hash(bh,8))*.44,len,radius,0,bh);
       }
     }
