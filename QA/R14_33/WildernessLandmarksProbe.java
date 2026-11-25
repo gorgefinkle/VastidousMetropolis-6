@@ -29,6 +29,35 @@ public final class WildernessLandmarksProbe {
             throw new AssertionError("mountain name is not stable for the same world seed and site");
         }
 
+        // A bent outlet is one continuous course. Test both legs, the
+        // corner itself, local highway-crossing axes and the legacy bank envelope.
+        WildernessStreamCourse stream = new WildernessStreamCourse(seed,
+                new double[]{8.0, 24.0, 24.0},
+                new double[]{8.0, 8.0, 24.0}, 6.5, 8.0);
+        if (!stream.isEnabled()) {
+            throw new AssertionError("river-enabled test configuration unexpectedly disabled wilderness outlet carving");
+        }
+        if (stream.pointCount() != 3
+                || Math.abs(stream.distanceFromCenterBlock(16.0, 8.0)) > 1.0e-9
+                || Math.abs(stream.distanceFromCenterBlock(24.0, 16.0)) > 1.0e-9
+                || Math.abs(stream.distanceFromCenterBlock(24.0, 8.0)) > 1.0e-9) {
+            throw new AssertionError("polyline stream broke at its 90-degree bend");
+        }
+        if (!stream.isRiverOrBank(1, 0) || !stream.isRiverOrBank(1, 1)) {
+            throw new AssertionError("stream course does not reserve both sides of its bend");
+        }
+        if (stream.isZBoundAt(1, 0) || !stream.isZBoundAt(1, 1)
+                || stream.forChunk(1, 0).isZBound() || !stream.forChunk(1, 1).isZBound()) {
+            throw new AssertionError("local stream axis is not preserved at the bend");
+        }
+        if (Math.abs(stream.spineZBlock(16.0) - 8.0) > 1.0e-9
+                || Math.abs(stream.spineXBlock(16.0) - 24.0) > 1.0e-9) {
+            throw new AssertionError("local highway crossing spine query does not follow the correct stream leg");
+        }
+        if (!Double.isNaN(stream.distanceFromCenterBlock(1000.0, 1000.0))) {
+            throw new AssertionError("stream course claims terrain beyond its bank envelope");
+        }
+
         WildernessFeatures.LakeSite lakeA = new WildernessFeatures.LakeSite(
                 seed, 11, -8, 1800.0, 2400.0, 288.0, 238.0, 0.61, 63);
         WildernessFeatures.LakeSite lakeB = new WildernessFeatures.LakeSite(
