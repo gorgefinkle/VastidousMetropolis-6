@@ -238,15 +238,19 @@ public final class DeferredSchematicMetadata {
             if(!plugin.isEnabled())return;
             if(loading||(staging!=null&&staging!=slot)){
                 blockedLoadsSinceLog++;
+                slot.nextTry=ticks+2;
                 return;
             }
             staging=slot;stagingSince=ticks;loading=true;loadTarget=id;
+            // Keep the slot out of the hot path while its async request is pending.
+            slot.nextTry=ticks+2;
             long generation=++loadGeneration;
             int x=(int)(id>>32),z=(int)id;
             CompletableFuture<Chunk> future;
             try{future=world.getChunkAtAsync(x,z,false);}
             catch(RuntimeException ex){
-                loading=false;loadGeneration++;release(slot);slot.nextTry=ticks+100;
+                // release() clears the staging gate and invalidates this generation.
+                release(slot);slot.nextTry=ticks+100;
                 asyncLoadFailuresSinceLog++;
                 return;
             }
@@ -285,10 +289,8 @@ public final class DeferredSchematicMetadata {
             if(staging!=null&&ticks-stagingSince>100){
                 Slot expired=staging;
                 long expiredTarget=loadTarget;
-                loadGeneration++; // invalidate a late completion callback
-                loading=false;
                 expired.nextTry=ticks+100;
-                release(expired);
+                release(expired); // clears loading and invalidates any late callback
                 loadTimeoutsSinceLog++;
                 if(loadTimeoutsSinceLog==1||loadTimeoutsSinceLog%10==0){
                     plugin.getLogger().warning("Deferred metadata chunk load timed out at "
@@ -323,7 +325,7 @@ public final class DeferredSchematicMetadata {
                     }
                     if(missing!=Long.MIN_VALUE){
                         chunkWaitsSinceLog++;
-                        loadLater(slot,missing);slot.nextTry=ticks+2;requeueOrReturn(slot);continue;
+                        loadLater(slot,missing);requeueOrReturn(slot);continue;
                     }
                     Set<Long> acquired=new HashSet<>();boolean okay=true;
                     try{
