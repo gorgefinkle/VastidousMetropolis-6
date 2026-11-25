@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_27_Wilderness_Camp_Groups_DEV</finalName>
+        <finalName>Metropolis_R14_27_Mushroom_Stalk_Geometry_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
