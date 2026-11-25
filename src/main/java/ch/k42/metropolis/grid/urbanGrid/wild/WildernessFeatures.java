@@ -547,12 +547,14 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       }
 
       public boolean intersectsChunk(int chunkX, int chunkZ) {
-         double bx = chunkX * 16.0 + 8.0, bz = chunkZ * 16.0 + 8.0;
-         if (normalizedRadius(bx, bz) <= 1.04) return true;
-         double[] ox = {-8.0, 8.0, -8.0, 8.0};
-         double[] oz = {-8.0, -8.0, 8.0, 8.0};
-         for (int i = 0; i < 4; i++) {
-            if (normalizedRadius(bx + ox[i], bz + oz[i]) <= 1.0) return true;
+         double bx = chunkX * 16.0, bz = chunkZ * 16.0;
+         // Center, four corners and four side midpoints catch narrow edge
+         // intersections without inflating the lake footprint by a buffer.
+         double[] offsets = {0.0, 8.0, 16.0};
+         for (double ox : offsets) {
+            for (double oz : offsets) {
+               if (normalizedRadius(bx + ox, bz + oz) <= 1.0) return true;
+            }
          }
          return false;
       }
