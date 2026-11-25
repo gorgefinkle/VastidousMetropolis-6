@@ -79,25 +79,25 @@ jobs:
           javac -d target/qa-queue src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java QA/R14_6/DiskDeferredChunkQueueProbe.java
           java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
       - name: Assemble complete source archive
-        run: zip -r Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
+        run: zip -r Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
       - name: Assemble exact two-file development package
         run: |
           mkdir -p r14-32-package
-          cp target/Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV.jar r14-32-package/
-          cp Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_SOURCE.zip r14-32-package/
-          (cd r14-32-package && zip -q ../Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip ./*)
+          cp target/Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_DEV.jar r14-32-package/
+          cp Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_SOURCE.zip r14-32-package/
+          (cd r14-32-package && zip -q ../Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_DEV_PACKAGE.zip ./*)
       - name: Verify exact package contents
         run: |
-          unzip -Z1 Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip | sort > package-files.txt
-          printf '%s\n' Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV.jar Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_SOURCE.zip | sort > expected-files.txt
+          unzip -Z1 Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\n' Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_DEV.jar Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_SOURCE.zip | sort > expected-files.txt
           diff -u expected-files.txt package-files.txt
-          unzip -t Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip
+          unzip -t Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_DEV_PACKAGE.zip
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV
+          name: Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV.jar
-            Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_SOURCE.zip
-            Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip
+            target/Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_DEV.jar
+            Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_SOURCE.zip
+            Metropolis_R14_32_Tree_Form_and_Farm_Vehicle_Removal_DEV_PACKAGE.zip
