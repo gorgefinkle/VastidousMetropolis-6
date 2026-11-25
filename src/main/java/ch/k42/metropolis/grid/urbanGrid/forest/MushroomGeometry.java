@@ -23,8 +23,6 @@ public final class MushroomGeometry {
         @Override public int hashCode(){return x*9176 ^ z*1709 ^ y*19307;}
         @Override public boolean equals(Object o){return o instanceof P p && p.x==x&&p.y==y&&p.z==z;}
     }
-    private record StalkAnchor(int capX,int capZ,int capEndY) {}
-
     static long mix(long v){ v^=v>>>30;v*= -4658895280553007687L; v^=v>>>27;v*= -7723592293110705685L;return v^(v>>>31); }
     static double unit(long v) {return (mix(v)>>>11)*0x1.0p-53;}
     public static String species(long seed) {return unit(seed ^ 131L)<.52?"minecraft:red_mushroom_block":"minecraft:brown_mushroom_block";}
@@ -33,18 +31,28 @@ public final class MushroomGeometry {
         return ((long)x<<32) ^ (z & 0xffffffffL);
     }
 
-    /** Root a separate stalk directly beneath the lowest face of a grouped cap. */
-    private static void addCapStalk(Set<P> output,Terrain terrain,
-                                    Map<Long,Integer> capBottomByColumn,
-                                    StalkAnchor anchor) {
-        int x=anchor.capX(),z=anchor.capZ();
-        Integer underside=capBottomByColumn.get(columnKey(x,z));
-        if(underside==null)return;
-        int endY=Math.min(anchor.capEndY(),underside-1);
-        int floor=terrain.groundAt(x,z)+1;
-        for(int y=floor;y<=endY;y++) {
-            if(!terrain.allows(x,z))break;
-            output.add(new P(x,y,z));
+    /**
+     * Preserve the authored trunk silhouette. Extend only beneath the lowest
+     * already-existing visible stem block in each occupied column.
+     */
+    static void emitTrunkStems(Sink sink,Terrain terrain,Set<P> trunk,
+                               Map<Long,Integer> capBottomByColumn) {
+        Map<Long,Integer> lowestVisibleByColumn=new HashMap<>();
+        for(P q:trunk) {
+            long key=columnKey(q.x,q.z);
+            Integer capBottom=capBottomByColumn.get(key);
+            if(capBottom!=null&&q.y>=capBottom)continue;
+            if(!terrain.allows(q.x,q.z))continue;
+            int groundY=terrain.groundAt(q.x,q.z);
+            if(q.y<=groundY)continue;
+            sink.set(q.x,q.y,q.z,STEM);
+            lowestVisibleByColumn.merge(key,q.y,Math::min);
+        }
+        for(Map.Entry<Long,Integer> entry:lowestVisibleByColumn.entrySet()) {
+            int tx=(int)(entry.getKey()>>32),tz=(int)(long)entry.getKey();
+            int floor=terrain.groundAt(tx,tz)+1;
+            int firstExisting=entry.getValue();
+            for(int ty=floor;ty<firstExisting;ty++)sink.set(tx,ty,tz,STEM);
         }
     }
 
@@ -58,9 +66,7 @@ public final class MushroomGeometry {
         double angle=unit(seed+11)*6.28318530718;
         double lean=3.0+unit(seed+15)*10.0;
         double centerX=x+Math.cos(angle)*lean,centerZ=z+Math.sin(angle)*lean;
-        Set<P> crown=new HashSet<>(), trunk=new HashSet<>(), capStems=new HashSet<>();
-        Set<Long> trunkColumns=new HashSet<>();
-        java.util.List<StalkAnchor> groupedCapAnchors=new java.util.ArrayList<>();
+        Set<P> crown=new HashSet<>(), trunk=new HashSet<>();
         for(int y=ground+1;y<=ground+height+1;y++) {
             double t=(double)(y-ground)/(double)height;
             double ease=t*t*(3.0-2.0*t);
@@ -104,9 +110,6 @@ public final class MushroomGeometry {
                 int by=ground+(int)(height*fraction);
                 double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                 double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
-                // Each grouped crown receives its own rooted stem directly
-                // beneath the cap centre, including the three highest crowns.
-                groupedCapAnchors.add(new StalkAnchor((int)Math.round(bx),(int)Math.round(bz),by));
                 int radius=5+(int)(unit(seed+j*199)*5.0);
                 for(int px=(int)bx-radius;px<=bx+radius;px++)for(int pz=(int)bz-radius;pz<=bz+radius;pz++) {
                     double dist=Math.hypot(px-bx,pz-bz),theta2=Math.atan2(pz-bz,px-bx);
@@ -142,39 +145,7 @@ public final class MushroomGeometry {
             Integer previous=capBottomByColumn.get(key);
             if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
         }
-        // The upper grouped crowns are independent cap masses. Give every
-        // one a full-height descending stalk rooted at its own local ground.
-        for(StalkAnchor anchor:groupedCapAnchors)
-            addCapStalk(capStems,terrain,capBottomByColumn,anchor);
-
-        // First retain the intended stalk ceiling in each column. Then root
-        // every stalk column at its own true terrain height. This matters on
-        // valley walls: a single centre-ground anchor leaves the uphill side
-        // of a broad stalk visibly suspended.
-        Map<Long,Integer> trunkTopByColumn=new HashMap<>();
-        for(P q:trunk) {
-            long key=columnKey(q.x,q.z);
-            trunkColumns.add(key);
-            Integer capBottom=capBottomByColumn.get(key);
-            if(capBottom!=null&&q.y>=capBottom)continue;
-            Integer old=trunkTopByColumn.get(key);
-            if(old==null||q.y>old)trunkTopByColumn.put(key,q.y);
-        }
-        // Extend the existing leaning bole upward from the cap underside in
-        // every occupied trunk column. This preserves the curved base while
-        // making its top follow the actual, possibly sloping cap underside.
-        for(long key:trunkColumns) {
-            Integer capBottom=capBottomByColumn.get(key);
-            if(capBottom!=null)trunkTopByColumn.merge(key,capBottom-1,Math::max);
-        }
-        for(Map.Entry<Long,Integer> entry:trunkTopByColumn.entrySet()) {
-            int tx=(int)(entry.getKey()>>32),tz=(int)(long)entry.getKey();
-            if(!terrain.allows(tx,tz))continue;
-            int floor=terrain.groundAt(tx,tz)+1;
-            for(int ty=floor;ty<=entry.getValue();ty++)sink.set(tx,ty,tz,STEM);
-        }
-        for(P q:capStems)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
-            sink.set(q.x,q.y,q.z,STEM);
+        emitTrunkStems(sink,terrain,trunk,capBottomByColumn);
         for(P q:crown)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z)) {
             StringBuilder state=new StringBuilder(cap).append('[');
             for(int i=0;i<6;i++) {
