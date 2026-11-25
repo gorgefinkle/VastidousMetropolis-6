@@ -1,12 +1,14 @@
 #!/bin/sh
 set -eu
 WILLOW=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/MotherWillowGeometry.java
+FOREST=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/ForestTrees.java
 MUSHROOM=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/MushroomGeometry.java
 LAYOUT=src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmLayout.java
 PROPS=src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmProps.java
 OUTBUILDINGS=src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmOutbuildings.java
 
 grep -Fq 'directionless?"none"' "$WILLOW"
+grep -Fq 'data | 12' "$FOREST"
 grep -Fq 'branchSegment(last,next' "$WILLOW"
 grep -Fq 'minecraft:oak_fence[north=true,east=true,south=true,west=true,waterlogged=false]' "$WILLOW"
 grep -Fq 'leaderIndex>=2?.34:.48' "$WILLOW"
