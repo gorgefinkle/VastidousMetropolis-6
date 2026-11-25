@@ -66,6 +66,27 @@ public final class MushroomGeometry {
         return emitted;
     }
 
+    /**
+     * Cap clipping can split the authored bole into several visible pieces.
+     * Only the component physically rooted at the local terrain is a valid
+     * anchor for grouped-crown branches.
+     */
+    private static Set<P> groundConnectedBole(Set<P> emitted,Terrain terrain) {
+        Set<P> connected=new HashSet<>();
+        java.util.ArrayDeque<P> queue=new java.util.ArrayDeque<>();
+        for(P q:emitted) {
+            if(q.y==terrain.groundAt(q.x,q.z)+1 && connected.add(q))queue.addLast(q);
+        }
+        while(!queue.isEmpty()) {
+            P current=queue.removeFirst();
+            for(int[] d:DIR) {
+                P next=new P(current.x+d[0],current.y+d[1],current.z+d[2]);
+                if(emitted.contains(next)&&connected.add(next))queue.addLast(next);
+            }
+        }
+        return connected;
+    }
+
     private static P nearestEmittedBoleBlock(GroupedCapAnchor anchor,Set<P> emittedMainBole) {
         P best=null;
         double bestDistance=Double.POSITIVE_INFINITY;
@@ -215,6 +236,7 @@ public final class MushroomGeometry {
         }
         Set<P> emittedMainBole=emitTrunkStems(sink,terrain,primaryBole,
                 capBottomByColumn,ground+1);
+        Set<P> rootedMainBole=groundConnectedBole(emittedMainBole,terrain);
         // Mode-specific satellite stalks keep their authored shape and are
         // emitted separately; only the primary leaning bole gets base-row
         // terrain extension and only it may anchor stacked crown branches.
@@ -227,7 +249,7 @@ public final class MushroomGeometry {
         }
         Set<P> groupedCapStems=new HashSet<>();
         for(GroupedCapAnchor anchor:groupedCapAnchors)
-            addGroupedCapBranch(groupedCapStems,anchor,emittedMainBole,crown);
+            addGroupedCapBranch(groupedCapStems,anchor,rootedMainBole,crown);
         for(P q:groupedCapStems) {
             if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
                 sink.set(q.x,q.y,q.z,STEM);
