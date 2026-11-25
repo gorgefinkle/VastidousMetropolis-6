@@ -356,6 +356,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
             byte axes = highwayAxes.getOrDefault(cellKey(nx, nz), (byte)0);
             int moveAxis = dx[direction] != 0 ? 1 : 2;
             if (axes != 0 && (axes & moveAxis) != 0) continue; // never travel along a highway
+            // Keep the crossing straight until the stream has cleared the highway width.
+            if (node.highwayRun > 0 && direction != node.direction) continue;
             int run = axes == 0 ? 0 : node.highwayRun + 1;
             if (run > MAX_HIGHWAY_CROSSING_CHUNKS) continue;
 
