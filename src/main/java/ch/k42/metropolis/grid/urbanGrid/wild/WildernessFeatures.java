@@ -507,7 +507,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    }
 
    public static final class LakeSite {
-      static final double WATER_EDGE = 0.79;
+      public static final double WATER_EDGE = 0.79;
       public final String name;
       public final int gridX, gridZ;
       public final double centerX, centerZ, radiusX, radiusZ, angle;
