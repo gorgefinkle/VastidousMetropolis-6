@@ -33,7 +33,7 @@ public final class WildernessLandmarksProbe {
         // corner itself, local highway-crossing axes and the legacy bank envelope.
         WildernessStreamCourse stream = new WildernessStreamCourse(seed,
                 new double[]{8.0, 24.0, 24.0},
-                new double[]{8.0, 8.0, 24.0}, 6.5, 8.0);
+                new double[]{8.0, 8.0, 24.0}, 11.0, 8.0);
         if (!stream.isEnabled()) {
             throw new AssertionError("river-enabled test configuration unexpectedly disabled wilderness outlet carving");
         }
@@ -45,6 +45,9 @@ public final class WildernessLandmarksProbe {
         }
         if (!stream.isRiverOrBank(1, 0) || !stream.isRiverOrBank(1, 1)) {
             throw new AssertionError("stream course does not reserve both sides of its bend");
+        }
+        if (stream.getHalfWidthBlocks() * 0.75 < 3.0) {
+            throw new AssertionError("stream is too narrow for the smallest explicit highway crossing bore");
         }
         if (stream.isZBoundAt(1, 0) || !stream.isZBoundAt(1, 1)
                 || stream.forChunk(1, 0).isZBound() || !stream.forChunk(1, 1).isZBound()) {
