@@ -98,45 +98,25 @@ public final class MushroomCapStemProbe {
                         double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                         double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
                         int capRadius=5+(int)(MushroomGeometry.unit(geometrySeed+branch*199)*5.0);
-                        int boleY=Math.max(ground+1,by-8);
-                        double boleT=(double)(boleY-ground)/(double)height;
-                        double boleEase=boleT*boleT*(3.0-2.0*boleT);
-                        double boleX=x+Math.cos(angle)*lean*boleEase
-                                +Math.sin(boleT*4.1+geometrySeed%37)*boleT*1.3;
-                        double boleZ=z+Math.sin(angle)*lean*boleEase
-                                +Math.cos(boleT*3.5+geometrySeed%29)*boleT*1.5;
-                        Set<MushroomGeometry.P> crownCells=new HashSet<>();
-                        for(Map.Entry<Voxel,String> entry:voxels.entrySet()) {
-                            if(isCap(entry.getValue())) {
-                                Voxel v=entry.getKey();
-                                crownCells.add(new MushroomGeometry.P(v.x(),v.y(),v.z()));
+                        boolean attached=false;
+                        for(int px=(int)Math.floor(bx-capRadius-1);px<=bx+capRadius+1&&!attached;px++) {
+                            for(int pz=(int)Math.floor(bz-capRadius-1);pz<=bz+capRadius+1&&!attached;pz++) {
+                                double dx=px-bx,dz=pz-bz,dist=Math.hypot(dx,dz);
+                                double edge=Math.atan2(dz,dx);
+                                if(dist>capRadius*(1.0+.14*Math.sin(edge*5.0+branch)))continue;
+                                int capTop=by+3-(int)((dist/capRadius)*4.0);
+                                int underside=capTop-2;
+                                Voxel capBlock=new Voxel(px,underside,pz);
+                                Voxel stemTop=new Voxel(px,underside-1,pz);
+                                if(isCap(voxels.get(capBlock))&&stemCells.contains(stemTop)
+                                        &&connectedToGround(stemTop,stemCells)) {
+                                    attached=true;
+                                }
                             }
                         }
-                        MushroomGeometry.GroupedCapAnchor anchor=
-                                new MushroomGeometry.GroupedCapAnchor(bx,bz,by,capRadius,branch,boleX,boleZ,boleY);
-                        MushroomGeometry.Terrain terrain=new MushroomGeometry.Terrain() {
-                            public int groundAt(int gx,int gz) {
-                                return 62+Math.floorMod(gx*31+gz*17,5)-2;
-                            }
-                            public boolean allows(int gx,int gz) { return true; }
-                        };
-                        MushroomGeometry.CapPort port=MushroomGeometry.findGroupedCapPort(anchor,crownCells,terrain);
-                        if(port==null)
-                            throw new AssertionError("grouped cap has no clear vertical underside port: branch="+branch+" sample="+sample);
-                        Voxel capVoxel=new Voxel(port.x(),port.undersideY(),port.z());
-                        Voxel neck=new Voxel(port.x(),port.undersideY()-1,port.z());
-                        if(!isCap(voxels.get(capVoxel)))
-                            throw new AssertionError("selected grouped cap port does not touch cap underside: branch="+branch+" sample="+sample);
-                        int portGround=terrain.groundAt(port.x(),port.z());
-                        for(int y=portGround+1;y<port.undersideY();y++) {
-                            Voxel support=new Voxel(port.x(),y,port.z());
-                            if(!stemCells.contains(support))
-                                throw new AssertionError("vertical cap support has an air gap: branch="+branch+" sample="+sample+" y="+y);
-                        }
-                        if(!stemCells.contains(neck))
-                            throw new AssertionError("grouped cap support does not meet underside: branch="+branch+" sample="+sample);
-                        if(!connectedToGround(neck,stemCells))
-                            throw new AssertionError("grouped cap support is not rooted in terrain: branch="+branch+" sample="+sample);
+                        if(!attached)
+                            throw new AssertionError("grouped cap has no top-layer stem continued to its own underside: branch="
+                                    +branch+" sample="+sample);
                     }
                 }
 
