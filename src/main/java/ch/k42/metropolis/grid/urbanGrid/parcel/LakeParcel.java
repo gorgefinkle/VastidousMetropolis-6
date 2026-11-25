@@ -6,6 +6,8 @@ import ch.k42.metropolis.grid.urbanGrid.enums.ContextType;
 import ch.k42.metropolis.grid.urbanGrid.enums.SchematicType;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildernessFeatures;
 import ch.k42.metropolis.minions.Cartesian2D;
+import ch.k42.metropolis.minions.GridRandom;
+import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -43,12 +45,24 @@ public final class LakeParcel extends Parcel {
       int minY = Math.max(world.getMinHeight() + 1, 1);
       int maxY = world.getMaxHeight() - 1;
       int waterY = Math.min(maxY - 4, Math.max(minY + 4, lake.waterY));
+      GridRandom rand = this.grid.getRandom();
+      RiverProvider stream = this.grid.planWater().streamCarrierAt(this.chunkX, this.chunkZ);
 
       for (int lx = 0; lx < 16; lx++) {
          for (int lz = 0; lz < 16; lz++) {
             int x = baseX + lx;
             int z = baseZ + lz;
             double radius = lake.normalizedRadius(x + 0.5, z + 0.5);
+            if (radius >= WildernessFeatures.LakeSite.WATER_EDGE && stream != null) {
+               double signed = stream.distanceFromCenterBlock(x, z);
+               double reach = stream.getHalfWidthBlocks() + stream.getFallbackBankMarginBlocks();
+               if (Double.isFinite(signed) && Math.abs(signed) <= reach) {
+                  // The outlet continues through this chunk's lake-owned
+                  // shoreline before it reaches ordinary stream parcels.
+                  RiverParcel.carveColumnWithCreeks(world, stream, this.grid, rand, x, z);
+                  continue;
+               }
+            }
             if (radius >= 1.0) continue;
 
             int oldTop = world.getHighestBlockYAt(x, z);
