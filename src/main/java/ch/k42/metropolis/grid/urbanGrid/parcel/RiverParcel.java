@@ -348,6 +348,11 @@ public class RiverParcel extends Parcel {
             return creek != null && (creek.isCreek()
                     || creek instanceof ch.k42.metropolis.grid.urbanGrid.river.BoundedRiverSegment) ? creek : null;
          }
+         if (kind == WaterField.Kind.STREAM) {
+            // The polyline course also owns its dry bank; the allows() and
+            // groundAt() checks below keep vegetation out of open water.
+            return this.grid.creekBankAt(x, z);
+         }
          // Bounded tributaries classify only their WET chunks as creek water;
          // their dry banks are separately reserved in the planning zone.
          // Earlier builds made the shore painter reject
