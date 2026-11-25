@@ -2414,37 +2414,10 @@ public final class ForestGenerator {
          return this.wild.sharp(x, z);
       }
 
-      /**
-       * A bridge is allowed only well inside one continuous, planned forest
-       * Morphomos region. The full footprint excludes roads, cities, water,
-       * EmptyParcel, fallback and any other parcel owner.
-       */
-      boolean karstBridgeAllowed(int x, int z, double[] weights) {
-         if (this.wild == null || this.region == null
-                 || this.region.getContext() != ContextType.FOREST
-                 || weights == null
-                 || weights[WildBiome.VOLCANIC_BARRENS.ordinal()] < 0.96) return false;
-         // Bridge geometry must agree with the exact biome column the painter
-         // will write. This also protects configurations that use stochastic
-         // (rather than hard) biome borders.
-         double roll = ForestTerrain.unit(ForestTerrain.hash(this.terrain.getSeed(), x, z, 41));
-         if (this.wild.pick(x, z, roll) != WildBiome.VOLCANIC_BARRENS) return false;
-         // A natural arch must be seated on the un-faded interior massif.
-         // At parcel edges the height field is intentionally eased to the
-         // street/water datum, so carving an arch there would have no matching
-         // upper rock volume and could only produce a filled or broken span.
-         if (this.reliefFade(x,z,wildBlend(this.blend,weights)) < 0.995) return false;
-         long seed = this.generator.getWorldSeed();
-         if (KarstLandforms.archWeight(seed, x, z) < 0.10) return false;
-         int cx = x >> 4, cz = z >> 4;
-         long key = ((long) cx << 32) ^ (cz & 0xffffffffL);
-         Boolean allowed = this.karstBridgeOwnerCache.get(key);
-         if (allowed == null) {
-            allowed = this.grid.isKarstBridgeFootprintOwned(this.region, cx, cz, 2);
-            this.karstBridgeOwnerCache.put(key, allowed);
-         }
-         return allowed;
-      }
+       /** Artificial Karst landbridges are disabled; natural massif and ravine relief remain active. */
+       boolean karstBridgeAllowed(int x, int z, double[] weights) {
+          return false;
+       }
 
       /** The relief of the wilderness at a column: each biome's own relief, blended by how much of the column it holds. */
       private double wildRelief(int x, int z, double[] n, double forestRelief) {
