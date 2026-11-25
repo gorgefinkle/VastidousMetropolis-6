@@ -174,8 +174,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          // centre, so the A* bounds and its receiving-water heuristic agree.
          List<WaterTarget> targets = findTargets(x, z);
          if (targets.isEmpty()) continue;
-         List<StreamSegment> stream = this.buildOutlet(lake, h, targets);
-         if (stream != null && !stream.isEmpty()) {
+         WildernessStreamCourse stream = this.buildOutlet(lake, h, targets);
+         if (stream != null) {
             lake.stream = stream;
             return new FeatureCell(null, lake);
          }
@@ -254,7 +254,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       for (int dx = -1; dx <= 1; dx++) {
          for (int dz = -1; dz <= 1; dz++) {
             LakeSite lake = cell(gx + dx, gz + dz).lake;
-            if (lake == null || lake.streams == null) continue;
+            if (lake == null || lake.stream == null) continue;
             WildernessStreamCourse carrier = lake.stream;
             if (!carrier.isRiverOrBank(chunkX, chunkZ)) continue;
             double signed = carrier.distanceFromCenterBlock(chunkX * 16.0 + 8.0, chunkZ * 16.0 + 8.0);
@@ -578,9 +578,9 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       if (site == null) return;
       String key = "L:" + worldName + ":" + Math.round(site.centerX) + ":" + Math.round(site.centerZ);
       if (ANNOUNCED.add(key)) {
-         Minions.i("Wilderness landmark in '%s': %s at block (%d,%d); outlet stream segments=%d",
+         Minions.i("Wilderness landmark in '%s': %s at block (%d,%d); outlet course points=%d",
                  worldName, site.name, Math.round(site.centerX), Math.round(site.centerZ),
-                 site.stream == null ? 0 : 1);
+                 site.stream == null ? 0 : site.stream.pointCount());
       }
    }
 
