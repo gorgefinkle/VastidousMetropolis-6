@@ -84,10 +84,10 @@ final class FarmMissileSilo extends FarmFeature {
         int[] clampLevels = {baseY + 10, baseY + 25, baseY + 39};
         for (int[] tower : towers) {
             int tx = tower[0], tz = tower[1];
-            for (int y = bottom + 3; y <= baseY + 42; y++) {
+            for (int y = bottom + 1; y <= baseY + 42; y++) {
                 this.block(p, tx, y, tz, FarmPainter.STONE_BRICK, 0);
-                this.block(p, tx + (tx == 0 ? 1 : 0), y,
-                        tz + (tz == 0 ? 1 : 0), FarmPainter.IRON_BARS, 0);
+                this.block(p, tx != 0 ? tx : 1, y, tz != 0 ? tz : 1,
+                        FarmPainter.IRON_BARS, 0);
             }
             for (int level : clampLevels) {
                 if (tx != 0) {
@@ -232,10 +232,9 @@ final class FarmMissileSilo extends FarmFeature {
                 this.block(p, dx, this.h + 5, dz, FarmPainter.STONE_BRICK, 0);
             }
         }
-        for (int y = this.h + 1; y <= this.h + 2; y++) {
-            this.block(p, 15, y, 9, FarmPainter.AIR, 0);
-        }
-        this.block(p, 15, this.h + 3, 9, FarmPainter.IRON_BARS, 0);
+        // Closed pressure-rated service door; the annex is abandoned but sealed.
+        this.block(p, 15, this.h + 1, 9, 71, 0);
+        this.block(p, 15, this.h + 2, 9, 71, 8);
     }
 
     @Override void paint(FarmPainter p) {
