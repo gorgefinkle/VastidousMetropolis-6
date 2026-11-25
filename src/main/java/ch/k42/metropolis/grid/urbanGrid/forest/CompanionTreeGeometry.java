@@ -73,9 +73,9 @@ public final class CompanionTreeGeometry {
                 double t=(double)i/Math.max(1,steps);
                 P pt=lerp(from,to,t);
                 int xx=(int)Math.round(pt.x), yy=(int)Math.round(pt.y), zz=(int)Math.round(pt.z);
-                while (x!=xx) { x+=Integer.signum(xx-x);put(x,y,z,true,"x"); }
-                while (z!=zz) { z+=Integer.signum(zz-z);put(x,y,z,true,"z"); }
-                while (y!=yy) { y+=Integer.signum(yy-y);put(x,y,z,true,"y"); }
+                while (x!=xx) { x+=Integer.signum(xx-x);put(x,y,z,true,directionless?"none":"x"); }
+                while (z!=zz) { z+=Integer.signum(zz-z);put(x,y,z,true,directionless?"none":"z"); }
+                while (y!=yy) { y+=Integer.signum(yy-y);put(x,y,z,true,directionless?"none":"y"); }
                 sphere(pt,startRadius+(endRadius-startRadius)*t,true,0L,axis);
             }
         }
