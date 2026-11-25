@@ -17,9 +17,7 @@ import java.util.Set;
  * plus (in some cells) one compact FARMSTEAD: a 3 x 3 chunk block in a corner,
  * next to a road, holding a derelict barn (a gabled one in one of six
  * weatherings, standard or large, or sometimes a round barn), one or two silos,
- * a wrecked tractor, old hay, maybe a well, and rows of windbreak trees, and --
  * each by chance -- an open pole barn, a shed or two (chicken coop, corn crib,
- * tool shed), a water-pumping windmill and a rusted pickup. The barn's doorway
  * faces the road and a dirt driveway runs straight out of it to the dirt road.
  *
  * A few farmsteads are instead a MODERN COMPOUND: a 6 x 5 chunk plot with one
@@ -638,9 +636,6 @@ final class FarmLayout {
          int tw = tx ? 5 : 3;
          int td = tx ? 3 : 5;
          int[] t = this.findSpot(r, tw, td, 3, sLoX, sLoZ, ux1 - 3 - tw + 1, uz1 - 3 - td + 1);
-         if (t != null) {
-            this.features.add(new FarmProps.Tractor(t[0], t[1], tx, h, this.seed));
-         }
       }
       this.plantSmallExtras(h, ux0, uz0, ux1, uz1);
       this.planWindbreaks(r, h, side, ux0, uz0, ux1, uz1);
@@ -680,7 +675,6 @@ final class FarmLayout {
       }
    }
 
-   /** Up to two sheds (chicken coop, corn crib, tool shed) and a rusted pickup, each at generator.farm.outbuildingPercent. */
    private void plantSmallExtras(int h, int ux0, int uz0, int ux1, int uz1) {
       Random x = this.extra;
       int pct = PluginConfig.getFarmOutbuildings();
@@ -706,9 +700,6 @@ final class FarmLayout {
          int bw = ax ? 6 : 3;
          int bd = ax ? 3 : 6;
          int[] s = this.findSpot(x, bw, bd, 2, loX, loZ, ux1 - 3 - bw + 1, uz1 - 3 - bd + 1);
-         if (s != null) {
-            this.features.add(new FarmOutbuildings.Pickup(s[0], s[1], ax, h, this.seed));
-         }
       }
    }
 
@@ -832,14 +823,10 @@ final class FarmLayout {
       }
 
       this.features.add(FarmModernBarn.make(bx, bz, axisX, mirror, variant, h, this.seed));
-      // a wrecked tractor in the feed alley, painted after the barn so it stands on the barn's floor
       int c = (wid - 1) / 2;
       int u0 = len / 2 - 3;
       int tAlong = (axisX ? bx : bz) + (mirror ? len - 5 - u0 : u0);
       int tAcross = (axisX ? bz : bx) + c - 1;
-      if (x.nextInt(100) < 70) {
-         this.features.add(new FarmProps.Tractor(axisX ? tAlong : tAcross, axisX ? tAcross : tAlong, axisX, h, this.seed));
-      }
 
       int sLoX = ux0 + 3;
       int sLoZ = uz0 + 3;
@@ -931,12 +918,6 @@ final class FarmLayout {
          int[] s = this.findSpot(x, bw, bd, 2, loX, loZ, ux1 - 3 - bw + 1, uz1 - 3 - bd + 1);
          if (s != null) this.features.add(new FarmOutbuildings.Shed(
                  s[0] + 1, s[1] + 1, ax, FarmOutbuildings.Shed.TOOL, h, this.seed));
-      }
-      if (x.nextInt(100) < 48) {
-         boolean ax = x.nextBoolean();
-         int bw = ax ? 6 : 3, bd = ax ? 3 : 6;
-         int[] s = this.findSpot(x, bw, bd, 2, loX, loZ, ux1 - 3 - bw + 1, uz1 - 3 - bd + 1);
-         if (s != null) this.features.add(new FarmOutbuildings.Pickup(s[0], s[1], ax, h, this.seed));
       }
    }
 
@@ -1175,15 +1156,6 @@ final class FarmLayout {
          int off = i * (bankW + FIELD_LANE);
          this.features.add(FarmGreenhouse.hoops(ax ? ox : ox + off, ax ? oz + off : oz, ax, variant, tunnels, h, this.seed));
       }
-      // a pickup parked on the access lane, and a packing shed in what room is left on the plot
-      if (x.nextInt(100) < 55) {
-         int slide = x.nextInt(Math.max(1, fieldW - 8));
-         if (ax) {
-            this.features.add(new FarmOutbuildings.Pickup(laneStart + 1, acrossStart + 2 + slide, false, h, this.seed));
-         } else {
-            this.features.add(new FarmOutbuildings.Pickup(acrossStart + 2 + slide, laneStart + 1, true, h, this.seed));
-         }
-      }
       if (x.nextInt(100) < 70) {
          boolean sax = x.nextBoolean();
          int sl = FarmOutbuildings.Shed.lengthOf(FarmOutbuildings.Shed.TOOL);
@@ -1202,7 +1174,6 @@ final class FarmLayout {
 
    /**
     * One large multi-bay glasshouse on a plot of its own (see FarmGreenhouse.BAYS), its doors facing an access lane that runs the
-    * width of the building, a pickup on the lane, a shed beside. Tried in each corner; false if the plot is not there.
     */
    private boolean planCommercialGlass(int[][] gy, boolean[][] used) {
       Random x = this.extra;
@@ -1268,14 +1239,6 @@ final class FarmLayout {
       this.recordRoadAccess(side, gate);
       int purpose = x.nextInt(100) < 18 ? FarmGreenhouse.COLLAPSED_WING : FarmGreenhouse.STANDARD;
       this.features.add(FarmGreenhouse.bays(ox, oz, ax, false, variant, bays, purpose, h, this.seed));
-      if (x.nextInt(100) < 55) {
-         int slide = x.nextInt(Math.max(1, wid - 8));
-         if (ax) {
-            this.features.add(new FarmOutbuildings.Pickup(laneStart + 1, acrossStart + 2 + slide, false, h, this.seed));
-         } else {
-            this.features.add(new FarmOutbuildings.Pickup(acrossStart + 2 + slide, laneStart + 1, true, h, this.seed));
-         }
-      }
       if (x.nextInt(100) < 70) {
          boolean sax = x.nextBoolean();
          int sl = FarmOutbuildings.Shed.lengthOf(FarmOutbuildings.Shed.TOOL);
