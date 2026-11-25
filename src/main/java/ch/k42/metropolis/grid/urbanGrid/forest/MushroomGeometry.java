@@ -82,75 +82,65 @@ public final class MushroomGeometry {
      * extended upward to the cap underside and downward to local terrain.
      * This does not alter or straighten the main leaning bole.
      */
+    /**
+     * Secondary grouped caps grow from their own grounded, gently wandering
+     * stalks. A slight lateral sweep and a flared lower foot break the rigid
+     * pillar silhouette; the final stem voxel is deliberately placed directly
+     * beneath the cap's center so the cap cannot float free.
+     */
     private static void emitGroupedCapStems(Sink sink,Terrain terrain,Set<P> stems,
                                              Set<P> crown,List<GroupedCapAnchor> anchors) {
         for(GroupedCapAnchor anchor:anchors) {
             int x=(int)Math.round(anchor.capX());
             int z=(int)Math.round(anchor.capZ());
             if(!terrain.allows(x,z))continue;
-            double dist=Math.hypot(x-anchor.capX(),z-anchor.capZ());
-            double theta=Math.atan2(z-anchor.capZ(),x-anchor.capX());
-            if(dist>anchor.radius()*(1.0+.14*Math.sin(theta*5.0+anchor.branch())))continue;
-            int capTop=anchor.capY()+3-(int)((dist/anchor.radius())*4.0);
+            int capTop=anchor.capY()+3;
             int underside=capTop-2;
             if(!crown.contains(new P(x,underside,z)))continue;
             int ground=terrain.groundAt(x,z);
-            // The cap's own underside is the upper endpoint. Do not fill
-            // through cap blocks, and root only this stalk's own column.
-            for(int y=ground+1;y<underside;y++) {
-                P q=new P(x,y,z);
-                // A grouped stalk may pass through the underside of a lower
-                // crown. The stalk owns that one-block column so the support
-                // remains continuous; surrounding cap geometry is unchanged.
-                crown.remove(q);
-                sink.set(x,y,z,STEM);
-                stems.add(q);
+            int firstY=ground+1,lastY=underside-1;
+            if(lastY-firstY<3)continue;
+            double direction=(anchor.branch()+1)*2.399963229728653;
+            double sideX=Math.cos(direction),sideZ=Math.sin(direction);
+            double bend=1.15+(anchor.branch()%3)*.28;
+            P previous=null;
+            for(int y=firstY;y<=lastY;y++) {
+                double t=(y-firstY)/(double)(lastY-firstY);
+                double sweep=Math.sin(Math.PI*t)*bend
+                        +Math.sin(2.0*Math.PI*t+anchor.branch()*.71)*.28;
+                int px=(int)Math.round(x+sideX*sweep);
+                int pz=(int)Math.round(z+sideZ*sweep);
+                P current=new P(px,y,pz);
+                if(previous==null) {
+                    emitStemVoxel(sink,terrain,stems,crown,current);
+                    // A restrained two-block foot flare gives the stalk a
+                    // visible root transition without making another pillar.
+                    if(t<.18) {
+                        int fx=px+(Math.abs(sideX)>Math.abs(sideZ)?0:(sideX>0?1:-1));
+                        int fz=pz+(Math.abs(sideX)>Math.abs(sideZ)?(sideZ>0?1:-1):0);
+                        emitStemVoxel(sink,terrain,stems,crown,new P(fx,y,fz));
+                    }
+                } else {
+                    int steps=Math.max(1,Math.max(Math.abs(current.x-previous.x),
+                            Math.max(Math.abs(current.y-previous.y),Math.abs(current.z-previous.z))));
+                    for(int i=1;i<=steps;i++) {
+                        double q=i/(double)steps;
+                        P voxel=new P((int)Math.round(previous.x+(current.x-previous.x)*q),
+                                (int)Math.round(previous.y+(current.y-previous.y)*q),
+                                (int)Math.round(previous.z+(current.z-previous.z)*q));
+                        emitStemVoxel(sink,terrain,stems,crown,voxel);
+                    }
+                }
+                previous=current;
             }
         }
     }
 
-    /**
-     * For each grouped crown, continue only stem columns already present under
-     * that crown. Fill the vertical air gap from the column's topmost stem block
-     * to that crown's own underside; do not create ground-to-cap support pillars.
-     */
-    private static void connectGroupedCapTops(Sink sink,Terrain terrain,Set<P> stems,
-                                                Set<P> crown,List<GroupedCapAnchor> anchors) {
-        Map<Long,Integer> highestByColumn=new HashMap<>();
-        for(P q:stems)highestByColumn.merge(columnKey(q.x,q.z),q.y,Math::max);
-        for(GroupedCapAnchor anchor:anchors) {
-            int radius=anchor.radius();
-            int minX=(int)Math.floor(anchor.capX()-radius-1);
-            int maxX=(int)Math.ceil(anchor.capX()+radius+1);
-            int minZ=(int)Math.floor(anchor.capZ()-radius-1);
-            int maxZ=(int)Math.ceil(anchor.capZ()+radius+1);
-            for(int x=minX;x<=maxX;x++)for(int z=minZ;z<=maxZ;z++) {
-                long key=columnKey(x,z);
-                Integer top=highestByColumn.get(key);
-                if(top==null||!terrain.allows(x,z))continue;
-                double dx=x-anchor.capX(),dz=z-anchor.capZ();
-                double dist=Math.hypot(dx,dz);
-                double theta=Math.atan2(dz,dx);
-                if(dist>radius*(1.0+.14*Math.sin(theta*5.0+anchor.branch())))continue;
-                int capTop=anchor.capY()+3-(int)((dist/radius)*4.0);
-                int underside=capTop-2;
-                if(!crown.contains(new P(x,underside,z))||top>=underside-1)continue;
-                boolean clear=true;
-                for(int y=top+1;y<underside;y++) {
-                    if(crown.contains(new P(x,y,z))||y<=terrain.groundAt(x,z)) {
-                        clear=false;
-                        break;
-                    }
-                }
-                if(!clear)continue;
-                for(int y=top+1;y<underside;y++) {
-                    P q=new P(x,y,z);
-                    sink.set(x,y,z,STEM);
-                    stems.add(q);
-                }
-                highestByColumn.put(key,underside-1);
-            }
-        }
+    private static void emitStemVoxel(Sink sink,Terrain terrain,Set<P> stems,Set<P> crown,P q) {
+        if(!terrain.allows(q.x,q.z)||q.y<=terrain.groundAt(q.x,q.z))return;
+        crown.remove(q);
+        sink.set(q.x,q.y,q.z,STEM);
+        stems.add(q);
     }
 
     public static void grow(Sink sink,Terrain terrain,int x,int z,long worldSeed,int variant) {
@@ -246,7 +236,6 @@ public final class MushroomGeometry {
         }
         Set<P> emittedStems=emitTrunkStems(sink,terrain,trunk,capBottomByColumn,ground+1);
         emitGroupedCapStems(sink,terrain,emittedStems,crown,groupedCapAnchors);
-        connectGroupedCapTops(sink,terrain,emittedStems,crown,groupedCapAnchors);
         for(P q:crown)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z)) {
             StringBuilder state=new StringBuilder(cap).append('[');
             for(int i=0;i<6;i++) {
