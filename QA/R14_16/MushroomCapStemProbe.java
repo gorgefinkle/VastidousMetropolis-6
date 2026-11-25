@@ -97,7 +97,7 @@ public final class MushroomCapStemProbe {
                         Voxel neck=new Voxel(capX,capBaseY-1,capZ);
                         if(!stemCells.contains(neck))
                             throw new AssertionError("grouped crown has no stem meeting its own underside: branch="+branch+" sample="+sample);
-                        int attachY=Math.max(ground+1,by-4);
+                        int attachY=Math.max(ground+1,by-8);
                         double t=(double)(attachY-ground)/(double)height;
                         double ease=t*t*(3.0-2.0*t);
                         double attachX=x+Math.cos(angle)*lean*ease+Math.sin(t*4.1+geometrySeed%37)*t*1.3;
