@@ -66,6 +66,9 @@ public final class KarstMountainProfileProbe {
                     "insufficient upland/cut samples for seed " + seed + " up=" + up + " cuts=" + cut);
             double uplandMedian = median(uplands);
             double cutMedian = median(cuts);
+            check(maxUpland-minUpland>=54.0,
+                    "karst massif still reads as an overly uniform plateau: sampled upland range="
+                            +(maxUpland-minUpland));
             check(uplandMedian >= 70.0,
                     "karst uplands are not mountain-height: median relief=" + uplandMedian);
             check(cutMedian >= -8.0 && cutMedian <= 8.0,
