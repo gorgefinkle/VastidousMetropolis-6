@@ -897,9 +897,15 @@ public class UrbanGrid extends Grid implements DistrictHost {
                }
                WaterField.Kind k = water.zoneKind(x + dx, z + dz);
                if (k == WaterField.Kind.OCEAN) {
-                  return k;                      // OCEAN wins over RIVER, as in zoneKind itself
+                  return k;                      // OCEAN wins over every inland shore
                }
-               if (k != WaterField.Kind.NONE) {
+               if (k == WaterField.Kind.RIVER) {
+                  best = k;                      // Main rivers remain ahead of minor outlets and lakes
+               } else if (k == WaterField.Kind.STREAM && best != WaterField.Kind.RIVER) {
+                  best = k;
+               } else if (k == WaterField.Kind.LAKE && best == WaterField.Kind.NONE) {
+                  best = k;
+               } else if (k == WaterField.Kind.CREEK && best == WaterField.Kind.NONE) {
                   best = k;
                }
             }
