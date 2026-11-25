@@ -25,7 +25,7 @@ public final class MushroomGeometry {
         @Override public int hashCode(){return x*9176 ^ z*1709 ^ y*19307;}
         @Override public boolean equals(Object o){return o instanceof P p && p.x==x&&p.y==y&&p.z==z;}
     }
-    private record GroupedCapAnchor(int capX,int capZ,double boleX,double boleZ,int boleY) {}
+    private record GroupedCapAnchor(int capX,int capZ,int capBaseY,double boleX,double boleZ,int boleY) {}
     static long mix(long v){ v^=v>>>30;v*= -4658895280553007687L; v^=v>>>27;v*= -7723592293110705685L;return v^(v>>>31); }
     static double unit(long v) {return (mix(v)>>>11)*0x1.0p-53;}
     public static String species(long seed) {return unit(seed ^ 131L)<.52?"minecraft:red_mushroom_block":"minecraft:brown_mushroom_block";}
@@ -63,12 +63,9 @@ public final class MushroomGeometry {
      * A side crown is a branch of the leaning bole, not a separate tree.
      * Build a short, tapered, rising stem from the bole into the cap underside.
      */
-    private static void addGroupedCapBranch(Set<P> output,GroupedCapAnchor anchor,
-                                            Map<Long,Integer> capBottomByColumn) {
-        Integer underside=capBottomByColumn.get(columnKey(anchor.capX(),anchor.capZ()));
-        if(underside==null)return;
+    private static void addGroupedCapBranch(Set<P> output,GroupedCapAnchor anchor,Set<P> crown) {
         double sx=anchor.boleX(),sy=anchor.boleY(),sz=anchor.boleZ();
-        double ex=anchor.capX(),ey=underside-1,ez=anchor.capZ();
+        double ex=anchor.capX(),ey=anchor.capBaseY()-1,ez=anchor.capZ();
         double dx=ex-sx,dy=ey-sy,dz=ez-sz;
         double length=Math.sqrt(dx*dx+dy*dy+dz*dz);
         int steps=Math.max(1,(int)Math.ceil(length*3.0));
@@ -81,8 +78,10 @@ public final class MushroomGeometry {
             for(int ox=-reach;ox<=reach;ox++)
                 for(int oy=-reach;oy<=reach;oy++)
                     for(int oz=-reach;oz<=reach;oz++) {
-                        if(ox*ox+oy*oy+oz*oz<=radius*radius+.30)
-                            output.add(new P(ix+ox,iy+oy,iz+oz));
+                        if(ox*ox+oy*oy+oz*oz<=radius*radius+.30) {
+                            P voxel=new P(ix+ox,iy+oy,iz+oz);
+                            if(voxel.y<anchor.capBaseY()&&!crown.contains(voxel))output.add(voxel);
+                        }
                     }
         }
     }
@@ -151,7 +150,7 @@ public final class MushroomGeometry {
                         +Math.sin(boleT*4.1+seed%37)*boleT*1.3;
                 double boleZ=z+Math.sin(angle)*lean*boleEase
                         +Math.cos(boleT*3.5+seed%29)*boleT*1.5;
-                groupedCapAnchors.add(new GroupedCapAnchor(capX,capZ,boleX,boleZ,boleY));
+                groupedCapAnchors.add(new GroupedCapAnchor(capX,capZ,by+1,boleX,boleZ,boleY));
                 int radius=5+(int)(unit(seed+j*199)*5.0);
                 for(int px=(int)bx-radius;px<=bx+radius;px++)for(int pz=(int)bz-radius;pz<=bz+radius;pz++) {
                     double dist=Math.hypot(px-bx,pz-bz),theta2=Math.atan2(pz-bz,px-bx);
@@ -190,10 +189,8 @@ public final class MushroomGeometry {
         emitTrunkStems(sink,terrain,trunk,capBottomByColumn,ground+1);
         Set<P> groupedCapStems=new HashSet<>();
         for(GroupedCapAnchor anchor:groupedCapAnchors)
-            addGroupedCapBranch(groupedCapStems,anchor,capBottomByColumn);
+            addGroupedCapBranch(groupedCapStems,anchor,crown);
         for(P q:groupedCapStems) {
-            Integer capBottom=capBottomByColumn.get(columnKey(q.x,q.z));
-            if(capBottom!=null&&q.y>=capBottom)continue;
             if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
                 sink.set(q.x,q.y,q.z,STEM);
         }
