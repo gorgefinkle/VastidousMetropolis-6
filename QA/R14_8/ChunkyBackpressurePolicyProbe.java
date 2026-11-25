@@ -35,6 +35,16 @@ public final class ChunkyBackpressurePolicyProbe {
                 free9, max, now - ChunkyBackpressurePolicy.STABILITY_NS + 1, now),
                 "retained heap must be stable for the full dwell period");
 
+        // System.nanoTime() has an arbitrary origin and may be negative.
+        long negativeNow = -60_000_000_000L;
+        long negativeStableSince = negativeNow - ChunkyBackpressurePolicy.STABILITY_NS;
+        check(ChunkyBackpressurePolicy.stableRecoveryReady(retained70, free9, max,
+                negativeStableSince, negativeNow),
+                "a negative monotonic clock value must not disable stable recovery");
+        check(!ChunkyBackpressurePolicy.stableRecoveryReady(retained70, free9, max,
+                0L, negativeNow),
+                "the zero sentinel must still mean that stability tracking has not started");
+
         // Stable mode is bounded by retained heap, free headroom, and queue size.
         check(ChunkyBackpressurePolicy.shouldPause(current91, retained70,
                 (long)(max * 0.079), max, 0, true, false),
