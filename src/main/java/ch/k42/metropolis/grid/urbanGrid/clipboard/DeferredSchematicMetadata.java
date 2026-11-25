@@ -249,8 +249,9 @@ public final class DeferredSchematicMetadata {
             CompletableFuture<Chunk> future;
             try{future=world.getChunkAtAsync(x,z,false);}
             catch(RuntimeException ex){
-                // release() clears the staging gate and invalidates this generation.
-                release(slot);slot.nextTry=ticks+100;
+                // Keep this slot staged so requeueOrReturn() preserves its cooldown.
+                // No ticket was acquired for this failed request.
+                loading=false;loadGeneration++;slot.nextTry=ticks+100;
                 asyncLoadFailuresSinceLog++;
                 return;
             }
