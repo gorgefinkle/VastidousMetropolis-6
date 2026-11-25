@@ -2,7 +2,7 @@ package ch.k42.metropolis.generator;
 
 /**
  * Pure policy for the Chunky heap valve. Kept separate from Bukkit so the
- * important 80%-baseline recovery behavior can be exercised deterministically.
+ * recovery behavior can be exercised deterministically.
  */
 public final class ChunkyBackpressurePolicy {
     public static final double SOFT_PAUSE = 0.74;
@@ -18,37 +18,45 @@ public final class ChunkyBackpressurePolicy {
 
     private ChunkyBackpressurePolicy() {}
 
-    public static boolean hasStableHeadroom(double usage, long remaining, long max) {
-        return max > 0L && usage <= STABLE_RESUME_MAX
+    /**
+     * Recovery is based on the post-GC live set, while free headroom is checked
+     * against the instantaneous heap. This separates retained memory from
+     * temporary allocation spikes without allowing recovery near exhaustion.
+     */
+    public static boolean hasStableHeadroom(double retainedUsage, long remaining, long max) {
+        return max > 0L && retainedUsage >= 0.0 && retainedUsage <= STABLE_RESUME_MAX
                 && remaining >= MIN_FREE_PROBE
                 && remaining >= (long) (max * MIN_FREE_FRACTION);
     }
 
-    public static boolean stableRecoveryReady(double usage, long remaining, long max,
+    public static boolean stableRecoveryReady(double retainedUsage, long remaining, long max,
                                               long stableSince, long now) {
-        return hasStableHeadroom(usage, remaining, max)
+        return hasStableHeadroom(retainedUsage, remaining, max)
                 && stableSince > 0L && now - stableSince >= STABILITY_NS;
     }
 
-    public static boolean canResume(int pending, double usage, long remaining, long max,
-                                     long stableSince, long now) {
+    public static boolean canResume(int pending, double currentUsage, double retainedUsage,
+                                    long remaining, long max, long stableSince, long now) {
         return pending <= QUEUE_RESUME
-                && (usage <= NORMAL_RESUME
-                    || stableRecoveryReady(usage, remaining, max, stableSince, now));
+                && (currentUsage <= NORMAL_RESUME
+                    || stableRecoveryReady(retainedUsage, remaining, max, stableSince, now));
     }
 
     /**
-     * Once a stable high-heap recovery has succeeded, remain in that bounded
-     * operating band while heap stays <=82%. Do not immediately pause again
-     * merely because usage remains above the ordinary 74% soft trigger.
+     * After a guarded high-retention recovery, stay in that band while the
+     * post-GC live set and instantaneous free headroom remain safe.
      */
-    public static boolean shouldKeepStableMode(double usage, long remaining, long max) {
-        return hasStableHeadroom(usage, remaining, max);
+    public static boolean shouldKeepStableMode(double retainedUsage, long remaining, long max) {
+        return hasStableHeadroom(retainedUsage, remaining, max);
     }
 
-    public static boolean shouldPause(double usage, int pending, boolean stableMode,
-                                      boolean probeActive) {
-        return usage >= HARD_PAUSE || pending >= QUEUE_PAUSE
-                || (!stableMode && !probeActive && usage >= SOFT_PAUSE);
+    public static boolean shouldPause(double currentUsage, double retainedUsage,
+                                      long remaining, long max, int pending,
+                                      boolean stableMode, boolean probeActive) {
+        if (pending >= QUEUE_PAUSE) return true;
+        if (stableMode) {
+            return !hasStableHeadroom(retainedUsage, remaining, max);
+        }
+        return currentUsage >= HARD_PAUSE || (!probeActive && currentUsage >= SOFT_PAUSE);
     }
 }
