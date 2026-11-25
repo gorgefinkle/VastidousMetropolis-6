@@ -89,6 +89,36 @@ public final class MushroomGeometry {
     }
 
     /**
+     * Give every secondary grouped cap its own narrow stalk. The stalk is
+     * anchored at the cap's central stem column: its authored top block is
+     * extended upward to the cap underside and downward to local terrain.
+     * This does not alter or straighten the main leaning bole.
+     */
+    private static void emitGroupedCapStems(Sink sink,Terrain terrain,Set<P> stems,
+                                             Set<P> crown,List<GroupedCapAnchor> anchors) {
+        for(GroupedCapAnchor anchor:anchors) {
+            int x=(int)Math.round(anchor.capX());
+            int z=(int)Math.round(anchor.capZ());
+            if(!terrain.allows(x,z))continue;
+            double dist=Math.hypot(x-anchor.capX(),z-anchor.capZ());
+            double theta=Math.atan2(z-anchor.capZ(),x-anchor.capX());
+            if(dist>anchor.radius()*(1.0+.14*Math.sin(theta*5.0+anchor.branch())))continue;
+            int capTop=anchor.capY()+3-(int)((dist/anchor.radius())*4.0);
+            int underside=capTop-2;
+            if(!crown.contains(new P(x,underside,z)))continue;
+            int ground=terrain.groundAt(x,z);
+            // The cap's own underside is the upper endpoint. Do not fill
+            // through cap blocks, and root only this stalk's own column.
+            for(int y=ground+1;y<underside;y++) {
+                P q=new P(x,y,z);
+                if(crown.contains(q))continue;
+                sink.set(x,y,z,STEM);
+                stems.add(q);
+            }
+        }
+    }
+
+    /**
      * For each grouped crown, continue only stem columns already present under
      * that crown. Fill the vertical air gap from the column's topmost stem block
      * to that crown's own underside; do not create ground-to-cap support pillars.
@@ -224,6 +254,7 @@ public final class MushroomGeometry {
             if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
         }
         Set<P> emittedStems=emitTrunkStems(sink,terrain,trunk,capBottomByColumn,ground+1);
+        emitGroupedCapStems(sink,terrain,emittedStems,crown,groupedCapAnchors);
         connectGroupedCapTops(sink,terrain,emittedStems,crown,groupedCapAnchors);
         for(P q:crown)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z)) {
             StringBuilder state=new StringBuilder(cap).append('[');
