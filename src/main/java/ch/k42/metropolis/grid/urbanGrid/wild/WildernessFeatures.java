@@ -410,7 +410,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private Map<Long, Byte> highwayAxes(int minX, int minZ, int maxX, int maxZ) {
       Map<Long, Byte> out = new HashMap<>();
       for (HighwayNetwork.Rect rect : this.highways.rectsIn(minX, minZ, maxX, maxZ)) {
-         byte axis = (byte)(rect.width() >= rect.depth() ? 1 : 2);
+         byte axis = (byte)((rect.maxX - rect.minX) >= (rect.maxZ - rect.minZ) ? 1 : 2);
          int x0 = Math.max(minX, rect.minX), x1 = Math.min(maxX, rect.maxX);
          int z0 = Math.max(minZ, rect.minZ), z1 = Math.min(maxZ, rect.maxZ);
          for (int x = x0; x <= x1; x++) {
