@@ -660,9 +660,8 @@ public final class BiomeEcology {
         },cx,cz,seed);
     }
     private static void karstGroves(Chunk c,ForestGenerator.TreeSite site,int cx,int cz,long seed){
-        // Leave the weather-exposed bridge crest bare; trees belong to the
-        // sheltered ravine/toe habitat rather than the vaulted roof.
-        if(KarstLandforms.archWeight(seed,cx,cz)>.20)return;
+        // Natural Karst groves may occupy the massif and ravine; there is no
+        // artificial bridge crest or bridge-shaped dry-shadow corridor.
         if(KarstLandforms.habitat(seed,cx,cz)<.68 || !site.allows(cx,cz))return;
         long h=hash(seed,cx,cz,0x47524f5645L);
         if(unit(h)<.45)return;
