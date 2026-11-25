@@ -32,7 +32,7 @@ public final class ChunkyBackpressurePolicy {
     public static boolean stableRecoveryReady(double retainedUsage, long remaining, long max,
                                               long stableSince, long now) {
         return hasStableHeadroom(retainedUsage, remaining, max)
-                && stableSince > 0L && now - stableSince >= STABILITY_NS;
+                && stableSince != 0L && now - stableSince >= STABILITY_NS;
     }
 
     public static boolean canResume(int pending, double currentUsage, double retainedUsage,
