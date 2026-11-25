@@ -38,7 +38,7 @@ public final class MotherWillowJunctionProbe {
             double root=MotherWillowGeometry.leaderRootRadius(i,attach);
             double trunk=15.0*Math.pow(1.0-.80*(attach/19.0),.82);
             double scale=MotherWillowGeometry.leaderScale(i,attach);
-            if(root>trunk*.5800001)
+            if(root>trunk*.4800001)
                 throw new AssertionError("leader "+i+" exceeds its local bole taper: "+root+" > "+trunk);
             if(scale>previousScale+1.0e-9)
                 throw new AssertionError("upper leader scaffold did not taper progressively with the bole");
