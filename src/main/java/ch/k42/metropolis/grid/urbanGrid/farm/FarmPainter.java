@@ -79,6 +79,8 @@ public final class FarmPainter {
    final int minZ;
    final int maxX;
    final int maxZ;
+   final int minY;
+   final int maxY;
 
    public FarmPainter(Chunk chunk, long seed, int groundY) {
       this.chunk = chunk;
@@ -88,6 +90,8 @@ public final class FarmPainter {
       this.minZ = chunk.getZ() << 4;
       this.maxX = this.minX + 15;
       this.maxZ = this.minZ + 15;
+      this.minY = chunk.getWorld().getMinHeight();
+      this.maxY = chunk.getWorld().getMaxHeight();
    }
 
    boolean intersects(int x0, int z0, int x1, int z1) {
@@ -99,7 +103,7 @@ public final class FarmPainter {
    }
 
    public void set(int x, int y, int z, int id, int data) {
-      if (y < 1 || y > 255 || !this.in(x, z)) {
+      if (y < this.minY || y >= this.maxY || !this.in(x, z)) {
          return;
       }
       LegacyBlocks.set(this.chunk.getBlock(x & 15, y, z & 15), id, data);
@@ -110,8 +114,8 @@ public final class FarmPainter {
       int ax1 = Math.min(Math.max(x0, x1), this.maxX);
       int az0 = Math.max(Math.min(z0, z1), this.minZ);
       int az1 = Math.min(Math.max(z0, z1), this.maxZ);
-      int ay0 = Math.max(1, Math.min(y0, y1));
-      int ay1 = Math.min(255, Math.max(y0, y1));
+      int ay0 = Math.max(this.minY, Math.min(y0, y1));
+      int ay1 = Math.min(this.maxY - 1, Math.max(y0, y1));
       for (int x = ax0; x <= ax1; x++) {
          for (int z = az0; z <= az1; z++) {
             for (int y = ay0; y <= ay1; y++) {

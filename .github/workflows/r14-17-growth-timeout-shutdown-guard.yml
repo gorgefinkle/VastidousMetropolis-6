@@ -1,0 +1,97 @@
+name: R14.23 FARM access connectivity and diversity validation
+
+on:
+  push:
+    branches:
+      - feature/r14-17-growth-timeout-shutdown-guard
+      - feature/r14-23-farm-access-and-diversity
+  pull_request:
+    branches:
+      - integration/morphomos-natural-family-bloomlands
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Maven clean verify
+        run: mvn -B -ntp clean verify
+      - name: Morphomos boundary-family probe
+        run: sh QA/R14_8/run_boundary_family_probe.sh
+      - name: One creek origin per generated city (inherited R14.15 regression)
+        run: sh QA/R14_15/run_creek_city_origin_policy_probe.sh
+      - name: Rare-biome appearance probe
+        run: sh QA/R14_8/run_wild_biome_appearance_probe.sh
+      - name: Rare-province physical-size probe
+        run: sh QA/R14_14/run_bloomlands_province_size_probe.sh
+      - name: Production picker and fungal landmark-footprint probe
+        run: sh QA/R14_13/run_wild_biome_production_picker_probe.sh
+      - name: Giant mushroom cap / stem occlusion regression (inherited R14.16)
+        run: sh QA/R14_16/run_mushroom_cap_stem_probe.sh
+      - name: Mushroom stalk ground-contact regression (R14.20)
+        run: sh QA/R14_20/run_mushroom_ground_contact_probe.sh
+      - name: Mother Willow highest-leader junction smoothness (R14.21)
+        run: sh QA/R14_21/run_mother_willow_junction_probe.sh
+      - name: Bloomlands compact understory tree geometry (R14.21)
+        run: sh QA/R14_21/run_bloom_understory_probe.sh
+      - name: No buried smooth-stone terrain seam (inherited R14.22)
+        run: sh QA/R14_22/run_smoothstone_seam_probe.sh
+      - name: FARM site access routes use bounded site-to-street intervals
+        run: sh QA/R14_23/run_farm_road_route_policy_probe.sh
+      - name: Branch-growth timeout shutdown lifecycle policy
+        run: sh QA/R14_17/run_growth_timeout_shutdown_policy_probe.sh
+      - name: Safe asynchronous branch support staging probe
+        run: sh QA/R14_19/run_safe_branch_staging_probe.sh
+      - name: Spatial cache key and incremental eviction probe
+        run: sh QA/R14_19/run_spatial_cache_probe.sh
+      - name: BUILD export durability probe
+        run: sh QA/R14_8/run_build_flag_exporter_probe.sh
+      - name: Disk deferred queue probe
+        run: |
+          mkdir -p target/qa-queue
+          javac -d target/qa-queue src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java QA/R14_6/DiskDeferredChunkQueueProbe.java
+          java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
+      - name: Chunky backpressure recovery policy probe
+        run: sh QA/R14_8/run_chunky_backpressure_policy_probe.sh
+      - name: Karst landbridge open-clearance and safe-floor probe
+        run: sh QA/R14_8/run_karst_landbridge_clearance_probe.sh
+      - name: Karst massif, deep-cut and buildable-upland probe
+        run: sh QA/R14_9/run_karst_mountain_profile_probe.sh
+      - name: Universal biome command target probe
+        run: sh QA/R14_10/run_metropolis_biome_target_probe.sh
+      - name: Underwater marine habitat probe
+        run: bash QA/R14_11/run_marine_habitat_probe.sh
+      - name: Assemble complete R14.23 source archive
+        run: zip -r Metropolis_R14_23_Farm_Access_Diversity_SOURCE.zip .gitattributes .gitignore .github pom.xml compile_summary.txt README*.md QA src
+      - name: Assemble exact two-file R14.23 development package
+        run: |
+          mkdir -p r14-23-package
+          cp target/Metropolis_R14_23_Farm_Access_Diversity_DEV.jar r14-23-package/
+          cp Metropolis_R14_23_Farm_Access_Diversity_SOURCE.zip r14-23-package/
+          (cd r14-23-package && zip -q ../Metropolis_R14_23_Farm_Access_Diversity_DEV_PACKAGE.zip ./*)
+      - name: Verify exact R14.23 package contents
+        run: |
+          unzip -Z1 Metropolis_R14_23_Farm_Access_Diversity_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\n' Metropolis_R14_23_Farm_Access_Diversity_DEV.jar Metropolis_R14_23_Farm_Access_Diversity_SOURCE.zip | sort > expected-files.txt
+          diff -u expected-files.txt package-files.txt
+          unzip -t Metropolis_R14_23_Farm_Access_Diversity_DEV_PACKAGE.zip
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metropolis_R14_23_Farm_Access_Diversity_DEV
+          if-no-files-found: error
+          path: |
+            target/Metropolis_R14_23_Farm_Access_Diversity_DEV.jar
+            Metropolis_R14_23_Farm_Access_Diversity_SOURCE.zip
+            Metropolis_R14_23_Farm_Access_Diversity_DEV_PACKAGE.zip

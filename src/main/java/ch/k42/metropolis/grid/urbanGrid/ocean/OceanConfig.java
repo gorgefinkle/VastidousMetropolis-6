@@ -248,10 +248,10 @@ public class OceanConfig {
     private static double oceanSeabedReliefFraction = 0.7;
     // R30ea seabed controls restored from the original compiled API.
     private static boolean oceanSeabedDetailsEnabled = true;
-    private static int oceanSeabedPatchSizeBlocks = 56;
-    private static int oceanSeabedRockPercent = 12;
-    private static int oceanSeabedSeagrassPercent = 17;
-    private static int oceanSeabedKelpPercent = 9;
+    private static int oceanSeabedPatchSizeBlocks = 44;
+    private static int oceanSeabedRockPercent = 18;
+    private static int oceanSeabedSeagrassPercent = 34;
+    private static int oceanSeabedKelpPercent = 28;
     private static double oceanSeabedRippleBlocks = 2.2;
     private static double oceanSeabedMidVariationBlocks = 2.0;
     private static double oceanSeabedBedformScaleBlocks = 110.0;

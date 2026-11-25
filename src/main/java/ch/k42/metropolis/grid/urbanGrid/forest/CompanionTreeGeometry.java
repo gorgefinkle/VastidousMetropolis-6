@@ -36,7 +36,7 @@ public final class CompanionTreeGeometry {
 
     static final class Maker {
         final Terrain land;
-        final String wood, leaves;
+        final String wood, bark, leaves;
         final long seed;
         final Map<Pos,String> vox = new LinkedHashMap<>();
         Maker(Terrain land, boolean spruce, long seed) {
@@ -44,12 +44,13 @@ public final class CompanionTreeGeometry {
             this.seed=seed;
             String species=spruce ? "spruce" : "dark_oak";
             wood="minecraft:"+species+"_log";
+            bark="minecraft:"+species+"_wood";
             leaves="minecraft:"+species+"_leaves[persistent=true]";
         }
         void put(int x,int y,int z,boolean trunk,String axis) {
             if (!land.allows(x,z) || y<=land.groundAt(x,z)) return;
             Pos key=new Pos(x,y,z);
-            if (trunk || !vox.containsKey(key)) vox.put(key,trunk?wood+"[axis="+axis+"]":leaves);
+            if (trunk || !vox.containsKey(key)) vox.put(key,trunk?(axis.equals("none")?bark:wood+"[axis="+axis+"]"):leaves);
         }
         void sphere(P center,double radius,boolean trunk,long salt,String axis) {
             for(int x=(int)Math.floor(center.x-radius);x<=(int)Math.ceil(center.x+radius);x++)
@@ -62,28 +63,28 @@ public final class CompanionTreeGeometry {
                 put(x,y,z,trunk,axis);
             }
         }
-        void limb(P from,P to,double startRadius,double endRadius) {
+        void limb(P from,P to,double startRadius,double endRadius,boolean directionless) {
             double dx=to.x-from.x,dy=to.y-from.y,dz=to.z-from.z;
             int steps=(int)Math.ceil(Math.sqrt(dx*dx+dy*dy+dz*dz)*2.5);
-            String axis=(Math.abs(dy)>Math.max(Math.abs(dx),Math.abs(dz))) ? "y" : Math.abs(dx)>=Math.abs(dz)?"x":"z";
+            String axis=directionless?"none":(Math.abs(dy)>Math.max(Math.abs(dx),Math.abs(dz))) ? "y" : Math.abs(dx)>=Math.abs(dz)?"x":"z";
             int x=(int)Math.round(from.x),y=(int)Math.round(from.y),z=(int)Math.round(from.z);
             put(x,y,z,true,axis);
             for(int i=0;i<=steps;i++) {
                 double t=(double)i/Math.max(1,steps);
                 P pt=lerp(from,to,t);
                 int xx=(int)Math.round(pt.x), yy=(int)Math.round(pt.y), zz=(int)Math.round(pt.z);
-                while (x!=xx) { x+=Integer.signum(xx-x);put(x,y,z,true,"x"); }
-                while (z!=zz) { z+=Integer.signum(zz-z);put(x,y,z,true,"z"); }
-                while (y!=yy) { y+=Integer.signum(yy-y);put(x,y,z,true,"y"); }
+                while (x!=xx) { x+=Integer.signum(xx-x);put(x,y,z,true,directionless?"none":"x"); }
+                while (z!=zz) { z+=Integer.signum(zz-z);put(x,y,z,true,directionless?"none":"z"); }
+                while (y!=yy) { y+=Integer.signum(yy-y);put(x,y,z,true,directionless?"none":"y"); }
                 sphere(pt,startRadius+(endRadius-startRadius)*t,true,0L,axis);
             }
         }
-        void curved(P a,P b,P c,double radius0,double radius1) {
+        void curved(P a,P b,P c,double radius0,double radius1,boolean directionless) {
             P previous=a;
             for(int i=1;i<=22;i++) {
                 double t=i/22.0;
                 P next=bez(a,b,c,t);
-                limb(previous,next,radius0+(radius1-radius0)*(t-1.0/22.0),radius0+(radius1-radius0)*t);
+                limb(previous,next,radius0+(radius1-radius0)*(t-1.0/22.0),radius0+(radius1-radius0)*t,directionless);
                 previous=next;
             }
         }
@@ -110,11 +111,11 @@ public final class CompanionTreeGeometry {
         P bottom=p(x,ground+1,z);
         P mid=p(x+Math.cos(angle)*reach*0.3,ground+height*0.5,z+Math.sin(angle)*reach*0.3);
         P top=p(x+Math.cos(angle)*reach,ground+height,z+Math.sin(angle)*reach);
-        maker.curved(bottom,p(mid.x+1.8,mid.y+3.0,mid.z-2.1),top,spruce?2.5:3.3,1.05);
+        maker.curved(bottom,p(mid.x+1.8,mid.y+3.0,mid.z-2.1),top,spruce?2.5:3.3,1.05,false);
         if(!spruce || unit(s+3)>0.68) {
             double a=angle+1.55;
             P end=p(mid.x+Math.cos(a)*10.0,mid.y+9.0,mid.z+Math.sin(a)*10.0);
-            maker.curved(mid,p(mid.x+Math.cos(a)*4.0,mid.y+9.0,mid.z+Math.sin(a)*4.0),end,2.15,0.85);
+            maker.curved(mid,p(mid.x+Math.cos(a)*4.0,mid.y+9.0,mid.z+Math.sin(a)*4.0),end,2.15,0.85,true);
             maker.spray(end,s+32,2.2,spruce);
         }
         int count=spruce?15:9+global.nextInt(4);
@@ -127,7 +128,7 @@ public final class CompanionTreeGeometry {
             double r=spruce?11.0+(1-t)*16.0+random.nextDouble()*5.0:17.0+random.nextDouble()*19.0;
             P end=p(joint.x+Math.cos(a)*r,joint.y+(spruce?-3.0+random.nextDouble()*5.0:1.0+random.nextDouble()*8.0),joint.z+Math.sin(a)*r);
             P midBranch=p(joint.x+Math.cos(a)*r*0.48,joint.y+3.0+random.nextDouble()*5.0,joint.z+Math.sin(a)*r*0.48);
-            maker.curved(joint,midBranch,end,spruce?1.3:1.8,0.65);
+            maker.curved(joint,midBranch,end,spruce?1.3:1.8,0.65,true);
             int tips=spruce?4:3+random.nextInt(3);
             for(int j=0;j<tips;j++) {
                 double frac=0.4+(double)(j+1)/(tips+2)*0.46;
@@ -135,7 +136,7 @@ public final class CompanionTreeGeometry {
                 double angleTip=a+(j%2==0?1:-1)*(0.5+random.nextDouble()*0.85);
                 double distance=3.0+random.nextDouble()*(spruce?7:10);
                 P tip=p(node.x+Math.cos(angleTip)*distance,node.y+(spruce?-2:0)+random.nextDouble()*4.0,node.z+Math.sin(angleTip)*distance);
-                maker.curved(node,p((node.x+tip.x)*0.5,node.y+1.3+random.nextDouble()*2.0,(node.z+tip.z)*0.5),tip,0.78,0.45);
+                maker.curved(node,p((node.x+tip.x)*0.5,node.y+1.3+random.nextDouble()*2.0,(node.z+tip.z)*0.5),tip,0.78,0.45,true);
                 maker.spray(tip,branchSeed+j*213L,1.7+random.nextDouble()*1.8,spruce);
             }
             for(int j=1;j<=5;j++) {

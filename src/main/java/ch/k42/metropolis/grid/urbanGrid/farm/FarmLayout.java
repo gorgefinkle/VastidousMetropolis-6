@@ -3,8 +3,10 @@ package ch.k42.metropolis.grid.urbanGrid.farm;
 import ch.k42.metropolis.plugin.PluginConfig;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * The plan for one cell of the farm grid: CELL_CHUNKS x CELL_CHUNKS chunks
@@ -15,16 +17,18 @@ import java.util.Random;
  * plus (in some cells) one compact FARMSTEAD: a 3 x 3 chunk block in a corner,
  * next to a road, holding a derelict barn (a gabled one in one of six
  * weatherings, standard or large, or sometimes a round barn), one or two silos,
- * a wrecked tractor, old hay, maybe a well, and rows of windbreak trees, and --
  * each by chance -- an open pole barn, a shed or two (chicken coop, corn crib,
- * tool shed), a water-pumping windmill and a rusted pickup. The barn's doorway
  * faces the road and a dirt driveway runs straight out of it to the dirt road.
  *
  * A few farmsteads are instead a MODERN COMPOUND: a 6 x 5 chunk plot with one
  * very big steel-framed barn (see FarmModernBarn), abandoned but intact, front
  * doors toward the road, with a silage bunker, silos, a machine shed and yard.
- * Some cells also get a NURSERY in a free corner (glasshouses, polytunnels, a
- * potting shed; see FarmGreenhouse), and some fields are overgrown ORCHARDS.
+ * Some farmsteads also receive a small family farmhouse with an optional
+ * earth-sheltered root cellar. Rare cells can contain one of three concealed
+ * survival bunkers or a sealed underground missile silo; those footprints are
+ * reserved before field rectangles are planned. Some cells also get a NURSERY
+ * in a free corner (glasshouses, polytunnels, a potting shed; see FarmGreenhouse),
+ * and some fields are overgrown ORCHARDS.
  * generator.farm.modernBarnPercent, greenhousePercent, orchardShare,
  * roundBarnPercent and outbuildingPercent set how often.
  *
@@ -32,10 +36,12 @@ import java.util.Random;
  * stream (the field `extra`), kept apart from the one the original plan uses, so
  * with those options at 0 every cell is planned exactly as it was before.
  *
- * The first 4 blocks along the cell's west and north edges belong to the dirt
- * road strips (see FarmRoads). Fields stand back from a strip that exists; where
- * there is none they run to the cell edge, so neighbouring fields are only
- * separated by their own broken fences. There is no path around any field.
+ * Farm boundaries can carry shared dirt access spines, but are not painted
+ * automatically. A boundary segment is only built when a real farm site asks
+ * for access and the spine reaches an ordinary paved street. Each farm site
+ * has its own driveway into the shared spine; unused boundaries remain meadow.
+ * Fields are laid out as separate plots and the access routes stay on their
+ * edges rather than cutting across crop interiors.
  *
  * Fields are found by taking the largest rectangle of free, same-height farm
  * chunks, again and again, so they follow the shape of the region instead of
@@ -66,6 +72,20 @@ final class FarmLayout {
    private final long seed;
    private final List<FarmFeature> features = new ArrayList<FarmFeature>();
    private final List<int[]> taken = new ArrayList<int[]>();
+   /** Boundary-road requests made by real farm sites in this cell. */
+   private final List<RoadAccess> roadAccesses = new ArrayList<RoadAccess>();
+
+   private static final class RoadAccess {
+      final boolean vertical;
+      final int line;
+      final int alongChunk;
+
+      RoadAccess(boolean vertical, int line, int alongChunk) {
+         this.vertical = vertical;
+         this.line = line;
+         this.alongChunk = alongChunk;
+      }
+   }
 
    private FarmLayout(FarmContext ctx, int cellX, int cellZ) {
       this.ctx = ctx;
@@ -173,7 +193,7 @@ final class FarmLayout {
       }
       boolean[][] used = new boolean[n][n];
       Random r = new Random(FarmRandom.hash(this.seed, this.cellX, this.cellZ, 101));
-      // A second stream for everything added later (modern compounds, nurseries, round barns, outbuildings). Kept apart from r so a
+      // A second stream for everything added later (modern compounds, nurseries, round barns, outbuildings, farmhouses, bunkers and the silo). Kept apart from r so a
       // cell that gets none of them is planned exactly as it was before they existed.
       this.extra = new Random(FarmRandom.hash(this.seed, this.cellX, this.cellZ, 104));
       if (r.nextInt(100) < PluginConfig.getFarmFarmsteadPercent()) {
@@ -185,16 +205,75 @@ final class FarmLayout {
       if (this.extra.nextInt(100) < PluginConfig.getFarmGreenhouse()) {
          this.planNursery(gy, used);
       }
+      this.planHiddenBunker(gy, used);
+      this.planMissileSilo(gy, used);
       this.planFields(r, gy, used);
    }
 
    /** Block rectangle {minX, minZ, maxX, maxZ} for the chunk range [a..b] x [c..d] of this cell: where a field's fence (or a farmstead's usable ground) may go. */
    private int[] rectFor(int a, int b, int c, int d) {
-      int west = a == 0 ? (this.ctx.lineExists(true, this.cellX) ? INSET : 1) : 1;
-      int north = c == 0 ? (this.ctx.lineExists(false, this.cellZ) ? INSET : 1) : 1;
+      // West and north strips are owned by this cell. East and south strips
+      // are owned by the neighbouring cell, so only inset the edges that
+      // physically reserve road blocks inside this cell.
+      int west = a == 0 && this.ctx.lineExists(true, this.cellX) ? INSET : 1;
+      int north = c == 0 && this.ctx.lineExists(false, this.cellZ) ? INSET : 1;
       return new int[]{
               this.x0 + 16 * a + west, this.z0 + 16 * c + north,
               this.x0 + 16 * (b + 1) - 2, this.z0 + 16 * (d + 1) - 2};
+   }
+
+   /**
+    * A boundary is a possible shared road spine only where its continuous
+    * farm run reaches a genuine paved street. Checking the whole field edge
+    * segment also sees access requests made by the neighbouring cell, whose
+    * west/north-owned strip is painted on this side of the shared boundary.
+    */
+   private boolean connectedBoundary(boolean vertical, int line, int alongStart, int alongEnd) {
+      for (int along = alongStart; along <= alongEnd; along++) {
+         int cx = vertical ? line * CELL_CHUNKS : along;
+         int cz = vertical ? along : line * CELL_CHUNKS;
+         if (this.ctx.connected(vertical, cx, cz)) return true;
+      }
+      return false;
+   }
+
+   /**
+    * Field plots stand back only from boundary segments that can actually
+    * carry a site-to-street route. Empty candidate boundaries remain usable
+    * land, while shared roads requested by either adjacent cell cannot cut
+    * through an already planned field.
+    */
+   private int[] rectForField(int a, int b, int c, int d) {
+      int west = a == 0 && this.connectedBoundary(true, this.cellX, this.cellZ * CELL_CHUNKS + c,
+              this.cellZ * CELL_CHUNKS + d) ? INSET : 1;
+      int north = c == 0 && this.connectedBoundary(false, this.cellZ, this.cellX * CELL_CHUNKS + a,
+              this.cellX * CELL_CHUNKS + b) ? INSET : 1;
+      return new int[]{
+              this.x0 + 16 * a + west, this.z0 + 16 * c + north,
+              this.x0 + 16 * (b + 1) - 2, this.z0 + 16 * (d + 1) - 2};
+   }
+
+   /** Add a site request for the shared dirt spine on the selected cell edge. */
+   private void recordRoadAccess(int side, int alongBlock) {
+      if (side < 0 || side > 3) return;
+      boolean vertical = side < 2;
+      int line = side == 0 ? this.cellX
+              : side == 1 ? this.cellX + 1
+              : side == 2 ? this.cellZ : this.cellZ + 1;
+      this.roadAccesses.add(new RoadAccess(vertical, line, alongBlock >> 4));
+   }
+
+   /**
+    * Exposes only genuine site access gates on the queried grid boundary.
+    * Called by FarmRoads while it builds the minimal shared route to a paved
+    * street; fields and empty boundaries never create road demand.
+    */
+   void collectAccessPoints(boolean vertical, int line, Set<Integer> points) {
+      for (RoadAccess access : this.roadAccesses) {
+         if (access.vertical == vertical && access.line == line) {
+            points.add(access.alongChunk);
+         }
+      }
    }
 
    // ------------------------------------------------------------------ fields
@@ -275,6 +354,37 @@ final class FarmLayout {
       }
    }
 
+   /** Rare concealed refuge, kept out of fields by reserving its 2x2-chunk footprint. */
+   private void planHiddenBunker(int[][] gy, boolean[][] used) {
+      if (this.extra.nextInt(100) >= 10) return;
+      int startX=this.extra.nextInt(CELL_CHUNKS-1), startZ=this.extra.nextInt(CELL_CHUNKS-1);
+      for(int n=0;n<(CELL_CHUNKS-1)*(CELL_CHUNKS-1);n++) {
+         int a=(startX+n)%(CELL_CHUNKS-1);
+         int c=(startZ+(startX+n)/(CELL_CHUNKS-1))%(CELL_CHUNKS-1);
+         if(!this.rectFree(gy,used,a,a+1,c,c+1)) continue;
+         int cx=this.x0+a*16+16, cz=this.z0+c*16+16;
+         this.features.add(new FarmBunker(cx,cz,gy[a][c],this.seed,this.extra.nextInt(3)));
+         this.markUsed(used,a,a+1,c,c+1);
+         return;
+      }
+   }
+
+   /** Rare full-scale sealed military installation; reserve its complete 3x3-chunk footprint. */
+   private void planMissileSilo(int[][] gy, boolean[][] used) {
+      if (this.extra.nextInt(100) >= 4) return;
+      int side=CELL_CHUNKS-2;
+      int startX=this.extra.nextInt(side), startZ=this.extra.nextInt(side);
+      for(int n=0;n<side*side;n++) {
+         int a=(startX+n)%side;
+         int c=(startZ+(startX+n)/side)%side;
+         if(!this.rectFree(gy,used,a,a+2,c,c+2)) continue;
+         int cx=this.x0+a*16+24, cz=this.z0+c*16+24;
+         this.features.add(new FarmMissileSilo(cx,cz,gy[a][c],this.seed));
+         this.markUsed(used,a,a+2,c,c+2);
+         return;
+      }
+   }
+
    private void planFields(Random r, int[][] gy, boolean[][] used) {
       int maxDim = 10 + r.nextInt(7);                // fields of up to 10..16 chunks (160..256 blocks) across, so they differ in size
       for (int n = 0; n < 12; n++) {
@@ -283,7 +393,7 @@ final class FarmLayout {
             break;
          }
          this.markUsed(used, rc[0], rc[1], rc[2], rc[3]);
-         int[] b = this.rectFor(rc[0], rc[1], rc[2], rc[3]);
+         int[] b = this.rectForField(rc[0], rc[1], rc[2], rc[3]);
          FarmField.Kind kind = this.pickKind(r);
          // some fields (never pasture) are an overgrown orchard instead; rolled from the field's own position, not from r, so every
          // other field and farmstead in the cell comes out exactly as it would without orchards
@@ -337,6 +447,22 @@ final class FarmLayout {
       }
    }
 
+   /** True only when this exact gate lies on a continuous spine reaching a paved street. */
+   private boolean sideConnected(int side, int alongBlock) {
+      int alongChunk = alongBlock >> 4;
+      int cx = this.cellX * CELL_CHUNKS;
+      int cz = this.cellZ * CELL_CHUNKS;
+      switch (side) {
+         case 0: return this.ctx.connected(true, cx, alongChunk);
+         case 1: return this.ctx.connected(true, cx + CELL_CHUNKS, alongChunk);
+         case 2: return this.ctx.connected(false, alongChunk, cz);
+         case 3: return this.ctx.connected(false, alongChunk, cz + CELL_CHUNKS);
+         default: return false;
+      }
+   }
+
+
+
    private void planFarmstead(Random r, int[][] gy, boolean[][] used) {
       int n = CELL_CHUNKS;
       int[][] corners = {{0, 0}, {n - BLOCK, 0}, {0, n - BLOCK}, {n - BLOCK, n - BLOCK}};
@@ -362,12 +488,9 @@ final class FarmLayout {
             return;
          }
       }
-      // No road to reach: still build the farm, just without a driveway.
-      for (int[] c : corners) {
-         if (this.blockFree(gy, used, c[0], c[1]) && this.tryFarmstead(r, gy, used, c[0], c[1], -1)) {
-            return;
-         }
-      }
+      // A farmstead is a road-served site. If neither candidate edge reaches
+      // a paved street through a valid dirt strip, leave this cell as fields
+      // rather than place an isolated compound with no usable access.
    }
 
    private boolean tryFarmstead(Random r, int[][] gy, boolean[][] used, int a0, int c0, int side) {
@@ -464,16 +587,29 @@ final class FarmLayout {
          }
          this.taken.add(new int[]{sx0, sz0, sx1, sz1});
          this.features.add(new FarmProps.Driveway(sx0, sz0, sx1, sz1, h, axisX));
+         this.recordRoadAccess(side, centre);
       }
 
       if (round) {
          this.features.add(new FarmRoundBarn(bx, bz, side >= 0 ? side : this.extra.nextInt(4), h, this.seed));
       } else {
-         this.features.add(new FarmBarn(bx, bz, axisX, big, h, this.seed));
+         boolean mirror = side == 1 || side == 3;
+         this.features.add(new FarmBarn(bx, bz, axisX, mirror, big, h, this.seed));
       }
 
       int sLoX = ux0 + 3;
       int sLoZ = uz0 + 3;
+      // Farmsteads sometimes include a separate family farmhouse rather than
+      // reading as an all-barn industrial yard. Its root cellar is a further
+      // independent roll, so only a subset receive the earth-sheltered store.
+      if (this.extra.nextInt(100) < 45) {
+         int[] home = this.findSpot(this.extra, 16, 16, 3, sLoX, sLoZ, ux1 - 3 - 15, uz1 - 3 - 15);
+         if (home != null) {
+            boolean cellar = this.extra.nextInt(100) < 42;
+            this.features.add(new FarmHouse(home[0] + 3, home[1] + 3, h, this.seed,
+                    axisX, cellar));
+         }
+      }
       int silos = 1 + r.nextInt(2);
       for (int i = 0; i < silos; i++) {
          int[] s = this.findSpot(r, 7, 7, 3, sLoX, sLoZ, ux1 - 3 - 6, uz1 - 3 - 6);
@@ -500,9 +636,6 @@ final class FarmLayout {
          int tw = tx ? 5 : 3;
          int td = tx ? 3 : 5;
          int[] t = this.findSpot(r, tw, td, 3, sLoX, sLoZ, ux1 - 3 - tw + 1, uz1 - 3 - td + 1);
-         if (t != null) {
-            this.features.add(new FarmProps.Tractor(t[0], t[1], tx, h, this.seed));
-         }
       }
       this.plantSmallExtras(h, ux0, uz0, ux1, uz1);
       this.planWindbreaks(r, h, side, ux0, uz0, ux1, uz1);
@@ -542,7 +675,6 @@ final class FarmLayout {
       }
    }
 
-   /** Up to two sheds (chicken coop, corn crib, tool shed) and a rusted pickup, each at generator.farm.outbuildingPercent. */
    private void plantSmallExtras(int h, int ux0, int uz0, int ux1, int uz1) {
       Random x = this.extra;
       int pct = PluginConfig.getFarmOutbuildings();
@@ -568,9 +700,6 @@ final class FarmLayout {
          int bw = ax ? 6 : 3;
          int bd = ax ? 3 : 6;
          int[] s = this.findSpot(x, bw, bd, 2, loX, loZ, ux1 - 3 - bw + 1, uz1 - 3 - bd + 1);
-         if (s != null) {
-            this.features.add(new FarmOutbuildings.Pickup(s[0], s[1], ax, h, this.seed));
-         }
       }
    }
 
@@ -601,11 +730,8 @@ final class FarmLayout {
             return true;
          }
       }
-      for (int[] cf : corners) {
-         if (this.tryModern(gy, used, cf, -1)) {
-            return true;
-         }
-      }
+      // Do not create an isolated modern compound as a fallback. Every
+      // placed farm site must have a real road-facing entrance and driveway.
       return false;
    }
 
@@ -693,38 +819,47 @@ final class FarmLayout {
          }
          this.taken.add(new int[]{sx0, sz0, sx1, sz1});
          this.features.add(new FarmProps.Driveway(sx0, sz0, sx1, sz1, h, axisX));
+         this.recordRoadAccess(side, centre);
       }
 
       this.features.add(FarmModernBarn.make(bx, bz, axisX, mirror, variant, h, this.seed));
-      // a wrecked tractor in the feed alley, painted after the barn so it stands on the barn's floor
       int c = (wid - 1) / 2;
       int u0 = len / 2 - 3;
       int tAlong = (axisX ? bx : bz) + (mirror ? len - 5 - u0 : u0);
       int tAcross = (axisX ? bz : bx) + c - 1;
-      if (x.nextInt(100) < 70) {
-         this.features.add(new FarmProps.Tractor(axisX ? tAlong : tAcross, axisX ? tAcross : tAlong, axisX, h, this.seed));
-      }
 
       int sLoX = ux0 + 3;
       int sLoZ = uz0 + 3;
-      // a silage bunker, and the feed silos beside it
+      // One operation specialization drives the rest of the compound mix.
+      // It is chosen before ancillary structures so storage and handling
+      // equipment can be appropriate to the actual operation.
+      int operation = this.chooseIndustrialStyle(x);
+      boolean grainOperation = operation == FarmIndustrial.ELEVATOR || operation == FarmIndustrial.GRAIN_DRYER;
+      boolean feedOperation = grainOperation || operation == FarmIndustrial.POULTRY_HALL;
       boolean bAx = x.nextBoolean();
       int bunkerW = bAx ? 24 : 9;
       int bunkerD = bAx ? 9 : 24;
-      int[] bs = this.findSpot(x, bunkerW, bunkerD, 3, sLoX, sLoZ, ux1 - 3 - bunkerW + 1, uz1 - 3 - bunkerD + 1);
-      if (bs != null) {
-         this.features.add(new FarmModernBarn.Bunker(bs[0], bs[1], bAx, x.nextBoolean(), 24, 9, h, this.seed));
+      int bunkerChance = operation == FarmIndustrial.PUMPWORKS
+              || operation == FarmIndustrial.ORGANIC_RECOVERY
+              || operation == FarmIndustrial.PACKHOUSE ? 30 : 72;
+      if (x.nextInt(100) < bunkerChance) {
+         int[] bs = this.findSpot(x, bunkerW, bunkerD, 3, sLoX, sLoZ,
+                 ux1 - 3 - bunkerW + 1, uz1 - 3 - bunkerD + 1);
+         if (bs != null) {
+            this.features.add(new FarmModernBarn.Bunker(bs[0], bs[1], bAx, x.nextBoolean(), 24, 9, h, this.seed));
+         }
       }
-      int silos = 2 + x.nextInt(2);
-      for (int i = 0; i < silos; i++) {
-         int[] s = this.findSpot(x, 7, 7, 3, sLoX, sLoZ, ux1 - 3 - 6, uz1 - 3 - 6);
-         if (s != null) {
-            this.features.add(new FarmSilo(s[0] + 3, s[1] + 3, h, this.seed));
+      int siloChance = grainOperation ? 88 : (feedOperation ? 48 : 20);
+      if (x.nextInt(100) < siloChance) {
+         int silos = grainOperation ? 1 + x.nextInt(2) : 1;
+         for (int i = 0; i < silos; i++) {
+            int[] s = this.findSpot(x, 7, 7, 3, sLoX, sLoZ, ux1 - 3 - 6, uz1 - 3 - 6);
+            if (s != null) this.features.add(new FarmSilo(s[0] + 3, s[1] + 3, h, this.seed));
          }
       }
       // a machine shed (the long pole barn), a windmill perhaps, and the rest of the yard
       this.plantBigExtras(h, ux0, uz0, ux1, uz1, false);
-      if (x.nextInt(100) < 60) {
+      if (x.nextInt(100) < 28) {
          boolean ax = x.nextBoolean();
          int pl = FarmOutbuildings.PoleBarn.lengthOf(2);
          int pw = ax ? pl + 2 : 13;
@@ -734,20 +869,18 @@ final class FarmLayout {
             this.features.add(new FarmOutbuildings.PoleBarn(s[0] + 1, s[1] + 1, ax, 2, h, this.seed));
          }
       }
-      this.plantSmallExtras(h, ux0, uz0, ux1, uz1);
-      // A separate mechanised worksite, reserved *after* the barn/bunkers,
-      // so an auger elevator or harvester depot never intersects the barns,
-      // loading drive or nearby fields. The two silhouettes are intentionally
-      // very different, rather than recoloured versions of the same barn.
-      if (x.nextInt(100) < 82) {
-         int style = x.nextBoolean() ? FarmIndustrial.ELEVATOR : FarmIndustrial.DEPOT;
+      this.plantModernExtras(x, h, ux0, uz0, ux1, uz1);
+      // One operation-specific facility per compound at most. Its unique
+      // footprint is reserved after the barn, yard, feed handling and small
+      // essentials so it cannot collide with the main farm or its driveway.
+      if (x.nextInt(100) < 62) {
          boolean ax = x.nextBoolean();
-         int bl = FarmIndustrial.length(style), wd = FarmIndustrial.width(style);
+         int bl = FarmIndustrial.length(operation), wd = FarmIndustrial.width(operation);
          int rw = (ax ? bl : wd) + 2, rd = (ax ? wd : bl) + 2;
          int[] site = this.findSpot(x, rw, rd, 2, sLoX, sLoZ,
                  ux1 - 3 - rw + 1, uz1 - 3 - rd + 1);
          if (site != null) {
-            this.features.add(new FarmIndustrial(site[0] + 1, site[1] + 1, ax, style, h, this.seed));
+            this.features.add(new FarmIndustrial(site[0] + 1, site[1] + 1, ax, operation, h, this.seed));
          }
       }
       int stacks = x.nextInt(3);
@@ -761,6 +894,33 @@ final class FarmLayout {
       return true;
    }
 
+   /** Weighted operation mix. The old elevator/depot pair no longer dominates every modern site. */
+   private int chooseIndustrialStyle(Random x) {
+      int roll = x.nextInt(100);
+      if (roll < 17) return FarmIndustrial.ELEVATOR;
+      if (roll < 30) return FarmIndustrial.DEPOT;
+      if (roll < 44) return FarmIndustrial.PACKHOUSE;
+      if (roll < 58) return FarmIndustrial.GRAIN_DRYER;
+      if (roll < 70) return FarmIndustrial.PUMPWORKS;
+      if (roll < 80) return FarmIndustrial.POULTRY_HALL;
+      if (roll < 92) return FarmIndustrial.LIVESTOCK_WORKS;
+      return FarmIndustrial.ORGANIC_RECOVERY;
+   }
+
+   /** Keep modern compounds functional without filling every spare corner with sheds. */
+   private void plantModernExtras(Random x, int h, int ux0, int uz0, int ux1, int uz1) {
+      int loX = ux0 + 3, loZ = uz0 + 3;
+      if (x.nextInt(100) < 32) {
+         boolean ax = x.nextBoolean();
+         int len = FarmOutbuildings.Shed.lengthOf(FarmOutbuildings.Shed.TOOL);
+         int wid = FarmOutbuildings.Shed.widthOf(FarmOutbuildings.Shed.TOOL);
+         int bw = (ax ? len : wid) + 2, bd = (ax ? wid : len) + 2;
+         int[] s = this.findSpot(x, bw, bd, 2, loX, loZ, ux1 - 3 - bw + 1, uz1 - 3 - bd + 1);
+         if (s != null) this.features.add(new FarmOutbuildings.Shed(
+                 s[0] + 1, s[1] + 1, ax, FarmOutbuildings.Shed.TOOL, h, this.seed));
+      }
+   }
+
    // ---------------------------------------------------------------- the nursery
 
    /**
@@ -768,16 +928,12 @@ final class FarmLayout {
     * fields so they leave room for it. Skipped if no corner is free.
     */
    private void planNursery(int[][] gy, boolean[][] used) {
-      // Nearly half of nurseries are a polytunnel FIELD, the way a grower runs them: many tunnels in aligned banks, on a plot of their
-      // own. One in seven is a commercial multi-bay glasshouse. The rest are the glasshouses described below. If the big plot a field or
-      // a commercial house needs is not there, the nursery is built the ordinary way.
+      // Production layouts are attempted first, but only when their service
+      // lane can meet a connected paved-road spine.
       double kind = this.extra.nextDouble();
-      if (kind < 0.58 && this.planTunnelField(gy, used)) {
-         return;
-      }
-      if (kind >= 0.58 && kind < 0.80 && this.planCommercialGlass(gy, used)) {
-         return;
-      }
+      if (kind < 0.58 && this.planTunnelField(gy, used)) return;
+      if (kind >= 0.58 && kind < 0.80 && this.planCommercialGlass(gy, used)) return;
+
       int n = CELL_CHUNKS;
       int[][] corners = {{0, 0}, {n - BLOCK, 0}, {0, n - BLOCK}, {n - BLOCK, n - BLOCK}};
       for (int i = corners.length - 1; i > 0; i--) {
@@ -786,47 +942,96 @@ final class FarmLayout {
          corners[i] = corners[j];
          corners[j] = t;
       }
-      for (int[] c : corners) {
-         if (!this.blockFree(gy, used, c[0], c[1])) {
-            continue;
-         }
-         int f0 = this.features.size();
-         int t0 = this.taken.size();
-         if (this.buildNursery(gy[c[0]][c[1]], c[0], c[1])) {
-            this.markUsed(used, c[0], c[0] + BLOCK - 1, c[1], c[1] + BLOCK - 1);
-            return;
-         }
-         while (this.features.size() > f0) {
-            this.features.remove(this.features.size() - 1);
-         }
-         while (this.taken.size() > t0) {
-            this.taken.remove(this.taken.size() - 1);
+      for (int[] corner : corners) {
+         if (!this.blockFree(gy, used, corner[0], corner[1])) continue;
+         int horizontal = corner[0] == 0 ? 0 : 1;
+         int vertical = corner[1] == 0 ? 2 : 3;
+         int first = this.extra.nextBoolean() ? horizontal : vertical;
+         int second = first == horizontal ? vertical : horizontal;
+         for (int side : new int[]{first, second}) {
+            int f0 = this.features.size();
+            int t0 = this.taken.size();
+            if (this.buildNursery(gy[corner[0]][corner[1]], corner[0], corner[1], side)) {
+               this.markUsed(used, corner[0], corner[0] + BLOCK - 1, corner[1], corner[1] + BLOCK - 1);
+               return;
+            }
+            while (this.features.size() > f0) this.features.remove(this.features.size() - 1);
+            while (this.taken.size() > t0) this.taken.remove(this.taken.size() - 1);
          }
       }
    }
 
-   private boolean buildNursery(int h, int a0, int c0) {
+   private boolean buildNursery(int h, int a0, int c0, int side) {
       Random x = this.extra;
       int[] u = this.rectFor(a0, a0 + BLOCK - 1, c0, c0 + BLOCK - 1);
-      boolean placed;
-      if (x.nextBoolean()) {
-         placed = this.placeGlasshouse(x, 2, h, u);                    // the big one first, then a smaller beside it
-         this.placeGlasshouse(x, 0, h, u);
+      boolean axisX = side < 2;
+      boolean mirror = side == 1 || side == 3;
+      int variant = x.nextInt(3);
+      int purposeRoll = x.nextInt(100);
+      int purpose = purposeRoll < 38 ? FarmGreenhouse.PROPAGATION
+              : (purposeRoll < 58 ? FarmGreenhouse.RESEARCH : FarmGreenhouse.STANDARD);
+      int len = FarmGreenhouse.lengthOf(FarmGreenhouse.GABLED, variant);
+      int wid = FarmGreenhouse.widthOf(FarmGreenhouse.GABLED, variant, 0);
+      int acrossCentre = axisX ? (u[1] + u[3]) / 2 : (u[0] + u[2]) / 2;
+      int acrossStart = acrossCentre - wid / 2;
+      int doorAlong = side == 0 ? this.x0 + 10
+              : side == 1 ? this.x0 + CELL - 11
+              : side == 2 ? this.z0 + 10 : this.z0 + CELL - 11;
+      if (!this.sideConnected(side, acrossCentre)) return false;
+
+      int ox, oz;
+      if (axisX) {
+         ox = mirror ? doorAlong - len + 1 : doorAlong;
+         oz = acrossStart;
       } else {
-         placed = this.placeGlasshouseAndBank(x, h, u);
+         ox = acrossStart;
+         oz = mirror ? doorAlong - len + 1 : doorAlong;
       }
-      if (!placed) {
-         return false;
+
+      // A four-wide driveway meets the actual open gable end, not just an
+      // arbitrary point in the nursery yard.
+      int minX, minZ, maxX, maxZ;
+      if (side == 0) {
+         minX = this.x0 + FarmRoads.WIDTH;
+         maxX = doorAlong - 1;
+         minZ = acrossCentre - 2;
+         maxZ = acrossCentre + 1;
+      } else if (side == 1) {
+         minX = doorAlong + 1;
+         maxX = this.x0 + CELL - 1;
+         minZ = acrossCentre - 2;
+         maxZ = acrossCentre + 1;
+      } else if (side == 2) {
+         minX = acrossCentre - 2;
+         maxX = acrossCentre + 1;
+         minZ = this.z0 + FarmRoads.WIDTH;
+         maxZ = doorAlong - 1;
+      } else {
+         minX = acrossCentre - 2;
+         maxX = acrossCentre + 1;
+         minZ = doorAlong + 1;
+         maxZ = this.z0 + CELL - 1;
       }
+      if (minX > maxX || minZ > maxZ) return false;
+
+      this.taken.add(new int[]{minX, minZ, maxX, maxZ});
+      this.features.add(new FarmProps.Driveway(minX, minZ, maxX, maxZ, h, axisX));
+      this.recordRoadAccess(side, acrossCentre);
+      this.features.add(FarmGreenhouse.gabled(ox, oz, axisX, mirror, variant, purpose, h, this.seed));
+      this.taken.add(new int[]{ox - 1, oz - 1,
+              ox + (axisX ? len : wid), oz + (axisX ? wid : len)});
+
+      // Keep the four-wide entrance lane clear of the greenhouse floor.
+
       if (x.nextInt(100) < 70) {
-         boolean ax = x.nextBoolean();
-         int len = FarmOutbuildings.Shed.lengthOf(FarmOutbuildings.Shed.TOOL);
-         int wid = FarmOutbuildings.Shed.widthOf(FarmOutbuildings.Shed.TOOL);
-         int bw = (ax ? len : wid) + 2;
-         int bd = (ax ? wid : len) + 2;
+         boolean shedAxisX = x.nextBoolean();
+         int shedLength = FarmOutbuildings.Shed.lengthOf(FarmOutbuildings.Shed.TOOL);
+         int shedWidth = FarmOutbuildings.Shed.widthOf(FarmOutbuildings.Shed.TOOL);
+         int bw = (shedAxisX ? shedLength : shedWidth) + 2;
+         int bd = (shedAxisX ? shedWidth : shedLength) + 2;
          int[] s = this.findSpot(x, bw, bd, 2, u[0] + 2, u[1] + 2, u[2] - 2 - bw + 1, u[3] - 2 - bd + 1);
          if (s != null) {
-            this.features.add(new FarmOutbuildings.Shed(s[0] + 1, s[1] + 1, ax, FarmOutbuildings.Shed.TOOL, h, this.seed));
+            this.features.add(new FarmOutbuildings.Shed(s[0] + 1, s[1] + 1, shedAxisX, FarmOutbuildings.Shed.TOOL, h, this.seed));
          }
       }
       return true;
@@ -874,7 +1079,6 @@ final class FarmLayout {
     */
    private boolean planTunnelField(int[][] gy, boolean[][] used) {
       Random x = this.extra;
-      boolean ax = x.nextBoolean();
       int banks = 1 + x.nextInt(4);
       int tunnels = banks == 1 ? 5 + x.nextInt(2) : (banks == 2 ? 5 + x.nextInt(2) : banks == 3 ? 4 + x.nextInt(2) : 5 + x.nextInt(2));
       int variant = 1 + x.nextInt(2);
@@ -882,45 +1086,41 @@ final class FarmLayout {
       int bankW = FarmGreenhouse.widthOf(FarmGreenhouse.HOOP, variant, tunnels);
       int fieldW = banks * bankW + (banks - 1) * FIELD_LANE;
       int fieldL = HEAD_LANE + len;
-      int alongC = (fieldL + 10 + 15) / 16;
+      int alongC = (fieldL + 15 + 15) / 16; // includes the west/north boundary inset and service-lane apron
       int acrossC = (fieldW + 10 + 15) / 16;
-      int bwC = ax ? alongC : acrossC;
-      int bdC = ax ? acrossC : alongC;
       int n = CELL_CHUNKS;
-      if (bwC > n || bdC > n) {
-         return false;
-      }
-      int[][] corners = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
-      for (int i = corners.length - 1; i > 0; i--) {
-         int j = x.nextInt(i + 1);
-         int[] t = corners[i];
-         corners[i] = corners[j];
-         corners[j] = t;
-      }
-      for (int[] cf : corners) {
-         int a0 = cf[0] == 0 ? 0 : n - bwC;
-         int c0 = cf[1] == 0 ? 0 : n - bdC;
-         if (!this.rectFree(gy, used, a0, a0 + bwC - 1, c0, c0 + bdC - 1)) {
-            continue;
-         }
-         int f0 = this.features.size();
-         int t0 = this.taken.size();
-         if (this.buildTunnelField(gy[a0][c0], a0, c0, bwC, bdC, ax, banks, tunnels, variant, len, bankW, fieldW)) {
-            this.markUsed(used, a0, a0 + bwC - 1, c0, c0 + bdC - 1);
-            return true;
-         }
-         while (this.features.size() > f0) {
-            this.features.remove(this.features.size() - 1);
-         }
-         while (this.taken.size() > t0) {
-            this.taken.remove(this.taken.size() - 1);
+      int[] sides = {0, 2}; // west or north: the tunnel mouths face the road-side head lane
+      if (x.nextBoolean()) { int t = sides[0]; sides[0] = sides[1]; sides[1] = t; }
+      for (int side : sides) {
+         boolean ax = side == 0;
+         int bwC = ax ? alongC : acrossC;
+         int bdC = ax ? acrossC : alongC;
+         if (bwC > n || bdC > n) continue;
+         int farA = n - bwC;
+         int farC = n - bdC;
+         int[][] options = ax
+                 ? new int[][]{{0, 0}, {0, farC}}
+                 : new int[][]{{0, 0}, {farA, 0}};
+         if (x.nextBoolean()) { int[] t = options[0]; options[0] = options[1]; options[1] = t; }
+         for (int[] option : options) {
+            int a0 = option[0], c0 = option[1];
+            if (!this.rectFree(gy, used, a0, a0 + bwC - 1, c0, c0 + bdC - 1)) continue;
+            int f0 = this.features.size();
+            int t0 = this.taken.size();
+            if (this.buildTunnelField(gy[a0][c0], a0, c0, bwC, bdC, ax, side,
+                    banks, tunnels, variant, len, bankW, fieldW)) {
+               this.markUsed(used, a0, a0 + bwC - 1, c0, c0 + bdC - 1);
+               return true;
+            }
+            while (this.features.size() > f0) this.features.remove(this.features.size() - 1);
+            while (this.taken.size() > t0) this.taken.remove(this.taken.size() - 1);
          }
       }
       return false;
    }
 
-   private boolean buildTunnelField(int h, int a0, int c0, int bwC, int bdC, boolean ax, int banks, int tunnels, int variant,
-                                    int len, int bankW, int fieldW) {
+   private boolean buildTunnelField(int h, int a0, int c0, int bwC, int bdC, boolean ax, int side,
+                                    int banks, int tunnels, int variant, int len, int bankW, int fieldW) {
       Random x = this.extra;
       int[] u = this.rectFor(a0, a0 + bwC - 1, c0, c0 + bdC - 1);
       int alongSpan = (ax ? u[2] - u[0] : u[3] - u[1]) + 1;
@@ -929,18 +1129,21 @@ final class FarmLayout {
          return false;
       }
       // the access lane at the low-coordinate side of the plot, the tunnels' open ends facing it, the whole field flush to the corner
-      int laneStart = (ax ? u[0] : u[1]) + 3;
-      int tunnelStart = laneStart + HEAD_LANE;
       int acrossStart = (ax ? u[1] : u[0]) + 4;
+      int gate = acrossStart + fieldW / 2;
+      if (!this.sideConnected(side, gate)) return false;
+      int laneStart = side == 0 ? this.x0 + FarmRoads.WIDTH : this.z0 + FarmRoads.WIDTH;
+      int tunnelStart = laneStart + HEAD_LANE;
       int ox = ax ? tunnelStart : acrossStart;
       int oz = ax ? acrossStart : tunnelStart;
       if (ax) {
          this.taken.add(new int[]{laneStart - 1, acrossStart - 2, tunnelStart + len, acrossStart + fieldW + 1});
-         this.features.add(new FarmProps.Driveway(laneStart, acrossStart - 1, tunnelStart - 1, acrossStart + fieldW, h, false));
+         this.features.add(new FarmProps.Driveway(laneStart, acrossStart - 1, tunnelStart - 1, acrossStart + fieldW, h, true));
       } else {
          this.taken.add(new int[]{acrossStart - 2, laneStart - 1, acrossStart + fieldW + 1, tunnelStart + len});
-         this.features.add(new FarmProps.Driveway(acrossStart - 1, laneStart, acrossStart + fieldW, tunnelStart - 1, h, true));
+         this.features.add(new FarmProps.Driveway(acrossStart - 1, laneStart, acrossStart + fieldW, tunnelStart - 1, h, false));
       }
+      this.recordRoadAccess(side, gate);
       for (int lane = 1; lane < banks; lane++) {
          int off = lane * bankW + (lane - 1) * FIELD_LANE;
          if (ax) {
@@ -952,15 +1155,6 @@ final class FarmLayout {
       for (int i = 0; i < banks; i++) {
          int off = i * (bankW + FIELD_LANE);
          this.features.add(FarmGreenhouse.hoops(ax ? ox : ox + off, ax ? oz + off : oz, ax, variant, tunnels, h, this.seed));
-      }
-      // a pickup parked on the access lane, and a packing shed in what room is left on the plot
-      if (x.nextInt(100) < 55) {
-         int slide = x.nextInt(Math.max(1, fieldW - 8));
-         if (ax) {
-            this.features.add(new FarmOutbuildings.Pickup(laneStart + 1, acrossStart + 2 + slide, false, h, this.seed));
-         } else {
-            this.features.add(new FarmOutbuildings.Pickup(acrossStart + 2 + slide, laneStart + 1, true, h, this.seed));
-         }
       }
       if (x.nextInt(100) < 70) {
          boolean sax = x.nextBoolean();
@@ -980,53 +1174,47 @@ final class FarmLayout {
 
    /**
     * One large multi-bay glasshouse on a plot of its own (see FarmGreenhouse.BAYS), its doors facing an access lane that runs the
-    * width of the building, a pickup on the lane, a shed beside. Tried in each corner; false if the plot is not there.
     */
    private boolean planCommercialGlass(int[][] gy, boolean[][] used) {
       Random x = this.extra;
-      boolean ax = x.nextBoolean();
-      int bays = 3 + x.nextInt(2);
+      int bays = 4 + x.nextInt(2);
       int variant = x.nextInt(3);
       int len = FarmGreenhouse.lengthOf(FarmGreenhouse.BAYS, variant);
       int wid = FarmGreenhouse.widthOf(FarmGreenhouse.BAYS, variant, bays);
-      int alongC = (HEAD_LANE + len + 10 + 15) / 16;
+      int alongC = (HEAD_LANE + len + 15 + 15) / 16; // account for the boundary inset as well as the road head lane
       int acrossC = (wid + 10 + 15) / 16;
-      int bwC = ax ? alongC : acrossC;
-      int bdC = ax ? acrossC : alongC;
       int n = CELL_CHUNKS;
-      if (bwC > n || bdC > n) {
-         return false;
-      }
-      int[][] corners = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
-      for (int i = corners.length - 1; i > 0; i--) {
-         int j = x.nextInt(i + 1);
-         int[] t = corners[i];
-         corners[i] = corners[j];
-         corners[j] = t;
-      }
-      for (int[] cf : corners) {
-         int a0 = cf[0] == 0 ? 0 : n - bwC;
-         int c0 = cf[1] == 0 ? 0 : n - bdC;
-         if (!this.rectFree(gy, used, a0, a0 + bwC - 1, c0, c0 + bdC - 1)) {
-            continue;
-         }
-         int f0 = this.features.size();
-         int t0 = this.taken.size();
-         if (this.buildCommercialGlass(gy[a0][c0], a0, c0, bwC, bdC, ax, bays, variant, len, wid)) {
-            this.markUsed(used, a0, a0 + bwC - 1, c0, c0 + bdC - 1);
-            return true;
-         }
-         while (this.features.size() > f0) {
-            this.features.remove(this.features.size() - 1);
-         }
-         while (this.taken.size() > t0) {
-            this.taken.remove(this.taken.size() - 1);
+      int[] sides = {0, 2};
+      if (x.nextBoolean()) { int t = sides[0]; sides[0] = sides[1]; sides[1] = t; }
+      for (int side : sides) {
+         boolean ax = side == 0;
+         int bwC = ax ? alongC : acrossC;
+         int bdC = ax ? acrossC : alongC;
+         if (bwC > n || bdC > n) continue;
+         int farA = n - bwC;
+         int farC = n - bdC;
+         int[][] options = ax
+                 ? new int[][]{{0, 0}, {0, farC}}
+                 : new int[][]{{0, 0}, {farA, 0}};
+         if (x.nextBoolean()) { int[] t = options[0]; options[0] = options[1]; options[1] = t; }
+         for (int[] option : options) {
+            int a0 = option[0], c0 = option[1];
+            if (!this.rectFree(gy, used, a0, a0 + bwC - 1, c0, c0 + bdC - 1)) continue;
+            int f0 = this.features.size();
+            int t0 = this.taken.size();
+            if (this.buildCommercialGlass(gy[a0][c0], a0, c0, bwC, bdC, ax, side, bays, variant, len, wid)) {
+               this.markUsed(used, a0, a0 + bwC - 1, c0, c0 + bdC - 1);
+               return true;
+            }
+            while (this.features.size() > f0) this.features.remove(this.features.size() - 1);
+            while (this.taken.size() > t0) this.taken.remove(this.taken.size() - 1);
          }
       }
       return false;
    }
 
-   private boolean buildCommercialGlass(int h, int a0, int c0, int bwC, int bdC, boolean ax, int bays, int variant, int len, int wid) {
+   private boolean buildCommercialGlass(int h, int a0, int c0, int bwC, int bdC, boolean ax, int side,
+                                        int bays, int variant, int len, int wid) {
       Random x = this.extra;
       int[] u = this.rectFor(a0, a0 + bwC - 1, c0, c0 + bdC - 1);
       int alongSpan = (ax ? u[2] - u[0] : u[3] - u[1]) + 1;
@@ -1034,27 +1222,23 @@ final class FarmLayout {
       if (alongSpan < HEAD_LANE + len + 8 || acrossSpan < wid + 8) {
          return false;
       }
-      int laneStart = (ax ? u[0] : u[1]) + 3;
-      int houseStart = laneStart + HEAD_LANE;
       int acrossStart = (ax ? u[1] : u[0]) + 4;
+      int gate = acrossStart + wid / 2;
+      if (!this.sideConnected(side, gate)) return false;
+      int laneStart = side == 0 ? this.x0 + FarmRoads.WIDTH : this.z0 + FarmRoads.WIDTH;
+      int houseStart = laneStart + HEAD_LANE;
       int ox = ax ? houseStart : acrossStart;
       int oz = ax ? acrossStart : houseStart;
       if (ax) {
          this.taken.add(new int[]{laneStart - 1, acrossStart - 2, houseStart + len, acrossStart + wid + 1});
-         this.features.add(new FarmProps.Driveway(laneStart, acrossStart - 1, houseStart - 1, acrossStart + wid, h, false));
+         this.features.add(new FarmProps.Driveway(laneStart, acrossStart - 1, houseStart - 1, acrossStart + wid, h, true));
       } else {
          this.taken.add(new int[]{acrossStart - 2, laneStart - 1, acrossStart + wid + 1, houseStart + len});
-         this.features.add(new FarmProps.Driveway(acrossStart - 1, laneStart, acrossStart + wid, houseStart - 1, h, true));
+         this.features.add(new FarmProps.Driveway(acrossStart - 1, laneStart, acrossStart + wid, houseStart - 1, h, false));
       }
-      this.features.add(FarmGreenhouse.bays(ox, oz, ax, variant, bays, h, this.seed));
-      if (x.nextInt(100) < 55) {
-         int slide = x.nextInt(Math.max(1, wid - 8));
-         if (ax) {
-            this.features.add(new FarmOutbuildings.Pickup(laneStart + 1, acrossStart + 2 + slide, false, h, this.seed));
-         } else {
-            this.features.add(new FarmOutbuildings.Pickup(acrossStart + 2 + slide, laneStart + 1, true, h, this.seed));
-         }
-      }
+      this.recordRoadAccess(side, gate);
+      int purpose = x.nextInt(100) < 18 ? FarmGreenhouse.COLLAPSED_WING : FarmGreenhouse.STANDARD;
+      this.features.add(FarmGreenhouse.bays(ox, oz, ax, false, variant, bays, purpose, h, this.seed));
       if (x.nextInt(100) < 70) {
          boolean sax = x.nextBoolean();
          int sl = FarmOutbuildings.Shed.lengthOf(FarmOutbuildings.Shed.TOOL);

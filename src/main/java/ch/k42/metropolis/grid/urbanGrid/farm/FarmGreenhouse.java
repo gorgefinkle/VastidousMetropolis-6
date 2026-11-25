@@ -6,11 +6,11 @@ import ch.k42.metropolis.plugin.PluginConfig;
  * An abandoned greenhouse, standing but neglected: glass gone green, panes missing, the plants inside grown wild.
  *
  * Two kinds:
- *  - GABLED: a glasshouse. A low stone-brick plinth (mossy, cracked), glass walls between white quartz posts, a 45 degree glass
- *    roof on quartz rafters with a ridge beam. A wide doorway at one end with no door left in it. Raised beds either side of a
+ *  - GABLED: a glasshouse. A low stone-brick plinth (mossy, cracked), glass walls between white white terracotta posts, a 45 degree glass
+ *    roof on white terracotta rafters with a ridge beam. A wide doorway at one end with no door left in it. Raised beds either side of a
  *    gravel path, a water barrel by the door, a chest at the far end.
  *  - BAYS: the large commercial glasshouse: three or four gabled bays side by side under one roof, thirty-six to forty-eight long.
- *    The roof runs in ridges and furrows (a gutter beam along each furrow, quartz posts at the gutters every fourth block, no walls
+ *    The roof runs in ridges and furrows (a gutter beam along each furrow, white terracotta posts at the gutters every fourth block, no walls
  *    between the bays), a wide door into every bay at the front end, the back end shut. Each bay is planted with ONE crop in
  *    unbroken rows, like the tunnels, and is as broken as a glasshouse is.
  *  - HOOP: a bank of long polytunnels side by side: steel hoops every third block (the hoops line up across the whole bank) under a
@@ -30,12 +30,18 @@ final class FarmGreenhouse extends FarmFeature {
    static final int GABLED = 0;
    static final int HOOP = 1;
    static final int BAYS = 2;
+   static final int STANDARD = 0;
+   static final int PROPAGATION = 1;
+   static final int RESEARCH = 2;
+   static final int COLLAPSED_WING = 3;
    /** A bay of the commercial glasshouse: eight blocks from furrow to furrow (the gutter column is shared with the next bay). */
    private static final int BAY_W = 8;
 
    private static final int GLASS = 20;
+   private static final int PLANKS = FarmPainter.PLANKS;
+   private static final int WALL = FarmPainter.STONE_BRICK;
 
-   private static final int QUARTZ = 155;
+   private static final int FRAME = FarmPainter.TERRACOTTA; // white structural infill; avoids a white terracotta-heavy survival cost
    private static final int STONE_BRICK_B = 98;      // data 1 mossy, 2 cracked
    private static final int FARMLAND_B = 60;
 
@@ -46,7 +52,9 @@ final class FarmGreenhouse extends FarmFeature {
    private static final int HOOP_GAP = 2;
 
    private final int style;
+   private final int purpose;
    private final boolean axisX;      // the long axis runs along x
+   private final boolean mirror;     // the open/entrance end faces the high-coordinate end
    private final int length;         // along the long axis
    private final int width;          // across it (for HOOP, all the tunnels together)
    private final int tunnels;        // HOOP only
@@ -60,12 +68,14 @@ final class FarmGreenhouse extends FarmFeature {
    private final int endId;          // what its closed end is: a vertical wall, the one place a pane suits
    private final int endData;
 
-   private FarmGreenhouse(int ox, int oz, boolean axisX, int style, int length, int width, int tunnels, int groundY, long seed) {
+   private FarmGreenhouse(int ox, int oz, boolean axisX, boolean mirror, int style, int purpose, int length, int width, int tunnels, int groundY, long seed) {
       super(ox - 1, oz - 1, ox + (axisX ? length : width), oz + (axisX ? width : length));   // one block of margin: vines grow on the outside
       this.ox = ox;
       this.oz = oz;
       this.axisX = axisX;
+      this.mirror = mirror;
       this.style = style;
+      this.purpose = purpose;
       this.length = length;
       this.width = width;
       this.tunnels = tunnels;
@@ -114,23 +124,49 @@ final class FarmGreenhouse extends FarmFeature {
    }
 
    static FarmGreenhouse gabled(int ox, int oz, boolean axisX, int variant, int groundY, long seed) {
-      return new FarmGreenhouse(ox, oz, axisX, GABLED, lengthOf(GABLED, variant), widthOf(GABLED, variant, 0), 0, groundY, seed);
+      return gabled(ox, oz, axisX, false, variant, groundY, seed);
+   }
+
+   static FarmGreenhouse gabled(int ox, int oz, boolean axisX, boolean mirror, int variant, int groundY, long seed) {
+      return gabled(ox, oz, axisX, mirror, variant, STANDARD, groundY, seed);
+   }
+
+   static FarmGreenhouse gabled(int ox, int oz, boolean axisX, boolean mirror, int variant, int purpose, int groundY, long seed) {
+      return new FarmGreenhouse(ox, oz, axisX, mirror, GABLED, purpose,
+              lengthOf(GABLED, variant), widthOf(GABLED, variant, 0), 0, groundY, seed);
    }
 
    /** The commercial glasshouse: `bays` gabled bays (3 or 4) under one roof, length by variant 0..2 (36, 42, 48). */
    static FarmGreenhouse bays(int ox, int oz, boolean axisX, int variant, int bays, int groundY, long seed) {
-      return new FarmGreenhouse(ox, oz, axisX, BAYS, lengthOf(BAYS, variant), widthOf(BAYS, variant, bays), bays, groundY, seed);
+      return bays(ox, oz, axisX, false, variant, bays, groundY, seed);
+   }
+
+   static FarmGreenhouse bays(int ox, int oz, boolean axisX, boolean mirror, int variant, int bays, int groundY, long seed) {
+      return bays(ox, oz, axisX, mirror, variant, bays, STANDARD, groundY, seed);
+   }
+
+   static FarmGreenhouse bays(int ox, int oz, boolean axisX, boolean mirror, int variant, int bays, int purpose, int groundY, long seed) {
+      return new FarmGreenhouse(ox, oz, axisX, mirror, BAYS, purpose,
+              lengthOf(BAYS, variant), widthOf(BAYS, variant, bays), bays, groundY, seed);
    }
 
    static FarmGreenhouse hoops(int ox, int oz, boolean axisX, int variant, int tunnels, int groundY, long seed) {
-      return new FarmGreenhouse(ox, oz, axisX, HOOP, lengthOf(HOOP, variant), widthOf(HOOP, variant, tunnels), tunnels, groundY, seed);
+      return hoops(ox, oz, axisX, false, variant, tunnels, groundY, seed);
+   }
+
+   static FarmGreenhouse hoops(int ox, int oz, boolean axisX, boolean mirror, int variant, int tunnels, int groundY, long seed) {
+      return new FarmGreenhouse(ox, oz, axisX, mirror, HOOP, STANDARD, lengthOf(HOOP, variant), widthOf(HOOP, variant, tunnels), tunnels, groundY, seed);
    }
 
    // ---- helpers in the building's own frame: u along the long axis, v across it, dy above the ground block
 
-   private int wx(int u, int v) { return this.axisX ? this.ox + u : this.ox + v; }
+   private int wx(int u, int v) {
+      return this.axisX ? this.ox + (this.mirror ? this.length - 1 - u : u) : this.ox + v;
+   }
 
-   private int wz(int u, int v) { return this.axisX ? this.oz + v : this.oz + u; }
+   private int wz(int u, int v) {
+      return this.axisX ? this.oz + v : this.oz + (this.mirror ? this.length - 1 - u : u);
+   }
 
    private double rnd(int u, int v, int dy, int salt) {
       return FarmRandom.unit(this.seed, this.wx(u, v) * 131 + dy * 7, this.wz(u, v), salt);
@@ -153,7 +189,11 @@ final class FarmGreenhouse extends FarmFeature {
    }
 
    private void glass(FarmPainter p, int u, int v, int dy) {
-      if (!this.broken(u, v, dy)) {
+      boolean collapsedWing = this.style == BAYS && this.purpose == COLLAPSED_WING
+              && u >= (this.length * 2) / 3
+              && v >= Math.max(1, (this.tunnels - 1) * BAY_W + 1)
+              && dy >= 5;
+      if (!collapsedWing && !this.broken(u, v, dy)) {
          if (this.style == HOOP) {
             this.put(p, u, v, dy, this.skinId, this.skinData);
          } else {
@@ -199,7 +239,7 @@ final class FarmGreenhouse extends FarmFeature {
          }
       }
 
-      // walls: plinth, quartz posts every four, glass between
+      // walls: plinth, white terracotta posts every four, glass between
       for (int u = 0; u < len; u++) {
          for (int side = 0; side < 2; side++) {
             int v = side == 0 ? 0 : w - 1;
@@ -208,7 +248,9 @@ final class FarmGreenhouse extends FarmFeature {
             this.put(p, u, v, 1, STONE_BRICK_B, m < 0.40 ? 1 : (m < 0.60 ? 2 : 0));
             for (int dy = 2; dy <= T; dy++) {
                if (post) {
-                  this.put(p, u, v, dy, QUARTZ, 0);
+                  this.put(p, u, v, dy, FRAME, 0);
+               } else if (this.purpose == RESEARCH && u >= Math.max(7, len - 8)) {
+                  this.put(p, u, v, dy, WALL, 0);
                } else {
                   this.glass(p, u, v, dy);
                }
@@ -228,9 +270,11 @@ final class FarmGreenhouse extends FarmFeature {
                for (int dy = T + k - 1; dy <= T + k; dy++) {
                   boolean ridge = k == half;
                   if (ridge && dy == T + k) {
-                     this.put(p, u, v, dy, QUARTZ, 0);          // the ridge beam
+                     this.put(p, u, v, dy, FRAME, 0);          // the ridge beam
                   } else if (rafter && dy == T + k) {
-                     this.put(p, u, v, dy, QUARTZ, 0);
+                     this.put(p, u, v, dy, FRAME, 0);
+                  } else if (this.purpose == RESEARCH && u >= Math.max(7, len - 8)) {
+                     this.put(p, u, v, dy, PLANKS, 1);
                   } else {
                      this.glass(p, u, v, dy);
                   }
@@ -239,20 +283,19 @@ final class FarmGreenhouse extends FarmFeature {
          }
       }
 
-      // end walls: glass in the gable, a quartz frame, and a wide doorway with nothing left in it at the entrance end
+      // end walls: glass in the gable, a white terracotta frame, and a wide doorway with nothing left in it at the entrance end
       for (int end = 0; end < 2; end++) {
          int u = end == 0 ? 0 : len - 1;
          for (int v = 1; v <= w - 2; v++) {
             int k = Math.min(v, w - 1 - v);
             int top = T + k - 2;                               // up to just under the roof
             boolean door = end == 0 && Math.abs(v - half) <= 1;
+            boolean solidLabEnd = this.purpose == RESEARCH && end == 1;
             for (int dy = 1; dy <= top; dy++) {
-               if (door && dy <= 3) {
-                  continue;
-               }
+               if (door && dy <= 3) continue;
                boolean frame = v == half || dy == top || (door && dy == 4);
-               if (frame || (dy == 1 && !door)) {
-                  this.put(p, u, v, dy, dy == 1 && !frame ? STONE_BRICK_B : QUARTZ, 0);
+               if (frame || (dy == 1 && !door) || solidLabEnd) {
+                  this.put(p, u, v, dy, solidLabEnd ? WALL : (dy == 1 && !frame ? STONE_BRICK_B : FRAME), 0);
                } else {
                   this.glass(p, u, v, dy);
                }
@@ -260,16 +303,17 @@ final class FarmGreenhouse extends FarmFeature {
          }
       }
 
-      // beds either side of the path, grown wild; the planting runs the length of the house but is thinner near the door
-      for (int u = 2; u < len - 1; u++) {
+      // Propagation beds and research trials have their own internal layout.
+      // Research keeps the last eight blocks as an enclosed rear laboratory.
+      int plantingEnd = this.purpose == RESEARCH ? Math.max(7, len - 8) : len - 1;
+      for (int u = 2; u < plantingEnd; u++) {
          for (int v = 1; v <= w - 2; v++) {
-            if (v == half || v == half - 1 || v == half + 1) {
-               continue;                                        // the path and its verge
-            }
+            if (v == half || v == half - 1 || v == half + 1) continue;
             this.bed(p, u, v);
          }
       }
-      // creeper, on the outside and the inside. A vine cannot cling to glass, so it climbs what is solid: three blocks up the quartz
+      if (this.purpose == RESEARCH) this.paintResearchRoom(p, Math.max(7, len - 8), len, w, half);
+      // creeper, on the outside and the inside. A vine cannot cling to glass, so it climbs what is solid: three blocks up the white terracotta
       // posts, and only the one block of plinth between them.
       for (int u = 0; u < len; u++) {
          boolean post = u % 4 == 0 || u == len - 1;
@@ -291,7 +335,7 @@ final class FarmGreenhouse extends FarmFeature {
       // a water barrel by the door, and a chest at the far end among the pots
       this.put(p, 2, 1, 1, FarmPainter.CAULDRON, 3);
       this.put(p, 2, w - 2, 1, FarmPainter.CAULDRON, 0);
-      int chestFacing = this.axisX ? 4 : 2;                    // the lid looks back toward the door
+      int chestFacing = this.axisX ? (this.mirror ? 5 : 4) : (this.mirror ? 3 : 2); // the lid looks back toward the door
       p.chest(this.wx(len - 2, half), this.groundY + 1, this.wz(len - 2, half), chestFacing, 31, FarmPainter.TIER_LOW);   // seed packets and trowels
    }
 
@@ -300,7 +344,7 @@ final class FarmGreenhouse extends FarmFeature {
    /**
     * Three or four gabled bays under one roof. A bay is BAY_W wide from furrow to furrow; the furrow columns are shared, so the
     * building is bays * BAY_W + 1 wide. Walls four high (plinth, then glass), roof at 45 degrees two glass blocks thick, ridge at
-    * the middle of each bay, a gutter beam along every furrow carried on quartz posts every fourth block, rafters on the same
+    * the middle of each bay, a gutter beam along every furrow carried on white terracotta posts every fourth block, rafters on the same
     * pitch. No walls between the bays. Doors: three wide, into every bay, at the u = 0 end; the far end is shut.
     */
    private void paintBays(FarmPainter p) {
@@ -314,7 +358,7 @@ final class FarmGreenhouse extends FarmFeature {
             this.put(p, u, v, 0, (v % BAY_W) == BAY_W / 2 ? FarmPainter.GRAVEL : FarmPainter.DIRT, 0);
          }
       }
-      // outer long walls: plinth, quartz posts every four, glass between
+      // outer long walls: plinth, white terracotta posts every four, glass between
       for (int u = 0; u < len; u++) {
          boolean post = u % 4 == 0 || u == len - 1;
          for (int side = 0; side < 2; side++) {
@@ -323,7 +367,7 @@ final class FarmGreenhouse extends FarmFeature {
             this.put(p, u, v, 1, STONE_BRICK_B, m < 0.40 ? 1 : (m < 0.60 ? 2 : 0));
             for (int dy = 2; dy <= T; dy++) {
                if (post) {
-                  this.put(p, u, v, dy, QUARTZ, 0);
+                  this.put(p, u, v, dy, FRAME, 0);
                } else {
                   this.glass(p, u, v, dy);
                }
@@ -334,10 +378,10 @@ final class FarmGreenhouse extends FarmFeature {
       for (int b = 1; b < bays; b++) {
          int v = b * BAY_W;
          for (int u = 0; u < len; u++) {
-            this.put(p, u, v, T, QUARTZ, 0);
+            this.put(p, u, v, T, FRAME, 0);
             if (u % 4 == 0 || u == len - 1) {
                for (int dy = 1; dy < T; dy++) {
-                  this.put(p, u, v, dy, QUARTZ, 0);
+                  this.put(p, u, v, dy, FRAME, 0);
                }
             }
          }
@@ -352,9 +396,9 @@ final class FarmGreenhouse extends FarmFeature {
                   boolean ridge = k == BAY_W / 2;
                   for (int dy = T + k - 1; dy <= T + k; dy++) {
                      if (ridge && dy == T + k) {
-                        this.put(p, u, v, dy, QUARTZ, 0);                       // the ridge beam
+                        this.put(p, u, v, dy, FRAME, 0);                       // the ridge beam
                      } else if (rafter && dy == T + k) {
-                        this.put(p, u, v, dy, QUARTZ, 0);
+                        this.put(p, u, v, dy, FRAME, 0);
                      } else {
                         this.glass(p, u, v, dy);
                      }
@@ -363,7 +407,7 @@ final class FarmGreenhouse extends FarmFeature {
             }
          }
       }
-      // end walls: glass up to the roof's underside, a quartz frame; a three-wide door into every bay at the front end
+      // end walls: glass up to the roof's underside, a white terracotta frame; a three-wide door into every bay at the front end
       for (int end = 0; end < 2; end++) {
          int u = end == 0 ? 0 : len - 1;
          for (int v = 1; v <= w - 2; v++) {
@@ -378,7 +422,7 @@ final class FarmGreenhouse extends FarmFeature {
                }
                boolean frame = vib == BAY_W / 2 || furrow || dy == top || (door && dy == 4);
                if (frame) {
-                  this.put(p, u, v, dy, QUARTZ, 0);
+                  this.put(p, u, v, dy, FRAME, 0);
                } else if (dy == 1) {
                   this.put(p, u, v, dy, STONE_BRICK_B, 0);
                } else {
@@ -398,7 +442,7 @@ final class FarmGreenhouse extends FarmFeature {
             }
          }
       }
-      // creeper only where there is something solid for it: up the quartz posts outside, and the plinth
+      // creeper only where there is something solid for it: up the white terracotta posts outside, and the plinth
       for (int u = 0; u < len; u++) {
          boolean post = u % 4 == 0 || u == len - 1;
          for (int side = 0; side < 2; side++) {
@@ -417,6 +461,107 @@ final class FarmGreenhouse extends FarmFeature {
       this.put(p, 1, w - 2, 1, FarmPainter.CAULDRON, 3);
       int mid = (bays / 2) * BAY_W + (bays % 2 == 0 ? 0 : BAY_W / 2);
       p.chest(this.wx(len - 2, mid), this.groundY + 1, this.wz(len - 2, mid), this.axisX ? 4 : 2, 71, FarmPainter.TIER_LOW);   // seed and trowels
+      if (this.purpose == COLLAPSED_WING) this.paintCollapsedWing(p, len, w, bays);
+   }
+
+   /**
+    * Propagation houses use raised, accessible seedling benches rather than
+    * ordinary field rows. Two long bench lines flank the central service aisle.
+    */
+   private void propagationBed(FarmPainter p, int u, int v) {
+      if (v != 1 && v != this.width - 2) {
+         // Narrow auxiliary trays sit one step farther from the sloping roof.
+         if (u % 3 == 1 && (v == 2 || v == this.width - 3)) {
+            this.put(p, u, v, 1, PLANKS, 1);
+            this.put(p, u, v, 2, FARMLAND_B, 7);
+            if (this.rnd(u, v, 1, 1761) < 0.78) {
+               this.put(p, u, v, 3, v < this.width / 2 ? FarmPainter.CARROTS : FarmPainter.WHEAT, 1);
+            }
+         }
+         return;
+      }
+      // The main bench uses raised farmland with fence legs. Crops stay below
+      // the roof eave instead of replacing the lower glass course.
+      if (u % 5 == 0) this.put(p, u, v, 0, FarmPainter.FENCE, 0);
+      this.put(p, u, v, 1, FARMLAND_B, 7);
+      double seedling = this.rnd(u, v, 1, 1762);
+      if (seedling < 0.84) {
+         int crop = (v == 1) ? FarmPainter.CARROTS : FarmPainter.WHEAT;
+         this.put(p, u, v, 2, crop, 1);
+      } else if (seedling < 0.94) {
+         this.put(p, u, v, 2, FarmPainter.TALL_GRASS, 1);
+      }
+   }
+
+   /** Separate trial beds with crop rows and occasional sample-marker posts. */
+   private void researchBed(FarmPainter p, int u, int v) {
+      this.put(p, u, v, 0, FARMLAND_B, 7);
+      int trial = Math.floorMod(v + u / 5, 3);
+      int crop = trial == 0 ? FarmPainter.CARROTS
+              : (trial == 1 ? FarmPainter.POTATOES : FarmPainter.BEETROOTS);
+      if (u % 6 == 0 && v % 2 == 1) {
+         this.put(p, u, v, 1, FarmPainter.FENCE, 0);
+         this.put(p, u, v, 2, FarmPainter.TERRACOTTA, trial);
+      } else if (this.rnd(u, v, 1, 1763) < 0.76) {
+         this.put(p, u, v, 1, crop, 1);
+      }
+   }
+
+   /**
+    * Enclosed lab/service room in the rear eight blocks of the research
+    * greenhouse. The exterior envelope is already closed by paintGabled;
+    * this builds an internal divider, work counters and sample storage.
+    */
+   private void paintResearchRoom(FarmPainter p, int start, int len, int width, int half) {
+      int divider = start;
+      for (int v = 1; v < width - 1; v++) {
+         if (Math.abs(v - half) <= 1) continue; // internal double-width access door
+         for (int dy = 1; dy <= 3; dy++) this.put(p, divider, v, dy, WALL, 0);
+      }
+      // Durable work counters along both sides, with sample cabinets and a
+      // clear central aisle. All materials are common blocks.
+      for (int u = start + 1; u < len - 1; u++) {
+         this.put(p, u, 1, 1, PLANKS, 1);
+         this.put(p, u, 1, width - 2, PLANKS, 1);
+         if (u % 3 == 0) {
+            this.put(p, u, 2, 1, 58, 0);
+            this.put(p, u, 2, width - 2, 47, 0);
+         }
+      }
+      for (int v = half - 2; v <= half + 2; v++) {
+         if (v == half) continue;
+         this.put(p, start + 2, v, 1, WALL, 0);
+      }
+      this.put(p, start + 3, 1, half, FarmPainter.CAULDRON, 3);
+      this.put(p, start + 5, 1, half, FarmPainter.TORCH, 5);
+   }
+
+   /**
+    * Deliberately collapsed rear wing of the last commercial bay. Missing
+    * glazing is confined by glass(); this adds fallen rafters and clustered
+    * shards without damaging the two still-operational bays.
+    */
+   private void paintCollapsedWing(FarmPainter p, int len, int width, int bays) {
+      int start = (len * 2) / 3;
+      int bayStart = Math.max(1, (bays - 1) * BAY_W + 1);
+      int bayEnd = Math.min(width - 2, bays * BAY_W - 1);
+      for (int u = start; u < len - 1; u += 3) {
+         int v = bayStart + Math.floorMod(u / 3, Math.max(1, bayEnd - bayStart + 1));
+         // One fallen roof member lies diagonally across the crop rows.
+         for (int step = 0; step < 4 && v + step <= bayEnd; step++) {
+            this.put(p, u + Math.min(1, step / 2), v + step, 1 + step / 2, PLANKS, 1);
+         }
+         for (int step = 0; step < 3 && v + step <= bayEnd; step++) {
+            if (this.rnd(u, v + step, 0, 1841) < 0.75) {
+               this.put(p, u + 1, v + step, 1, GLASS, 0);
+            }
+         }
+      }
+      // Broken roof edges hang down at the transition from the intact bays.
+      for (int v = bayStart; v <= bayEnd; v += 3) {
+         this.put(p, start, v, 5, PLANKS, 1);
+         if ((v & 1) == 0) this.put(p, start + 1, v, 4, PLANKS, 1);
+      }
    }
 
    // ------------------------------------------------------------------------------------------------------------ hoop houses
@@ -432,13 +577,17 @@ final class FarmGreenhouse extends FarmFeature {
             }
             this.put(p, u, v0 + 3, 0, FarmPainter.GRAVEL, 0);
          }
-         // the skin: sheeting over the arch, a steel hoop every third block
+         // the skin: sheeting over the arch, a common fence frame every third block and sparse metal reinforcement
          for (int u = 0; u < len; u++) {
             boolean hoop = u % 3 == 0 || u == len - 1;                 // steel hoops every third block
             for (int c = 0; c < HOOP_W; c++) {
                for (int dy = HOOP_LOW[c]; dy <= HOOP_TOP[c]; dy++) {
                   if (hoop) {
-                     this.put(p, u, v0 + c, dy, FarmPainter.IRON_BARS, 0);
+                     // Common fence framing carries most arches; a sparse
+                     // iron-bar rib at the major frames keeps the industrial
+                     // silhouette without making each tunnel an iron sink.
+                     int frame = (u % 12 == 0 || u == len - 1) ? FarmPainter.IRON_BARS : FarmPainter.FENCE;
+                     this.put(p, u, v0 + c, dy, frame, 0);
                   } else {
                      this.glass(p, u, v0 + c, dy);
                   }
@@ -499,6 +648,14 @@ final class FarmGreenhouse extends FarmFeature {
 
    /** One bed column, left to itself: dead crops, grass and ferns pushing up, the odd pumpkin or flower. */
    private void bed(FarmPainter p, int u, int v) {
+      if (this.purpose == PROPAGATION) {
+         this.propagationBed(p, u, v);
+         return;
+      }
+      if (this.purpose == RESEARCH) {
+         this.researchBed(p, u, v);
+         return;
+      }
       double r = this.rnd(u, v, 0, 1730);
       if (r < 0.30) {
          this.put(p, u, v, 0, FARMLAND_B, 7);

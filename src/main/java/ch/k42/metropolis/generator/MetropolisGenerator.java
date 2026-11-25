@@ -316,7 +316,9 @@ public class MetropolisGenerator extends ChunkGenerator {
    /**
     * The base terrain: stone from y=1 (y=0 when the underworld is vanilla) up
     * to just below buildHeight, or whatever the environment provider
-    * substitutes -- the Nether's lava sea. Everything else, including the
+    * substitutes -- the Nether's lava sea. Normal-overworld Y=64 is an
+    * intentional smoothstone pre-paint safety cap for unpopulated chunks.
+    * Everything else, including the
     * real surface, is painted later by the grid's populate step.
     *
     * This replaces generateBlockSections(), whose byte[][] of numeric block
@@ -339,6 +341,25 @@ public class MetropolisGenerator extends ChunkGenerator {
     * This runs on a world-generation thread: it must not touch the Bukkit
     * World, and doesn't (EnvironmentProvider.checkBlock() only computes).
     */
+   /** Base substrate fallback after environment-specific material selection. */
+   static Material baseTerrainMaterial(Material environmentOverride) {
+      return environmentOverride != null ? environmentOverride : Material.STONE;
+   }
+
+   /**
+    * The normal overworld has an intentional pre-paint safety cap at Y=64.
+    * It must be written during base generation, before parcels populate, so
+    * chunks that remain unpopulated never expose a grass-cap surface.
+    * Populated parcels may replace it; raised forest columns normalize it only
+    * when it is buried beneath their actual surface.
+    */
+   static Material baseTerrainMaterial(Material environmentOverride, Environment environment, int y) {
+      if (environment == Environment.NORMAL && y == 64) {
+         return Material.SMOOTH_STONE;
+      }
+      return baseTerrainMaterial(environmentOverride);
+   }
+
    @Override
    public void generateNoise(WorldInfo worldInfo, Random random, int chunkX, int chunkZ, ChunkData chunkData) {
       this.ensureProviders(worldInfo.getEnvironment(), worldInfo.getSeed());
@@ -355,17 +376,9 @@ public class MetropolisGenerator extends ChunkGenerator {
       for (int x = 0; x < 16; x++) {
          for (int z = 0; z < 16; z++) {
             for (int y = firstY; y < TERRAIN_TOP; y++) {
-               // R30ea parity: pre-paint safety cap over the entire overworld.
-               // It must exist even when a parcel has not populated yet, so
-               // ocean/river-adjacent gaps cannot expose floating grass.
-               // Do not move this to parcel paint time: unpopulated parcels
-               // would miss the cap. Later parcel painters may replace it.
-               if (worldInfo.getEnvironment() == Environment.NORMAL && y == 64) {
-                  CachedChunkWrite.set(chunkData, x, y, z, Material.SMOOTH_STONE);
-               } else {
-                  Material decay = this.natureDecay.checkBlock(this.world, chunkX * 16 + x, y, chunkZ * 16 + z);
-                  CachedChunkWrite.set(chunkData, x, y, z, decay != null ? decay : Material.STONE);
-               }
+               Material decay = this.natureDecay.checkBlock(this.world, chunkX * 16 + x, y, chunkZ * 16 + z);
+               CachedChunkWrite.set(chunkData, x, y, z,
+                       baseTerrainMaterial(decay, worldInfo.getEnvironment(), y));
             }
          }
       }
@@ -451,22 +464,22 @@ public class MetropolisGenerator extends ChunkGenerator {
       // guarded:
       //
       // - nesting is limited to MAX_NESTED_POPULATES levels. Anything deeper is
-      //   put in a queue and run later from the top of the stack, within a time
-      //   budget per tick, so a long chain turns into a queue instead of
-      //   recursion and never holds the main thread for long;
-      // - the queue is saved to disk (world folder, metropolis/deferred-
-      //   populates.tsv) and reloaded at the next start. This matters: the
-      //   legacy populate hook fires ONCE per chunk, so a chunk that was deferred
-      //   and then lost to a shutdown or a watchdog kill would stay unpopulated
-      //   -- a hole in the city -- forever;
+      //   durably queued and staged asynchronously from disk, so a long chain
+      //   becomes queued work instead of recursive synchronous chunk loading;
+      // - deferred jobs are saved to disk and reloaded at the next start;
+      // - the drain stages already-generated chunks asynchronously from disk,
+      //   then runs one population callback on the server thread. It never
+      //   synchronously loads a queued chunk from inside the drain. This matters:
+      //   synchronous loading can re-enter chunk generation/lighting while a
+      //   player tick is itself waiting for chunk completion.
       // - nested starts, slow populates and stuck populates are logged (the
       //   stuck one with the main thread's stack), plus a summary line every 30 s
       //   saying how much main-thread time populating is costing.
       private static final int MAX_NESTED_POPULATES = 3;
-      private static final long DRAIN_BUDGET_NANOS = 25_000_000L;
       private static final long SAVE_INTERVAL_MS = 5000;
       private static final long STATS_INTERVAL_MS = 30000;
       private static final long SLOW_POPULATE_MS = 3000;
+      private static final long ASYNC_CHUNK_LOAD_TIMEOUT_TICKS = 600L;
       private static final long STUCK_REPORT_MS = 15000;
       private static final int DIAGNOSTIC_LINES = 40;
 
@@ -605,10 +618,10 @@ public class MetropolisGenerator extends ChunkGenerator {
       }
 
       /**
-       * Runs queued chunks from a scheduler task, for at most DRAIN_BUDGET_NANOS
-       * per tick (at least one chunk), then reschedules itself. The old rule was
-       * a fixed two chunks per tick, however long they took, which let one drain
-       * hold the main thread for over a minute under a Chunky pregeneration.
+       * Stages one durable job at a time with Paper's non-generating async
+       * disk-load path. Population itself remains on the server thread, but
+       * chunk retrieval no longer blocks that thread or recursively generates
+       * a support chunk from inside the deferred queue drain.
        */
       private void scheduleDrain() {
          this.scheduleDrain(1L);
@@ -626,79 +639,120 @@ public class MetropolisGenerator extends ChunkGenerator {
          try {
             Bukkit.getScheduler().runTaskLater(MetropolisGenerator.this.plugin, () -> {
                long followUpDelayTicks = 1L;
+               boolean asyncInFlight = false;
+               DiskDeferredChunkQueue.Chunk job = null;
                try {
-                  long deadline = System.nanoTime() + DRAIN_BUDGET_NANOS;
-                  do {
-                     DiskDeferredChunkQueue.Chunk job;
-                     try {
-                        job = this.deferred.poll(System.nanoTime());
-                     } catch (IOException ex) {
-                        Minions.w("Could not read deferred Metropolis population spool; durable jobs retained: %s", ex);
-                        followUpDelayTicks = 20L;
-                        break;
-                     }
-                     if (job == null) {
-                        long retryDelay = this.deferred.nextRetryDelayMillis();
-                        followUpDelayTicks = retryDelay <= 0L ? 1L
-                                : Math.max(1L, Math.min(1200L, (retryDelay + 49L) / 50L));
-                        break;
-                     }
+                  job = this.deferred.poll(System.nanoTime());
+                  if (job == null) {
+                     long retryDelay = this.deferred.nextRetryDelayMillis();
+                     followUpDelayTicks = retryDelay <= 0L ? 1L
+                             : Math.max(1L, Math.min(1200L, (retryDelay + 49L) / 50L));
+                     return;
+                  }
 
-                     boolean acknowledged = false;
+                  // This chunk was already generated when its original
+                  // BlockPopulator callback was deferred. Never synchronously
+                  // load it from the server-thread drain: doing so can enter
+                  // ChunkTaskScheduler/lighting while a player tick is waiting
+                  // for the same chunk, contributing to a server-thread stall.
+                  asyncInFlight = true;
+                  DiskDeferredChunkQueue.Chunk staged = job;
+                  AtomicBoolean settled = new AtomicBoolean();
+                  Bukkit.getScheduler().runTaskLater(MetropolisGenerator.this.plugin, () -> {
+                     if (!settled.compareAndSet(false, true)) return;
                      try {
-                        boolean finished = this.populateComplete(this.owner, new Random(),
-                                this.owner.getChunkAt(job.x(), job.z()));
-                        if (finished) {
-                           this.deferred.complete();
-                           acknowledged = true;
-                        } else {
-                           this.deferred.retry(System.nanoTime());
-                        }
-                     } catch (IOException | RuntimeException failure) {
-                        if (!acknowledged) {
-                           try {
-                              this.deferred.retry(System.nanoTime());
-                           } catch (RuntimeException retryFailure) {
-                              failure.addSuppressed(retryFailure);
-                           }
-                        }
-                        Minions.w("Deferred populate of chunk [%d,%d] failed; job retained on disk: %s",
-                                job.x(), job.z(), failure);
-                        Minions.e(failure);
-                     } catch (Error fatal) {
-                        if (!acknowledged) {
-                           try {
-                              this.deferred.retry(System.nanoTime());
-                           } catch (RuntimeException retryFailure) {
-                              fatal.addSuppressed(retryFailure);
-                           }
-                        }
-                        throw fatal;
+                        this.deferred.retry(System.nanoTime());
+                        Minions.w("Deferred chunk [%d,%d] async disk staging exceeded %d ticks; durable job returned to retry queue",
+                                staged.x(), staged.z(), ASYNC_CHUNK_LOAD_TIMEOUT_TICKS);
+                     } catch (RuntimeException retryFailure) {
+                        Minions.w("Could not retry timed-out deferred chunk [%d,%d]: %s",
+                                staged.x(), staged.z(), retryFailure);
                      }
                      this.reportPending();
-                  } while (System.nanoTime() < deadline);
-
-                  if (this.deferred.hasPending()) {
-                     long retryDelay = this.deferred.nextRetryDelayMillis();
-                     if (retryDelay > 0L) {
-                        followUpDelayTicks = Math.max(1L, Math.min(1200L, (retryDelay + 49L) / 50L));
-                     }
+                     this.drainScheduled.set(false);
+                     if (this.deferred.hasPending()) this.scheduleDrain(20L);
+                  }, ASYNC_CHUNK_LOAD_TIMEOUT_TICKS);
+                  try {
+                     this.owner.getChunkAtAsync(staged.x(), staged.z(), false, false)
+                             .whenComplete((loaded, loadFailure) -> {
+                                if (!settled.compareAndSet(false, true)) return;
+                                try {
+                                   Bukkit.getScheduler().runTask(MetropolisGenerator.this.plugin,
+                                           () -> this.finishDeferredLoad(staged, loaded, loadFailure));
+                                } catch (RuntimeException schedulingFailure) {
+                                   try {
+                                      this.deferred.retry(System.nanoTime());
+                                   } catch (RuntimeException retryFailure) {
+                                      schedulingFailure.addSuppressed(retryFailure);
+                                   }
+                                   Minions.w("Could not schedule deferred populate completion for chunk [%d,%d]; job retained: %s",
+                                           staged.x(), staged.z(), schedulingFailure);
+                                   this.reportPending();
+                                   this.drainScheduled.set(false);
+                                   if (this.deferred.hasPending()) this.scheduleDrain(20L);
+                                }
+                             });
+                  } catch (RuntimeException stagingFailure) {
+                     settled.set(true);
+                     throw stagingFailure;
                   }
-               } catch (RuntimeException unexpected) {
-                  Minions.w("Deferred Metropolis drain aborted unexpectedly; durable jobs remain queued: %s", unexpected);
-                  Minions.e(unexpected);
+               } catch (IOException | RuntimeException failure) {
+                  if (job != null && asyncInFlight) {
+                     try { this.deferred.retry(System.nanoTime()); }
+                     catch (RuntimeException retryFailure) { failure.addSuppressed(retryFailure); }
+                  }
+                  Minions.w("Deferred Metropolis population could not be staged; durable job retained: %s", failure);
+                  Minions.e(failure);
                   followUpDelayTicks = 20L;
+                  asyncInFlight = false;
                } finally {
-                  this.drainScheduled.set(false);
-                  // Do not rely on a future player action or new Chunky callback:
-                  // pending work always schedules its own next wakeup.
-                  if (this.deferred.hasPending()) this.scheduleDrain(followUpDelayTicks);
+                  // The single-flight token remains held only while the
+                  // asynchronous disk load is outstanding. Empty/cooling
+                  // queues and synchronous staging failures release it here.
+                  if (!asyncInFlight) {
+                     this.drainScheduled.set(false);
+                     if (this.deferred.hasPending()) this.scheduleDrain(followUpDelayTicks);
+                  }
                }
             }, Math.max(1L, delayTicks));
          } catch (RuntimeException submissionFailure) {
             this.drainScheduled.set(false);
             Minions.w("Could not schedule deferred Metropolis drain; jobs remain on disk and watchdog will retry: %s",
                     submissionFailure);
+         }
+      }
+
+      /** Complete one disk-backed async chunk load on the server thread. */
+      private void finishDeferredLoad(DiskDeferredChunkQueue.Chunk job, Chunk loaded, Throwable loadFailure) {
+         try {
+            if (loadFailure != null || loaded == null) {
+               this.deferred.retry(System.nanoTime());
+               Minions.w("Deferred chunk [%d,%d] was not available from disk; job retained for retry: %s",
+                       job.x(), job.z(), loadFailure == null ? "chunk absent" : loadFailure);
+            } else {
+               boolean finished = this.populateComplete(this.owner, new Random(), loaded);
+               if (finished) this.deferred.complete();
+               else this.deferred.retry(System.nanoTime());
+            }
+         } catch (IOException | RuntimeException failure) {
+            try { this.deferred.retry(System.nanoTime()); }
+            catch (RuntimeException retryFailure) { failure.addSuppressed(retryFailure); }
+            Minions.w("Deferred populate of chunk [%d,%d] failed; job retained on disk: %s",
+                    job.x(), job.z(), failure);
+            Minions.e(failure);
+         } catch (Error fatal) {
+            try { this.deferred.retry(System.nanoTime()); }
+            catch (RuntimeException retryFailure) { fatal.addSuppressed(retryFailure); }
+            throw fatal;
+         } finally {
+            this.reportPending();
+            this.drainScheduled.set(false);
+            if (this.deferred.hasPending()) {
+               long retryDelay = this.deferred.nextRetryDelayMillis();
+               long delay = retryDelay <= 0L ? 1L
+                       : Math.max(1L, Math.min(1200L, (retryDelay + 49L) / 50L));
+               this.scheduleDrain(delay);
+            }
          }
       }
 

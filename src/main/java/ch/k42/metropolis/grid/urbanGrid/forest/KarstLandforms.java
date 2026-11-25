@@ -38,17 +38,20 @@ public final class KarstLandforms {
     // Side tributaries: branching, curved, finite valley arms from each
     // nearby main drainage. Different ages and lengths break regular spacing.
     double tributary=9999;
-    for(int di=-1;di<=1;di++){
+    for(int di=-2;di<=2;di++){
       long n=laneN+di;
       double base=n*340.0-warp;
       long slot=Math.round((v+37*n)/250.0);
-      for(int ds=-1;ds<=1;ds++){
+      for(int ds=-2;ds<=2;ds++){
         long k=slot+ds;
         long h=mix(seed^mix(n*0x9e3779b97f4a7c15L+k*0xc2b2ae3d27d4eb4fL));
         double v0=k*250-37*n+(unit(h)-.5)*58;
         double length=105+unit(h+3)*106;
         double p=(v-v0)/length;
-        if(p<-.12||p>1.13)continue;
+        // Carry each tributary well beyond its visible branch tip. The long
+        // endpoint envelopes prevent the old short fade from changing the
+        // nearest-fracture distance too quickly and producing cliff bands.
+        if(p<-.65||p>1.65)continue;
         // Arc starts embedded in the main canyon then wanders to a shallow
         // dying cleft in the uplands. Side alternates by section and seed.
         double sign=(h&1L)==0?1:-1;
@@ -56,19 +59,27 @@ public final class KarstLandforms {
         double t=clamp(p);
         double lateral=sign*(153*Math.sin(t*1.27)+18*Math.sin(t*4.6+bend));
         double channelU=base+lateral;
-        double weight=smooth((p+.12)/.23)*smooth((1.13-p)/.27);
+        // A long, smooth taper at both ends turns the tributary into a
+        // gradually dying fracture rather than an abrupt ravine endpoint.
+        double weight=smooth((p+.65)/.65)*smooth((1.65-p)/.65);
         // Anisotropic distance converts the curved channel into a natural
-        // tributary with tapering width toward its dead head.
+        // tributary whose influence fades over a broad upland transition.
         double duDv=sign*(153*1.27*Math.cos(t*1.27)+82.8*Math.cos(t*4.6+bend))/length;
-        double d=Math.abs(u-channelU)/Math.sqrt(1+duDv*duDv)+15*(1-weight);
+        double branchDistance=Math.abs(u-channelU)/Math.sqrt(1+duDv*duDv);
+        double d=major+(branchDistance-major)*weight;
         if(d<tributary)tributary=d;
       }
     }
     // Minor, non-periodic shear cracks fringe the main sides but do not
     // themselves create broad circular depressions or crater rings.
     double small= Math.abs(u+warp-laneN*340-94*(noise(seed,x,z,165,0x4c494d45L)-.5));
-    if(noise(seed,x,z,230,0x5348454152L)>.69)tributary=Math.min(tributary,small+26);
-    return Math.min(major,tributary);
+    // Minor shear cracks are also a smooth field contribution, not a binary
+    // noise threshold. The former >.69 switch could change the nearest
+    // fracture distance by dozens of blocks across adjacent columns.
+    double combined=Math.min(major,tributary);
+    double shearWeight=smooth((noise(seed,x,z,230,0x5348454152L)-.60)/.16);
+    double withShear=Math.min(combined,small+26);
+    return combined+(withShear-combined)*shearWeight;
   }
   /** Canyon cross-sections are broad on the floor and broken at the shoulder. */
   public static double width(long seed,int x,int z){
@@ -77,8 +88,8 @@ public final class KarstLandforms {
   }
   public static double valley(long seed,int x,int z){
     double d=distance(seed,x,z),w=width(seed,x,z);
-    // Wide, nearly flat fertile toe, then steep, asymmetrical escarpments.
-    double interior=1-smooth((d-w*.29)/(w*.70));
+    // Broad, nearly flat valley floor, then long graded limestone shoulders. The ramp is deliberately wider than the old narrow escarpment band.
+    double interior=1-smooth((d-w*.22)/(w*2.10));
     double ledge=.075*(smooth((d/w-.48)/.035)-smooth((d/w-.59)/.06));
     return clamp(interior-ledge);
   }
@@ -87,11 +98,28 @@ public final class KarstLandforms {
     return smooth((valley+patch-.23)/.66);
   }
   public static double habitat(long seed,int x,int z){return habitat(seed,x,z,valley(seed,x,z));}
+  /** Broad highland mass: long, low-gradient benches suitable for building,
+   * with progressively finer relief that never reduces the massif to narrow fins. */
+  static double massifUpland(long seed,int x,int z){
+    double broad=28*(noise(seed,x,z,1800,0x4d415353494631L)-.5)
+                +18*(noise(seed,x,z,700,0x4d415353494632L)-.5);
+    double fine=8*(noise(seed,x,z,250,0x4d415353494633L)-.5)
+               +2.5*(noise(seed,x,z,80,0x4d415353494634L)-.5);
+    // Break the old broad plateau into long, weathered limestone ridges.
+    // An anisotropic ridged field forms connected high spines rather than
+    // isolated cone peaks; the amplitudes are low enough to retain wide,
+    // buildable benches between those spines.
+    double a=along(seed,x,z),c=cross(seed,x,z);
+    double ridgeSignal=1.0-Math.abs(2.0*noise(seed,a*.55,c,1180,0x4b41525354524944L)-1.0);
+    double shoulderSignal=1.0-Math.abs(2.0*noise(seed,a*.82,c*1.28,510,0x4b4152535455524cL)-1.0);
+    double ridges=18.0*(ridgeSignal-.5)+5.0*(shoulderSignal-.5);
+    return broad+fine+ridges;
+  }
   public static double depth(long seed,int x,int z){
     double v=valley(seed,x,z);
-    // Deep inner drainage cuts descend from the elevated limestone uplands
-    // toward the surrounding build-height datum (roughly Y=63 by default).
-    return v*(62+6*noise(seed,x,z,220,0x4445505448L));
+    // Deep dissolution remains mountain-scale, but the lowered floor now grades
+    // across broad shoulders rather than dropping through a narrow cliff band.
+    return v*(90+8*noise(seed,x,z,220,0x4445505448L));
   }
   /** A bridge is a remnant of the SAME limestone upland on both banks.
    * Its top-view footprint is a constricted, gently crooked waist over the
@@ -142,9 +170,11 @@ public final class KarstLandforms {
     double toe=smooth((r-.37)/.20)*(1-smooth((r-.79)/.31));
     return envelope*(cliff*(large+gullies+broken)+toe*(3.2+2.1*noise(seed,x,z,31,0x544f4552494dL)));
   }
+  /** Artificial Karst landbridges are retired; no span coverage is generated. */
   public static double archWeight(long seed,int x,int z){
-    return KarstSpanVolume.coverage(seed,x,z);
+    return 0.0;
   }
+
   private static double oldKarstArchWeight(long seed,int x,int z){
     double lateral=bridgeBankRatio(seed,x,z);
     if(lateral>1.10)return 0;
@@ -212,15 +242,22 @@ public final class KarstLandforms {
     return naturalKarstRelief(seed,x,z);
   }
   public static double relief(long seed,int x,int z,boolean bloom){
-    return reliefInternal(seed,x,z,bloom,true);
+    return reliefInternal(seed,x,z,bloom,false);
   }
+
+  /** The same karst mass field with its bridge remnant independently gated
+   * by the owning forest region. Shore and incomplete parcel footprints pass
+   * bridge=false while retaining the ordinary massif and drainage relief. */
+  public static double relief(long seed,int x,int z,boolean bloom,boolean bridge){
+    // Ignore the legacy bridge request; retain natural massif and ravine relief.
+    return reliefInternal(seed,x,z,bloom,false);
+  }
+
   /** Original fractured-valley surface, with NO remnants of the rejected
    * raised-strip, haunch cuts or shoulder relief modifications. */
   private static double naturalKarstRelief(long seed,int x,int z){
     double r=distance(seed,x,z)/width(seed,x,z);
-    double upland=17*(noise(seed,x,z,240,0x55504c414e44L)-.5)
-                 +10*(noise(seed,x,z,102,0x5249444745L)-.5)
-                 +5*(noise(seed,x,z,36,0x42524f4bL)-.5);
+    double upland=massifUpland(seed,x,z);
     double ledge=5.2*(smooth((r-.52)/.08)-smooth((r-.67)/.11))
                  *(.6+noise(seed,x,z,63,0x4c454447L));
     double shoulder=5.1*(smooth((r-.84)/.07)-smooth((r-1.13)/.22));
@@ -237,18 +274,18 @@ public final class KarstLandforms {
     double tt=along(seed,x,z)+3*(noise(seed,x,z,220,0x5350414e41584953L)*2-1);
     double offset=nearest(tt,319);
     double envelope=1-smooth((offset-25)/83.0);
-    double bank=smooth((r-.30)/.19)*(1-smooth((r-1.52)/.27));
-    double broad=1-smooth((r-.26)/1.10);
+    double bank=smooth((r-.10)/.65)*(1-smooth((r-1.18)/1.10));
+    double broad=1-smooth((r-.18)/2.20);
     double ledges=1.9*(noise(seed,x,z,54,0x53484f554c4445L)-.5)
                  +2.5*(noise(seed,x,z,26,0x4c454447455aL)-.5);
     double grade=upland+ledge*.60+shoulder*.25+terrace*.5+talus*.55+rubble*.35
-                  -broad*(62+6*noise(seed,x,z,220,0x4445505448L))+ledges;
+                  -broad*(90+8*noise(seed,x,z,220,0x4445505448L))+ledges;
     // Karst is a mountain range, not a lowland pockmark field. Lift the
     // entire limestone massif first; the broad, deep dissolution channels
     // then cut back down toward the ordinary terrain datum. The upland noise
     // remains deliberately low-frequency so the crests read as broad,
     // gently rolling tablelands rather than isolated round hills.
-    return 65.0 + old+(grade-old)*envelope*bank*.87;
+    return 90.0 + old+(grade-old)*envelope*bank*.87;
   }
   /** Crucially, the underpass floor uses the terrain BEFORE the uplift,
    * rather than guessing its elevation from the current bridge thickness.
@@ -288,9 +325,13 @@ public final class KarstLandforms {
   /** Absolute pre-bridge ground height (including all ordinary limestone
    * noise), reconstructed by subtracting the exact local artificial uplift.
    * No artificial sill, detached lower gallery, or vegetation on the deck. */
+  public static int bridgeFloor(long seed,int x,int z,int topY,int baseY,int minimumFloorY){
+    return -1;
+  }
+
+  /** Legacy diagnostic overload uses the historical default base datum. */
   public static int bridgeFloor(long seed,int x,int z,int topY){
-    if(archWeight(seed,x,z)<.008)return -1;
-    return KarstSpanVolume.floor(seed,x,z,topY,naturalKarstRelief(seed,x,z));
+    return bridgeFloor(seed,x,z,topY,65,57);
   }
   /** R30dl: ONE GENTLY CURVED 3-D VAULT, WITHOUT A WAVY UNDERSIDE.
    *
@@ -344,11 +385,9 @@ public final class KarstLandforms {
    * opening the rest of the load-bearing bridge. Raw field samples, not
    * recursive neighbor repairs, keep it seed/chunk-order deterministic. */
   public static int bridgeCeiling(long seed,int x,int z,int topY){
-    int floor=bridgeFloor(seed,x,z,topY);
-    if(floor<0)return -1;
-    int undercut=KarstSpanVolume.undercutCeiling(seed,x,z,topY,floor);
-    return undercut>floor?undercut:-1;
+    return -1;
   }
+
   private static int oldKarstBridgeCeiling(long seed,int x,int z,int topY){
     int y=bridgeCeilingRaw(seed,x,z,topY);
     if(y<0||y>=topY-6)return y;
@@ -369,45 +408,17 @@ public final class KarstLandforms {
    * otherwise a beautiful underside still meets a raw vertical heightmap wall.
    * Erosion shares the same candidate/seed gate as the landbridge. */
   public static boolean bridgeApproachActive(long seed,int x,int z){
-    double r=bridgeBankRatio(seed,x,z);
-    return r>=.48&&r<=1.25&&bridgeErosionEnvelope(seed,x,z)>.23;
+    return false;
   }
+
   /** Genuine XYZ abrasion of the rock shoulder and exposed canyon wall.
    * At low elevations the cavity tapers OUT into the cliff, forming eroded
    * buttresses. At roof elevation the rock remains thick and load-bearing.
    * Noise is coherent in all three spatial directions. */
   public static boolean erodeBridgeShoulder(long seed,int x,int y,int z,int topY,int floor,int ceiling){
-    if(y<=68||y>=topY-8)return false;
-    double r=bridgeBankRatio(seed,x,z);
-    if(r<.48||r>1.25)return false;
-    double nearby=bridgeErosionEnvelope(seed,x,z);
-    if(nearby<.24)return false;
-    // The cavity expands into the lower bank, not at the bridge deck.
-    double descent=smooth((topY-y-11.0)/34.0);
-    double target=.72+.27*descent;
-    // Abrasion weakens toward the outer ends and along the valley bends.
-    target-=.085*(1-nearby);
-    // Large, coherent fracture pockets on the actual supporting rock flank,
-    // concentrated below (not through) the walkable crossing. The threshold
-    // varies independently with Y so the side is not a vertical extrusion.
-    double v=bridgeLong(seed,x,z);
-    double front=1-smooth((v-19)/29.0);
-    double below=topY-y;
-    double niche=smooth((below-9)/10.0)*(1-smooth((below-35)/18.0));
-    double fissure=noise(seed,x+y*.32,z-y*.23,17.0,0x504f434b455453L);
-    target+=(.12+.19*fissure)*front*niche;
-    double basin=noise(seed,x+y*.33,z-y*.29,20,0x5349444557414c4cL);
-    double cracks=noise(seed,x-y*.17,z+y*.53,9.5,0x4c494d45504f434bL);
-    target+=.11*(basin-.5)*2+.045*(cracks-.5)*2;
-    if(r>=target)return false;
-    // Protect the whole natural lower ground, not an artificial platform.
-    // In the cliff beyond the raised bridge the original ravine has a higher
-    // surface; keep a basal rock foot rather than a through-going tunnel.
-    int safeBase=floor>=0?floor:Math.max(65,topY-34);
-    if(y<=safeBase+6)return false;
-    if(ceiling>=0 && ceiling<topY && y>ceiling+9)return false;
-    return true;
+    return false;
   }
+
   public static int ceiling(long seed,int x,int z,int topY){
     if(bloomArchWeight(seed,x,z)<.87)return -1;
     double inset=distance(seed,x,z)/width(seed,x,z);

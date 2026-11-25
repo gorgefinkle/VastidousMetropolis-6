@@ -1,12 +1,16 @@
 package ch.k42.metropolis.grid.urbanGrid.forest;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 /**
  * Giant fungal growth geometry. The cap and trunk have coherent material
  * identities; the caller owns site choice and terrain permissions.
- * This is a source recovery of the shipped R30ea behavior, not a scale tweak.
+ * Stem height is clipped against assembled cap columns so it cannot pierce the upper surface.
  */
 public final class MushroomGeometry {
     public static final String STEM = "minecraft:mushroom_stem[down=true,east=true,north=true,south=true,up=true,west=true]";
@@ -21,9 +25,148 @@ public final class MushroomGeometry {
         @Override public int hashCode(){return x*9176 ^ z*1709 ^ y*19307;}
         @Override public boolean equals(Object o){return o instanceof P p && p.x==x&&p.y==y&&p.z==z;}
     }
+    static record GroupedCapAnchor(double capX,double capZ,int capY,int radius,int branch) {}
     static long mix(long v){ v^=v>>>30;v*= -4658895280553007687L; v^=v>>>27;v*= -7723592293110705685L;return v^(v>>>31); }
     static double unit(long v) {return (mix(v)>>>11)*0x1.0p-53;}
     public static String species(long seed) {return unit(seed ^ 131L)<.52?"minecraft:red_mushroom_block":"minecraft:brown_mushroom_block";}
+
+    private static long columnKey(int x,int z) {
+        return ((long)x<<32) ^ (z & 0xffffffffL);
+    }
+
+    /**
+     * Emit the original leaning bole unchanged. Terrain extensions are allowed
+     * only under columns that were already occupied on its original first row.
+     * Higher, laterally-shifted bole columns are never filled down to ground.
+     */
+    /**
+     * Preserve the authored leaning bole. Extend only its original bottom
+     * footprint down to local terrain, and extend each existing stem column's
+     * topmost layer upward to the cap underside. Never fill beneath upper,
+     * laterally-shifted trunk columns.
+     */
+    static Set<P> emitTrunkStems(Sink sink,Terrain terrain,Set<P> trunk,
+                                 Map<Long,Integer> capBottomByColumn,int rootY) {
+        Set<Long> originalBottomFootprint=new HashSet<>();
+        Set<P> emitted=new HashSet<>();
+        for(P q:trunk) {
+            long key=columnKey(q.x,q.z);
+            // Capture only the authored lowest footprint before terrain
+            // clipping, so its roots can be extended down over uneven ground.
+            if(q.y==rootY&&terrain.allows(q.x,q.z))originalBottomFootprint.add(key);
+            Integer capBottom=capBottomByColumn.get(key);
+            if(capBottom!=null&&q.y>=capBottom)continue;
+            if(!terrain.allows(q.x,q.z))continue;
+            if(q.y<=terrain.groundAt(q.x,q.z))continue;
+            sink.set(q.x,q.y,q.z,STEM);
+            emitted.add(q);
+        }
+        // Bottom-only correction: extend the original base footprint down
+        // to local terrain. Never extend leaning bole columns upward; those
+        // vertical fills erase the authored taper, curve, and trunk silhouette.
+        for(long key:originalBottomFootprint) {
+            int x=(int)(key>>32),z=(int)key;
+            int groundY=terrain.groundAt(x,z);
+            for(int y=groundY+1;y<rootY;y++) {
+                P q=new P(x,y,z);
+                sink.set(x,y,z,STEM);
+                emitted.add(q);
+            }
+        }
+        return emitted;
+    }
+
+    /**
+     * Give every secondary grouped cap its own narrow stalk. The stalk is
+     * anchored at the cap's central stem column: its authored top block is
+     * extended upward to the cap underside and downward to local terrain.
+     * This does not alter or straighten the main leaning bole.
+     */
+    /**
+     * Secondary grouped caps grow from their own grounded, gently wandering
+     * stalks. A slight lateral sweep and a flared lower foot break the rigid
+     * pillar silhouette; the final stem voxel is deliberately placed directly
+     * beneath the cap's center so the cap cannot float free.
+     */
+    private static void emitGroupedCapStems(Sink sink,Terrain terrain,Set<P> stems,
+                                             Set<P> crown,List<GroupedCapAnchor> anchors) {
+        for(GroupedCapAnchor anchor:anchors) {
+            int x=(int)Math.round(anchor.capX());
+            int z=(int)Math.round(anchor.capZ());
+            if(!terrain.allows(x,z))continue;
+            int capTop=anchor.capY()+3;
+            int underside=capTop-2;
+            int ground=terrain.groundAt(x,z);
+            int firstY=ground+1,lastY=underside-1;
+            if(lastY-firstY<3)continue;
+            double direction=(anchor.branch()+1)*2.399963229728653;
+            double sideX=Math.cos(direction),sideZ=Math.sin(direction);
+            double bend=1.15+(anchor.branch()%3)*.28;
+            P previous=null;
+            for(int y=firstY;y<=lastY;y++) {
+                double t=(y-firstY)/(double)(lastY-firstY);
+                // Keep the first four blocks anchored over the local root
+                // column before the stalk begins its visible lateral sweep.
+                double curveT=Math.max(0.0,Math.min(1.0,
+                        (y-firstY-4.0)/Math.max(1.0,lastY-firstY-4.0)));
+                double sweep=Math.sin(Math.PI*curveT)*bend
+                        +Math.sin(2.0*Math.PI*curveT+anchor.branch()*.71)*.28*curveT;
+                int px=(int)Math.round(x+sideX*sweep);
+                int pz=(int)Math.round(z+sideZ*sweep);
+                P current=new P(px,y,pz);
+                if(previous==null) {
+                    emitStemVoxel(sink,terrain,stems,crown,current);
+                    // A restrained two-block foot flare gives the stalk a
+                    // visible root transition without making another pillar.
+                    if(t<.18) {
+                        int fx=px+(Math.abs(sideX)>Math.abs(sideZ)?0:(sideX>0?1:-1));
+                        int fz=pz+(Math.abs(sideX)>Math.abs(sideZ)?(sideZ>0?1:-1):0);
+                        emitStemVoxel(sink,terrain,stems,crown,new P(fx,y,fz));
+                    }
+                } else {
+                    // Use face-adjacent voxel steps rather than diagonal
+                    // interpolation so every segment is physically connected.
+                    int sx=previous.x,sy=previous.y,sz=previous.z;
+                    while(sx!=current.x) {
+                        sx+=Integer.signum(current.x-sx);
+                        emitStemVoxel(sink,terrain,stems,crown,new P(sx,sy,sz));
+                    }
+                    while(sz!=current.z) {
+                        sz+=Integer.signum(current.z-sz);
+                        emitStemVoxel(sink,terrain,stems,crown,new P(sx,sy,sz));
+                    }
+                    while(sy!=current.y) {
+                        sy+=Integer.signum(current.y-sy);
+                        emitStemVoxel(sink,terrain,stems,crown,new P(sx,sy,sz));
+                    }
+                }
+                previous=current;
+            }
+        }
+        // A later stalk may pass through an earlier cap. Restore every
+        // grouped cap's center underside after all stalk paths are laid, and
+        // pin its final stem voxel directly beneath that cap.
+        for(GroupedCapAnchor anchor:anchors) {
+            int x=(int)Math.round(anchor.capX());
+            int z=(int)Math.round(anchor.capZ());
+            if(!terrain.allows(x,z))continue;
+            int underside=anchor.capY()+1;
+            P capBottom=new P(x,underside,z);
+            crown.add(capBottom);
+            P stemTop=new P(x,underside-1,z);
+            if(stemTop.y>terrain.groundAt(x,z)) {
+                sink.set(stemTop.x,stemTop.y,stemTop.z,STEM);
+                stems.add(stemTop);
+            }
+        }
+    }
+
+    private static void emitStemVoxel(Sink sink,Terrain terrain,Set<P> stems,Set<P> crown,P q) {
+        if(!terrain.allows(q.x,q.z)||q.y<=terrain.groundAt(q.x,q.z))return;
+        crown.remove(q);
+        sink.set(q.x,q.y,q.z,STEM);
+        stems.add(q);
+    }
 
     public static void grow(Sink sink,Terrain terrain,int x,int z,long worldSeed,int variant) {
         long seed=mix(worldSeed ^ mix(x*-7046029254386353131L + z*-4417276706812531889L));
@@ -36,6 +179,7 @@ public final class MushroomGeometry {
         double lean=3.0+unit(seed+15)*10.0;
         double centerX=x+Math.cos(angle)*lean,centerZ=z+Math.sin(angle)*lean;
         Set<P> crown=new HashSet<>(), trunk=new HashSet<>();
+        List<GroupedCapAnchor> groupedCapAnchors=new ArrayList<>();
         for(int y=ground+1;y<=ground+height+1;y++) {
             double t=(double)(y-ground)/(double)height;
             double ease=t*t*(3.0-2.0*t);
@@ -48,7 +192,7 @@ public final class MushroomGeometry {
                 if(dist<rad*(.94+.08*unit(mix(seed ^ px*257L ^ pz*433L))))trunk.add(new P(px,y,pz));
             }
         }
-        for(int px=(int)(centerX-spread-4);px<=centerX+spread+4;px++)for(int pz=(int)(centerZ-spread-4);pz<=centerZ+spread+4;pz++) {
+         for(int px=(int)(centerX-spread-4);px<=centerX+spread+4;px++)for(int pz=(int)(centerZ-spread-4);pz<=centerZ+spread+4;pz++) {
             double offsetX=px-centerX,offsetZ=pz-centerZ;
             double a=Math.atan2(offsetZ,offsetX), dist=Math.hypot(offsetX,offsetZ);
             double ripples=.08*Math.sin(a*5.0+(seed%43)*.1)+.065*Math.sin(a*9.0+(seed%31)*.13);
@@ -80,6 +224,7 @@ public final class MushroomGeometry {
                 double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                 double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
                 int radius=5+(int)(unit(seed+j*199)*5.0);
+                groupedCapAnchors.add(new GroupedCapAnchor(bx,bz,by,radius,j));
                 for(int px=(int)bx-radius;px<=bx+radius;px++)for(int pz=(int)bz-radius;pz<=bz+radius;pz++) {
                     double dist=Math.hypot(px-bx,pz-bz),theta2=Math.atan2(pz-bz,px-bx);
                     if(dist>radius*(1.0+.14*Math.sin(theta2*5.0+j)))continue;
@@ -105,7 +250,17 @@ public final class MushroomGeometry {
                 }
             }
         }
-        for(P q:trunk)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))sink.set(q.x,q.y,q.z,STEM);
+        // Determine the underside of the completed cap (including secondary
+        // crowns) per X/Z column. The older fixed-height trunk ignored the
+        // downward-curving cap profiles and could continue through the cap.
+        Map<Long,Integer> capBottomByColumn=new HashMap<>();
+        for(P q:crown) {
+            long key=columnKey(q.x,q.z);
+            Integer previous=capBottomByColumn.get(key);
+            if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
+        }
+        Set<P> emittedStems=emitTrunkStems(sink,terrain,trunk,capBottomByColumn,ground+1);
+        emitGroupedCapStems(sink,terrain,emittedStems,crown,groupedCapAnchors);
         for(P q:crown)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z)) {
             StringBuilder state=new StringBuilder(cap).append('[');
             for(int i=0;i<6;i++) {

@@ -171,5 +171,6 @@ public final class FarmGenerator {
    /** Forget cached farm plans (call after the config is reloaded). */
    public static void clearCache() {
       FarmLayout.clearCache();
+      FarmRoads.clearCache();
    }
 }
