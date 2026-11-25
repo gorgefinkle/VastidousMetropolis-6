@@ -31,7 +31,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private static final int FEATURE_CELL_MULTIPLIER = 2;
    private static final int MOUNTAIN_CLEARANCE = 28;
    private static final int MAX_STREAM_RANGE = 220;
-   private static final int MAX_ROUTE_EXPANSIONS = 120000;
+   private static final int MAX_ROUTE_EXPANSIONS = 40000;
    private static final int MAX_HIGHWAY_CROSSING_CHUNKS = 2;
    private static final int MOUNTAIN_THRESHOLD = 14;
    private static final int LAKE_THRESHOLD = 42;
@@ -132,7 +132,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
 
       int idealX = gx * this.cellSize + this.spacing;
       int idealZ = gz * this.cellSize + this.spacing;
-      int attempts = 10;
+      int attempts = 4;
       HighwayNetwork.Snapshot highwayMask = this.highways.snapshot(
               idealX - 72, idealZ - 72, idealX + 72, idealZ + 72);
 
@@ -155,6 +155,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       int radius = 14 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
       double ratio = 0.76 + unit(mix(h ^ 0x454C4C49505345L)) * 0.20;
       double angle = unit(mix(h ^ 0x4C414B45414E474CL)) * Math.PI;
+      List<WaterTarget> targets = findTargets(idealX, idealZ);
+      if (targets.isEmpty()) return FeatureCell.EMPTY;
       for (int attempt = 0; attempt < attempts; attempt++) {
          int[] offset = candidateOffset(h, attempt, 20);
          int x = idealX + offset[0], z = idealZ + offset[1];
@@ -163,7 +165,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          LakeSite lake = new LakeSite(this.seed, gx, gz, x * 16.0 + 8.0, z * 16.0 + 8.0,
                  radius * 16.0, radius * ratio * 16.0, angle,
                  RiverConfig.getRiverBuildHeight());
-         List<StreamSegment> stream = this.buildOutlet(lake, h);
+         List<StreamSegment> stream = this.buildOutlet(lake, h, targets);
          if (stream != null && !stream.isEmpty()) {
             lake.streams = stream;
             return new FeatureCell(null, lake);
@@ -191,8 +193,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
                     + (double)dz * dz / ((double)radiusZ * radiusZ);
             if (r > 1.0) continue;
             int x = centerX + dx, z = centerZ + dz;
-            if (this.inOuterCity(x, z) || this.water.kindAt(x, z) != WaterField.Kind.NONE
-                    || highwayMask.at(x, z)) return false;
+            if (this.inOuterCity(x, z) || this.water.baseKindAt(x, z) != WaterField.Kind.NONE
+                    || this.water.isCreek(x, z) || highwayMask.at(x, z)) return false;
          }
       }
       return true;
@@ -259,16 +261,14 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       return best;
    }
 
-   private List<StreamSegment> buildOutlet(LakeSite lake, long featureHash) {
-      List<WaterTarget> targets = findTargets((int)Math.floor(lake.centerX / 16.0),
-              (int)Math.floor(lake.centerZ / 16.0));
+   private List<StreamSegment> buildOutlet(LakeSite lake, long featureHash, List<WaterTarget> targets) {
       if (targets.isEmpty()) return null;
       WaterTarget nearest = targets.get(0);
       double dx = nearest.x - lake.centerX / 16.0;
       double dz = nearest.z - lake.centerZ / 16.0;
       double length = Math.max(1.0, Math.hypot(dx, dz));
-      int startX = (int)Math.round(lake.centerX / 16.0 + dx / length * lake.radiusX / 16.0 * LakeSite.WATER_EDGE);
-      int startZ = (int)Math.round(lake.centerZ / 16.0 + dz / length * lake.radiusZ / 16.0 * LakeSite.WATER_EDGE);
+      int startX = (int)Math.round(lake.centerX / 16.0 + dx / length * lake.radiusX / 16.0 * 0.86);
+      int startZ = (int)Math.round(lake.centerZ / 16.0 + dz / length * lake.radiusZ / 16.0 * 0.86);
       List<int[]> path = route(startX, startZ, targets);
       if (path == null || path.size() < 2) return null;
 
@@ -359,8 +359,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
             if (this.inOuterCity(nx, nz)) continue;
             WaterField.Kind base = this.water.baseKindAt(nx, nz);
             if (base != WaterField.Kind.NONE && !this.water.isReceivingWaterAt(nx, nz)) continue;
-            WaterField.Kind current = this.water.kindAt(nx, nz);
-            if (current == WaterField.Kind.CREEK || current == WaterField.Kind.LAKE) continue;
+            if (this.water.isCreek(nx, nz)) continue;
 
             byte axes = highwayAxes.getOrDefault(cellKey(nx, nz), (byte)0);
             int moveAxis = dx[direction] != 0 ? 1 : 2;
