@@ -59,6 +59,8 @@ jobs:
         run: sh QA/R14_23/run_farm_road_route_policy_probe.sh
       - name: Deferred population async-load regression
         run: sh QA/R14_24/run_deferred_population_async_probe.sh
+      - name: Deferred metadata retry and stale-callback regression
+        run: sh QA/R14_31/run_deferred_metadata_retry_probe.sh
       - name: Chunky retained-heap recovery policy probe
         run: sh QA/R14_8/run_chunky_backpressure_policy_probe.sh
       - name: FARM underground sites policy probe
