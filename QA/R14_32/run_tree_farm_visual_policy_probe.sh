@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+WILLOW=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/MotherWillowGeometry.java
+MUSHROOM=src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/MushroomGeometry.java
+LAYOUT=src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmLayout.java
+PROPS=src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmProps.java
+OUTBUILDINGS=src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmOutbuildings.java
+
+grep -Fq 'directionless?"none"' "$WILLOW"
+grep -Fq 'branchSegment(last,next' "$WILLOW"
+grep -Fq 'minecraft:oak_fence[north=true,east=true,south=true,west=true,waterlogged=false]' "$WILLOW"
+grep -Fq 'leaderIndex>=2?.34:.48' "$WILLOW"
+grep -Fq 'leaderMid=leaderRoot*(i>=2?.52:.638)' "$WILLOW"
+grep -Fq 'leaderTip=leaderMid*(i>=2?.26:.365)' "$WILLOW"
+grep -Fq 'Math.sin(Math.PI*t)*bend' "$MUSHROOM"
+grep -Fq 'emitStemVoxel(sink,terrain,stems,crown,current)' "$MUSHROOM"
+! grep -Fq 'connectGroupedCapTops' "$MUSHROOM"
+! grep -Eiq 'Tractor|Pickup|tractor|pickup' "$LAYOUT"
+! grep -Eiq 'class Tractor|class Pickup' "$PROPS" "$OUTBUILDINGS"
+! grep -Eiq 'new FarmProps.Tractor|new FarmOutbuildings.Pickup' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm
+echo "TreeFarmVisualPolicyProbe PASS: tapered upper leaders, bark-textured directionless branches, continuous thin willow trails, curved cap-connected grouped mushroom stalks, and no multiblock farm vehicles"
