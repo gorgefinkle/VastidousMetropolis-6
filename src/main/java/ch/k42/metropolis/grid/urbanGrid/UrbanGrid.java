@@ -68,6 +68,7 @@ import ch.k42.metropolis.grid.urbanGrid.river.RiverConfig;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverReclaim;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildernessFeatures;
+import ch.k42.metropolis.grid.urbanGrid.wild.WildernessStreamCourse;
 import ch.k42.metropolis.grid.urbanGrid.statistics.AthmosStat;
 import ch.k42.metropolis.grid.urbanGrid.statistics.GridStatistics;
 import ch.k42.metropolis.minions.Cartesian2D;
@@ -3961,11 +3962,15 @@ public class UrbanGrid extends Grid implements DistrictHost {
     * registered in creekCarriers (which would enroll it in the creek-origin
     * park, road-pruning, and lifecycle-audit systems). */
    private void placeStreamAt(int chunkX, int chunkZ) {
-      RiverProvider stream = this.planWater().streamCarrierAt(chunkX, chunkZ);
-      if (stream == null) {
+      RiverProvider planned = this.planWater().streamCarrierAt(chunkX, chunkZ);
+      if (planned == null) {
          Minions.w("WILDERNESS STREAM CARRIER MISSING chunk=(%d,%d)", chunkX, chunkZ);
          return;
       }
+      // The stream has a single continuous polyline, but highway walls need
+      // the local segment axis at this chunk rather than a world-wide axis.
+      RiverProvider stream = planned instanceof WildernessStreamCourse
+              ? ((WildernessStreamCourse) planned).forChunk(chunkX, chunkZ) : planned;
       RiverParcel parcel = new RiverParcel(this, new Cartesian2D(chunkX, chunkZ), stream);
       if (stream.isZBound()) {
          if (this.isLaneOverCreek(stream, chunkX, chunkZ - 1)) {
