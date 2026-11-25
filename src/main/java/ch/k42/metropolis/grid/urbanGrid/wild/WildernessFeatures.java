@@ -441,21 +441,6 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       return new int[]{x, z};
    }
 
-   @Override
-   public boolean waterOrBank(int chunkX, int chunkZ, boolean ignored) {
-      return streamCarrierAt(chunkX, chunkZ) != null;
-   }
-
-   @Override
-   public boolean waterOrBank(int chunkX, int chunkZ) {
-      return streamCarrierAt(chunkX, chunkZ) != null;
-   }
-
-   @Override
-   public RiverProvider carrierAt(int chunkX, int chunkZ) {
-      return streamCarrierAt(chunkX, chunkZ);
-   }
-
    public static final class MountainSite {
       public final String name;
       public final double centerX, centerZ, radiusX, radiusZ, angle;
