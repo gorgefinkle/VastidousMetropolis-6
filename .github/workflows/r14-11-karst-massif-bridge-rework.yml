@@ -1,4 +1,4 @@
-name: R14.13 Inland Karst, open landbridges and deep geology validation
+name: R14.28 Karst landbridge retirement and deep geology compatibility validation
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
       - integration/morphomos-natural-family-bloomlands
   workflow_dispatch:
 
- # R14.13 release-candidate CI: inland Karst, open landbridge and deep geology QA with exact two-file packaging.
+ # R14.28 compatibility CI: retired Karst landbridges, natural massif and deep geology QA with exact two-file packaging.
 permissions:
   contents: read
 
@@ -45,7 +45,7 @@ jobs:
           java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
       - name: Chunky backpressure recovery policy probe
         run: sh QA/R14_8/run_chunky_backpressure_policy_probe.sh
-      - name: Karst landbridge open-clearance and safe-floor probe
+      - name: Karst landbridge retirement and zero-span probe
         run: sh QA/R14_8/run_karst_landbridge_clearance_probe.sh
       - name: Karst massif, deep-cut and buildable-upland probe
         run: sh QA/R14_9/run_karst_mountain_profile_probe.sh
@@ -55,21 +55,21 @@ jobs:
         run: bash QA/R14_11/run_marine_habitat_probe.sh
       - name: Assemble complete source archive
         run: |
-          zip -r Metropolis_R14_13_Inland_Karst_Landbridges_Geology_SOURCE.zip \
+          zip -r Metropolis_R14_28_Karst_Removal_Strategic_Silo_SOURCE.zip \
             .gitattributes .gitignore .github pom.xml compile_summary.txt \
             README*.md QA src
       - name: Assemble exact two-file development package
         run: |
-          mkdir -p r14-13-package
-          cp target/Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV.jar r14-13-package/
-          cp Metropolis_R14_13_Inland_Karst_Landbridges_Geology_SOURCE.zip r14-13-package/
-          (cd r14-13-package && zip -q ../Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV_PACKAGE.zip ./*)
+          mkdir -p r14-28-compat-package
+          cp target/Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV.jar r14-28-compat-package/
+          cp Metropolis_R14_28_Karst_Removal_Strategic_Silo_SOURCE.zip r14-28-compat-package/
+          (cd r14-28-compat-package && zip -q ../Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip ./*)
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV
+          name: Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV.jar
-            Metropolis_R14_13_Inland_Karst_Landbridges_Geology_SOURCE.zip
-            Metropolis_R14_13_Inland_Karst_Landbridges_Geology_DEV_PACKAGE.zip
+            target/Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV.jar
+            Metropolis_R14_28_Karst_Removal_Strategic_Silo_SOURCE.zip
+            Metropolis_R14_28_Karst_Removal_Strategic_Silo_DEV_PACKAGE.zip
