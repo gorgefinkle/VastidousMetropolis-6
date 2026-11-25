@@ -50,13 +50,13 @@ public final class WaterField implements WorldLayout.Mask {
 
    /** Named wilderness lakes are independent of the river/creek channel field. */
    public interface LakeSource {
-      boolean waterOrBank(int chunkX, int chunkZ);
+      boolean lakeOrBankAt(int chunkX, int chunkZ);
    }
    private LakeSource lakes;
 
    /** Small named-lake outlets routed through wilderness and permitted to cross highways. */
    public interface StreamSource {
-      boolean waterOrBank(int chunkX, int chunkZ);
+      boolean streamOrBankAt(int chunkX, int chunkZ);
       ch.k42.metropolis.grid.urbanGrid.river.RiverProvider carrierAt(int chunkX, int chunkZ);
    }
    private StreamSource streams;
@@ -78,12 +78,12 @@ public final class WaterField implements WorldLayout.Mask {
 
    public boolean isLake(int x, int z) {
       LakeSource src = lakes;
-      return src != null && src.waterOrBank(x, z);
+      return src != null && src.lakeOrBankAt(x, z);
    }
 
    public boolean isStream(int x, int z) {
       StreamSource src = streams;
-      return src != null && src.waterOrBank(x, z);
+      return src != null && src.streamOrBankAt(x, z);
    }
 
    /** Exact open receiving water (not its bank): the outlet a wilderness stream must reach. */
