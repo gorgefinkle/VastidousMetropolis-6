@@ -42,6 +42,40 @@ public final class MushroomGroundContactProbe {
         }
     }
 
+    private static void verifyUnevenRootRow(int x,int z,long worldSeed,int variant,
+                                             Map<Voxel,String> placed) {
+        long seed=MushroomGeometry.mix(worldSeed ^ MushroomGeometry.mix(
+                x*-7046029254386353131L + z*-4417276706812531889L));
+        int mode=Math.floorMod(variant,6);
+        int ground=-3+Math.floorMod(x*31+z*17,9);
+        int height=(mode==5?29:24)+(int)(MushroomGeometry.unit(seed+2)*21);
+        double angle=MushroomGeometry.unit(seed+11)*6.28318530718;
+        double lean=3.0+MushroomGeometry.unit(seed+15)*10.0;
+        double t=1.0/height;
+        double ease=t*t*(3.0-2.0*t);
+        double cx=x+Math.cos(angle)*lean*ease+Math.sin(t*4.1+seed%37)*t*1.3;
+        double cz=z+Math.sin(angle)*lean*ease+Math.cos(t*3.5+seed%29)*t*1.5;
+        double rad=(mode==1?3.6:2.2)+(1.0-t)*(mode==1?3.1:2.7)
+                +2.0*Math.pow(1.0-t,5.0);
+        if(mode==4)rad+=.6*Math.sin(t*15.0+seed%100);
+        int checked=0;
+        for(int px=(int)(cx-rad-1);px<=cx+rad+1;px++)
+            for(int pz=(int)(cz-rad-1);pz<=cz+rad+1;pz++) {
+                double dist=Math.hypot(px-cx,pz-cz);
+                if(dist>=rad*(.94+.08*MushroomGeometry.unit(
+                        MushroomGeometry.mix(seed ^ px*257L ^ pz*433L))))continue;
+                int localGround=-3+Math.floorMod(px*31+pz*17,9);
+                if(localGround>ground)continue; // uphill columns meet the bole higher up naturally
+                Voxel expectedRoot=new Voxel(px,localGround+1,pz);
+                if(!MushroomGeometry.STEM.equals(placed.get(expectedRoot))) {
+                    throw new AssertionError("original bole base row floats above lower terrain: variant="+variant
+                            +" at="+px+","+pz+" localGround="+localGround+" expectedRootY="+(localGround+1));
+                }
+                checked++;
+            }
+        if(checked==0)throw new AssertionError("root-row probe did not sample any terrain columns");
+    }
+
     public static void main(String[] args) {
         verifyBottomOnlyExtension();
         if (!VegetationHeightPolicy.allows(-2, -64, 320))
@@ -89,26 +123,16 @@ public final class MushroomGroundContactProbe {
                             + " sample=" + sample + " ground cover=TALL_GRASS"
                             + " groundY=" + ground + " rootCell=" + foot);
                 }
-                Map<Long,Integer> lowestStem = new HashMap<>();
-                for (Map.Entry<Voxel,String> entry : placed.entrySet()) {
-                    if (!MushroomGeometry.STEM.equals(entry.getValue())) continue;
-                    Voxel voxel = entry.getKey();
-                    long key = ((long) voxel.x() << 32) | (voxel.z() & 0xffffffffL);
-                    lowestStem.merge(key, voxel.y(), Math::min);
+                for(Map.Entry<Voxel,String> entry:placed.entrySet()) {
+                    if(!MushroomGeometry.STEM.equals(entry.getValue()))continue;
+                    Voxel voxel=entry.getKey();
+                    int localGround=-3+Math.floorMod(voxel.x()*31+voxel.z()*17,9);
+                    if(voxel.y()<=localGround)
+                        throw new AssertionError("stem was written inside terrain: variant="+variant
+                                +" sample="+sample+" at="+voxel.x()+","+voxel.y()+","+voxel.z());
                 }
-                int rootedColumns = 0;
-                for (Map.Entry<Long,Integer> stemColumn : lowestStem.entrySet()) {
-                    int sx = (int) (stemColumn.getKey() >> 32);
-                    int sz = (int) (long) stemColumn.getKey();
-                    int expected = -3 + Math.floorMod(sx * 31 + sz * 17, 9) + 1;
-                    if (stemColumn.getValue() != expected) {
-                        throw new AssertionError("stalk column does not reach its own uneven ground: variant="
-                                + variant + " sample=" + sample + " at=" + sx + "," + sz
-                                + " lowest=" + stemColumn.getValue() + " expected=" + expected);
-                    }
-                    rootedColumns++;
-                }
-                if (rootedColumns == 0) throw new AssertionError("mushroom has no rooted stalk columns");
+                verifyUnevenRootRow(x,z,0x4D555348524F4F4DL ^ (sample*0x9E3779B97F4A7C15L),
+                        variant,placed);
                 shapes++;
             }
         }
