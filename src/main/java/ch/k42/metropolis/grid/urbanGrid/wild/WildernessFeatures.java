@@ -475,7 +475,9 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          double relief = Math.max(0.0, maxHeight - this.peakClearance - baseY);
          double rough = (broadNoise * 12.0 + (ridged - 0.42) * 17.0) * fade;
          // One dominant summit with broken shoulders, rather than a smooth cone or a flat plateau.
-         double summit = 12.0 * Math.pow(Math.max(0.0, 1.0 - r * 1.45), 2.0);
+         // The dominant crown must reach the intended near-build-height
+         // summit even when the local ridge noise is strongly negative.
+         double summit = 32.0 * Math.pow(Math.max(0.0, 1.0 - r * 1.45), 2.0);
          double value = baseY + relief * fade + rough + summit;
          return (int)Math.max(baseY, Math.min(maxHeight - this.peakClearance, Math.round(value)));
       }
