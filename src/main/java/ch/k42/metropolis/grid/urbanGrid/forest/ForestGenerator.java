@@ -633,6 +633,7 @@ public final class ForestGenerator {
             int x = baseX + lx;
             int z = baseZ + lz;
             int h = ctx.height(x, z);
+            WildernessFeatures.announceMountain(ctx.wildernessMountainAt(x, z), world.getName());
             ctx.terrain.typeWeights(x, z, w);
             WildBiome biome = ctx.wildernessMountainAt(x, z) != null ? WildBiome.MOUNTAINS :
                     ctx.wild == null ? WildBiome.FOREST :
