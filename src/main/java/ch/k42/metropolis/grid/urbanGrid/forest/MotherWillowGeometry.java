@@ -72,7 +72,7 @@ public final class MotherWillowGeometry {
   static double leaderRootRadius(int leaderIndex,int attachNode) {
     double nominal=5.8-leaderIndex*.56;
     double trunkAtAttach=15.0*Math.pow(1.0-.80*(attachNode/19.0),.82);
-    return Math.min(nominal,trunkAtAttach*.58);
+    return Math.min(nominal,trunkAtAttach*.48);
   }
   static double leaderScale(int leaderIndex,int attachNode) {
     return leaderRootRadius(leaderIndex,attachNode)/(5.8-leaderIndex*.56);
