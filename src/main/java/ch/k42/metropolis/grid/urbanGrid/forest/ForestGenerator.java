@@ -1887,10 +1887,11 @@ public final class ForestGenerator {
    }
 
    /**
-    * R14.22: legacy chunks may still contain the old Y=64 smooth-stone
-    * fallback cap. If a raised biome surface buries that exact block,
-    * normalize it to the same stone substrate during this column's regular
-    * paint operation. The actual surface and all other materials are kept.
+    * The normal-overworld pre-paint safety cap at Y=64 remains intentional
+    * in chunks that have not been populated. When this regular forest-column
+    * painter raises the surface above Y=64, the cap is now buried substrate;
+    * normalize only that buried block so no internal smoothstone seam remains.
+    * Exposed caps and all other materials are kept.
     */
    static Material buriedFallbackCap(Material existing, int surfaceY, int blockY) {
       return existing == Material.SMOOTH_STONE && blockY == 64 && surfaceY > blockY
