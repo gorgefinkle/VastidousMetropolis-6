@@ -87,11 +87,14 @@ public final class MushroomCapStemProbe {
                         double bx=x+Math.cos(angle)*lean*fraction+Math.cos(theta)*6.0;
                         double bz=z+Math.sin(angle)*lean*fraction+Math.sin(theta)*6.0;
                         int capX=(int)Math.round(bx),capZ=(int)Math.round(bz);
-                        Integer underside=capBottom.get(new Column(capX,capZ));
-                        if(underside==null)throw new AssertionError("grouped cap missing at branch="+branch+" sample="+sample);
-                        Voxel neck=new Voxel(capX,underside-1,capZ);
+                        int capBaseY=by+1;
+                        String capAtUnderside=voxels.get(new Voxel(capX,capBaseY,capZ));
+                        if(capAtUnderside==null||(!capAtUnderside.startsWith("minecraft:red_mushroom_block[")
+                                &&!capAtUnderside.startsWith("minecraft:brown_mushroom_block[")))
+                            throw new AssertionError("grouped crown missing its own underside: branch="+branch+" sample="+sample);
+                        Voxel neck=new Voxel(capX,capBaseY-1,capZ);
                         if(!stemCells.contains(neck))
-                            throw new AssertionError("grouped crown has no stem meeting its underside: branch="+branch+" sample="+sample);
+                            throw new AssertionError("grouped crown has no stem meeting its own underside: branch="+branch+" sample="+sample);
                         int attachY=Math.max(ground+1,by-4);
                         double t=(double)(attachY-ground)/(double)height;
                         double ease=t*t*(3.0-2.0*t);
