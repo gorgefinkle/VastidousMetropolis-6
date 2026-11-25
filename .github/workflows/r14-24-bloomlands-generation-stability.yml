@@ -1,4 +1,4 @@
-name: R14.31 Deferred metadata retry and Chunky recovery clock QA
+name: R14.32 Tree form, grouped mushrooms, willow trails and FARM vehicle removal
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: r14-31-${{ github.event.pull_request.number || github.ref }}
+  group: r14-32-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -41,6 +41,8 @@ jobs:
         run: sh QA/R14_15/run_creek_city_origin_policy_probe.sh
       - name: Mushroom grouped cap-to-bole stem connection probe
         run: sh QA/R14_16/run_mushroom_cap_stem_probe.sh
+      - name: Tree and FARM visual policy regression
+        run: sh QA/R14_32/run_tree_farm_visual_policy_probe.sh
       - name: Branch growth timeout lifecycle probe
         run: sh QA/R14_17/run_growth_timeout_shutdown_policy_probe.sh
       - name: Safe branch staging and spatial cache probes
@@ -60,7 +62,7 @@ jobs:
       - name: Deferred population async-load regression
         run: sh QA/R14_24/run_deferred_population_async_probe.sh
       - name: Deferred metadata retry and stale-callback regression
-        run: sh QA/R14_31/run_deferred_metadata_retry_probe.sh
+        run: sh QA/R14_32/run_deferred_metadata_retry_probe.sh
       - name: Chunky retained-heap recovery policy probe
         run: sh QA/R14_8/run_chunky_backpressure_policy_probe.sh
       - name: FARM underground sites policy probe
@@ -77,25 +79,25 @@ jobs:
           javac -d target/qa-queue src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java QA/R14_6/DiskDeferredChunkQueueProbe.java
           java -Xmx160m -cp target/qa-queue DiskDeferredChunkQueueProbe
       - name: Assemble complete source archive
-        run: zip -r Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
+        run: zip -r Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_SOURCE.zip .gitattributes .gitignore .github pom.xml README*.md QA src
       - name: Assemble exact two-file development package
         run: |
-          mkdir -p r14-31-package
-          cp target/Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV.jar r14-31-package/
-          cp Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_SOURCE.zip r14-31-package/
-          (cd r14-31-package && zip -q ../Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip ./*)
+          mkdir -p r14-32-package
+          cp target/Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV.jar r14-32-package/
+          cp Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_SOURCE.zip r14-32-package/
+          (cd r14-32-package && zip -q ../Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip ./*)
       - name: Verify exact package contents
         run: |
-          unzip -Z1 Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip | sort > package-files.txt
-          printf '%s\n' Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV.jar Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_SOURCE.zip | sort > expected-files.txt
+          unzip -Z1 Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip | sort > package-files.txt
+          printf '%s\n' Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV.jar Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_SOURCE.zip | sort > expected-files.txt
           diff -u expected-files.txt package-files.txt
-          unzip -t Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip
+          unzip -t Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV
+          name: Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV
           if-no-files-found: error
           path: |
-            target/Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV.jar
-            Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_SOURCE.zip
-            Metropolis_R14_31_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip
+            target/Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV.jar
+            Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_SOURCE.zip
+            Metropolis_R14_32_Deferred_Retry_and_Clock_Fix_DEV_PACKAGE.zip
