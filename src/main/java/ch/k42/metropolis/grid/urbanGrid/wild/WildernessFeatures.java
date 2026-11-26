@@ -214,6 +214,45 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       return this.cities.withinOuterCity(chunkX, chunkZ, nearest);
    }
 
+   /**
+    * Find the nearest planned named lake without scanning or generating terrain.
+    * Feature cells are widely spaced, so search outward by cell rings and inspect
+    * one ring beyond the first hit before choosing the closest lake centre.
+    */
+   public synchronized LakeSite nearestLake(int blockX, int blockZ, int maxRings) {
+      int chunkX = Math.floorDiv(blockX, 16);
+      int chunkZ = Math.floorDiv(blockZ, 16);
+      int originGX = Math.floorDiv(chunkX, this.cellSize);
+      int originGZ = Math.floorDiv(chunkZ, this.cellSize);
+      int limit = Math.max(0, maxRings);
+      int firstHitRing = -1;
+      LakeSite best = null;
+      double bestDistance = Double.POSITIVE_INFINITY;
+
+      for (int ring = 0; ring <= limit; ring++) {
+         for (int dx = -ring; dx <= ring; dx++) {
+            for (int dz = -ring; dz <= ring; dz++) {
+               if (ring > 0 && Math.max(Math.abs(dx), Math.abs(dz)) != ring) continue;
+               FeatureCell feature = cell(originGX + dx, originGZ + dz);
+               LakeSite lake = feature.lake;
+               if (lake == null) continue;
+               double ox = lake.centerX - (blockX + 0.5);
+               double oz = lake.centerZ - (blockZ + 0.5);
+               double distance = ox * ox + oz * oz;
+               if (distance < bestDistance) {
+                  bestDistance = distance;
+                  best = lake;
+               }
+            }
+         }
+         if (best != null) {
+            if (firstHitRing < 0) firstHitRing = ring;
+            else if (ring > firstHitRing) break;
+         }
+      }
+      return best;
+   }
+
    public MountainSite mountainAt(int blockX, int blockZ) {
       int gx = Math.floorDiv(Math.floorDiv(blockX, 16), this.cellSize);
       int gz = Math.floorDiv(Math.floorDiv(blockZ, 16), this.cellSize);
