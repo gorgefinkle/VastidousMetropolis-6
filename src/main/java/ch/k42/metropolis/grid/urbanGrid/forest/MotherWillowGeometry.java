@@ -5,7 +5,7 @@ import java.util.*;
 /**
  * Mother Willow: deterministic reiterating sympodial branching model.
  * The existing biome owns seed, placement, terrain clearance and chunk ownership;
- * this class only grows one accepted tree. Materials are exclusively oak wood/leaves.
+ * this class only grows one accepted tree. Poplar bark/logs and golden poplar foliage give the 26.3 tree a distinct willow palette.
  * Branch diameter follows a pipe-model power taper; reaction to gravity grows with
  * age/span, while young terminals are phototropic and subsequently pendulous.
  */
@@ -92,7 +92,7 @@ public final class MotherWillowGeometry {
       if(priority||!blocks.containsKey(k))blocks.put(k,state);
     }
     void put(int x,int y,int z,boolean wood,String axis,boolean root) {
-      putState(x,y,z,wood?(axis.equals("none")?"minecraft:oak_wood":"minecraft:oak_log[axis="+axis+"]"):"minecraft:oak_leaves[persistent=true]",wood,root);
+      putState(x,y,z,wood?(axis.equals("none")?"minecraft:poplar_wood":"minecraft:poplar_log[axis="+axis+"]"):"minecraft:yellow_poplar_leaves[persistent=true]",wood,root);
     }
     void bulb(P c,double r,boolean wood,long salt,String axis) {bulb(c,r,wood,salt,axis,false);}
     void bulb(P c,double r,boolean wood,long salt,String axis,boolean root) {
@@ -155,26 +155,26 @@ public final class MotherWillowGeometry {
     }
     void foliage(P from,long salt,double maturity) {
       // Pendent SHOOTS, not vertical sheets of leaves glued to scaffolds.
-      int shoots=2+(int)(rand(hash(salt,1))*4);
+      int shoots=4+(int)(rand(hash(salt,1))*4);
       for(int j=0;j<shoots;j++){
         long sh=hash(salt,37+j);
         double a=rand(hash(sh,2))*Math.PI*2;
-        int length=9+(int)(rand(hash(sh,3))*23*maturity)+(rand(hash(sh,14))>.86?9:0);
-        double dx=(rand(hash(sh,5))-.5)*.19,dz=(rand(hash(sh,6))-.5)*.19;
+        int length=20+(int)(rand(hash(sh,3))*34*maturity)+(rand(hash(sh,14))>.78?12:0);
+        double dx=(rand(hash(sh,5))-.5)*.12,dz=(rand(hash(sh,6))-.5)*.12;
         P at=from.add(Math.cos(a)*1.4,rand(hash(sh,11))*1.9,Math.sin(a)*1.4);
         P prev=from;
         for(int k=0;k<length;k++){
           double t=k/(double)length;
-          double sway=Math.sin(k*.18+rand(hash(sh,7))*6.283)*(.26+1.5*t);
-          P cur=p(at.x+dx*k+Math.cos(a)*sway,at.y-k*(.56+.40*t),at.z+dz*k+Math.sin(a)*sway);
+          double sway=Math.sin(k*.15+rand(hash(sh,7))*6.283)*(.35+2.1*t);
+          P cur=p(at.x+dx*k+Math.cos(a)*sway,at.y-k*(.50+.56*t),at.z+dz*k+Math.sin(a)*sway);
           // Only young shoot axes are woody; mature lower twigs droop to a fine tip.
           // A continuous, slender fence shoot carries the leaves all the way
           // down the pendulous trail instead of leaving isolated leaf clumps.
-          trailSegment(prev,cur);
-          if(k%2==0 || k==length-1)bulb(cur,.8+(1-t)*.55,false,sh+k,"y");
-          if(k%6==2 && rand(hash(sh,k))>.38) {
-            P bud=cur.add(Math.cos(a+1.4)*1.15,.3,Math.sin(a+1.4)*1.15);
-            bulb(bud,.8,false,sh+k+99,"y");
+          branchSegment(prev,cur,Math.max(.48,.78*(1.0-t*.48)),Math.max(.42,.78*(1.0-(t+.035)*.48)));
+          if(k%2==0 || k==length-1)bulb(cur,1.05+(1-t)*.62,false,sh+k,"y");
+          if(k%4==1 && rand(hash(sh,k))>.22) {
+            P bud=cur.add(Math.cos(a+1.4)*1.35,.25,Math.sin(a+1.4)*1.35);
+            bulb(bud,.95+(1-t)*.35,false,sh+k+99,"y");
           }
           prev=cur;
         }
@@ -206,7 +206,7 @@ public final class MotherWillowGeometry {
         // branch system. The central scaffold remains visually exposed.
         for(int k=steps/2;k<=steps;k++)if(k%2==0||k==steps) {
           P tip=pts[k];bulb(tip,1.20+rand(hash(tag,k))*1.15,false,tag+k,"y");
-          if(k>=steps-3 && rand(hash(tag,k+48))<.39)foliage(tip,hash(tag,k),.68+rand(hash(tag,k+77))*.55);
+          if(k>=steps-3 && rand(hash(tag,k+48))<.78)foliage(tip,hash(tag,k),.95+rand(hash(tag,k+77))*.55);
         }
         return;
       }
@@ -222,7 +222,7 @@ public final class MotherWillowGeometry {
         double ang=azimuth+side+(rand(hash(child,5))-.5)*.36;
         double size=(order==0?.47:order==1?.49:.52)+(rand(hash(child,6))-.5)*.13;
         double parentAtAttach=radius*Math.pow(1-.85*attach/(double)steps,.78);
-        double r=Math.min(parentAtAttach*.81,radius*Math.pow(size,1.0/2.35)*.76);
+        double r=Math.min(parentAtAttach*.68,radius*Math.pow(size,1.0/2.35)*.68);
         double len=length*(order==0?.47:order==1?.49:.54)*(.77+rand(hash(child,7))*.42);
         double lift=order==0?.36:order==1?.27:-.08;
         branch(pts[attach],ang,lift,len,Math.max(.48,r),order+1,child);
@@ -239,7 +239,7 @@ public final class MotherWillowGeometry {
         double side=(j==0?-1:1);
         double opening=(order==0?.33:order==1?.45:.58)+rand(hash(fork,3))*.18;
         double forkAngle=terminalHeading+side*opening;
-        double forkRadius=Math.max(.48,terminalRadius*(.70+rand(hash(fork,4))*.055));
+        double forkRadius=Math.max(.48,terminalRadius*(.58+rand(hash(fork,4))*.07));
         double forkLength=length*(order==0?.43:order==1?.47:.54)*(.85+rand(hash(fork,5))*.25);
         double up=order==0?.22:order==1?.12:-.18;
         branch(tip,forkAngle,up,forkLength,forkRadius,order+1,fork);
@@ -284,10 +284,10 @@ public final class MotherWillowGeometry {
     P last=origin;
     for(int k=1;k<nodes.length;k++){
       double t=k/(double)(nodes.length-1);
-      double h=105*t+8*Math.sin(t*1.8);
+      double h=180*t+12*Math.sin(t*1.8);
       P q=p(cx+Math.cos(wind)*14*t*t+Math.sin(k*.48)*3.0*t,ground+1+h,
             cz+Math.sin(wind)*12*t*t+Math.cos(k*.39)*2.2*t);
-      m.segment(last,q,15*Math.pow(1-.80*(t-1.0/19),.82),15*Math.pow(1-.80*t,.82));
+      m.segment(last,q,17*Math.pow(1-.82*(t-1.0/19),.82),17*Math.pow(1-.82*t,.82));
       nodes[k]=q;last=q;
     }
     // Willows do NOT make one enormous central taproot. Let the fused bole
@@ -367,8 +367,8 @@ public final class MotherWillowGeometry {
     for(int i=0;i<4;i++){
       long sh=hash(s,900+i);int attach=7+i*3;
       P p0=nodes[attach];double a=wind+i*2.399963+(.5-rand(hash(sh,3)))*.50;
-      P mid=p0.add(Math.cos(a)*(10+i*2),24-i*2,Math.sin(a)*(10+i*2));
-      P top=mid.add(Math.cos(a+0.28)*(11+i*2),20+rand(hash(sh,4))*11,Math.sin(a+.28)*(11+i*2));
+      P mid=p0.add(Math.cos(a)*(13+i*2),30-i*4,Math.sin(a)*(13+i*2));
+      P top=mid.add(Math.cos(a+0.28)*(15+i*2),24+rand(hash(sh,4))*18,Math.sin(a+.28)*(15+i*2));
       double leaderRoot=leaderRootRadius(i,attach);
       double leaderMid=leaderRoot*(i>=2?.52:.638);
       double leaderTip=leaderMid*(i>=2?.26:.365);
@@ -382,7 +382,7 @@ public final class MotherWillowGeometry {
         long bh=hash(sh,120+j);double angle=a+((j+.3)*2.399963)+(.5-rand(hash(bh,4)))*.83;
         double height=(j+.5)/6.0;
         P start=lerp(j%2==0?p0:mid, j%2==0?mid:top, height);
-        double len=47+rand(hash(bh,6))*57-(j==0?11:0);
+        double len=55+rand(hash(bh,6))*62-(j==0?13:0);
         double radius=(3.45+rand(hash(bh,9))*1.25)*leaderScale*(i>=2?.72:1.0);
         m.branch(start,angle,.10+rand(hash(bh,8))*.44,len,radius,0,bh);
       }
@@ -392,7 +392,7 @@ public final class MotherWillowGeometry {
     for(int j=0;j<7;j++){
       long bh=hash(s,81112+j);P start=nodes[6+j%12];
       double a=wind+j*2.399963+rand(hash(bh,2))*.33;
-      if(j<5)m.branch(start,a,.68,24+rand(hash(bh,3))*29,2.7,1,bh);
+      if(j<5)m.branch(start,a,.78,30+rand(hash(bh,3))*38,3.1,1,bh);
       else m.branchSegment(start,start.add(Math.cos(a)*9,-3,Math.sin(a)*9),3.2,1.4);
     }
     m.flush();
