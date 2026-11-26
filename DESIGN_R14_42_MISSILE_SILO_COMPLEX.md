@@ -44,9 +44,9 @@ Sources:
 - Keep the original launch table and missile dimensions unless an audit identifies a collision.
 
 ### Access and control center
-- Add a separate underground four-level control/crew module beside the launch shaft.
-- Connect the module to the silo through short, reinforced cable/service corridors at planned levels.
-- Include a two-door blast-lock sequence on the main connecting route.
+- Add a separate underground four-level control/crew module beside the launch shaft. The game layout expands the real three-level control-centre functions into four furnished levels: quarters/mess, launch-control or laboratory, communications/instrumentation, and power/utility/emergency stores.
+- Connect the module to the silo through a reinforced cableway with a short LCC-side approach, a two-door blast-lock chamber, and a longer silo-side cable run.
+- The lower access route has a distinct entrapment room protected by blast doors 6 and 7; the silo cableway is protected by doors 8 and 9.
 - The surface portal has a closed iron entry door with no exposed button/lever/power source. The vertical ladder is caged and continuous to the underground module; it must not terminate below a sealed ceiling.
 - Each underground floor has an independently readable purpose and a dressed interior.
 
@@ -84,8 +84,8 @@ Sources:
 2. **Determinism:** same seed/cell/variant produces byte-identical block operations regardless of chunk paint order.
 3. **Chunk clipping:** painting every chunk separately produces the same world-coordinate block map as one full geometry render; no block escapes the reserved footprint.
 4. **Top grating:** iron bars present over the central shaft; zero iron trapdoors in every variant.
-5. **Locked access:** continuous ladder; closed iron door at surface; no accessible redstone/button/lever to unlock it; cage and landings remain clear.
-6. **Blast-lock sequence:** two separated door frames on the access/cable route; corridor floor and headroom remain clear.
+5. **Locked access:** continuous ladder; closed iron door at surface; no accessible redstone/button/lever to unlock it; cage, entrapment chamber and landings remain clear.
+6. **Four blast doors:** Doors 6 and 7 frame the access-portal entrapment chamber; doors 8 and 9 frame the cableway airlock; each is a full-width two-block-high door with reinforced jambs, clear headroom and a walkable floor.
 7. **Eight silo levels:** every gallery level has floor area, rails, lighting/equipment and ladder adjacency; no platform collides with the rocket envelope.
 8. **Control-center floors:** all four levels have complete floors/ceilings, supporting walls/columns, clear circulation and distinct furnishings.
 9. **Variant identity:** all three variants have distinct room layouts, material palettes, and characteristic furniture; each is deterministic and can occur.
@@ -100,6 +100,19 @@ Sources:
 - No plain guard tower.
 - No iron-trapdoor cap.
 - No single hollow cylinder with empty floors presented as a finished interior.
+
+
+## Second-pass design audit (R14.42)
+
+The first code review identified three false positives in the initial geometry: the top bars sat above a solid ground cap, the portal door faced a blocked cage panel instead of a usable approach, and the two cableway doors lacked proper bulkheads. The current implementation corrects those points:
+
+- The ground layer is explicitly cleared across the launch-duct aperture before the bar grid is painted. The collar and cardinal steel beams support a full-aperture grate at grade.
+- The portal door faces the approach spur. A clear vestibule opens into the caged ladder well; the ladder reaches the control-centre floors and lands on a steel grate at its lowest level.
+- The entry route now has the lower Door 6 / Door 7 pair and its observation-sided entrapment chamber. The silo cableway has the upper Door 8 / Door 9 pair, each three blocks wide, with an enclosed chamber between reinforced bulkheads.
+- The vehicle gate is closed from ground level through its mesh height. The access spur turns toward the actual portal door.
+- The geometry probe now checks the open aperture, continuous ladder, bottom landing, all four blast doors, each variant's signature furnishings, all eight galleries, deterministic replay and per-chunk clipping.
+
+This is still a development design, not an in-game visual approval. The geometry probe can prove block-operation consistency and required structural features, but it cannot confirm the final Minecraft silhouette, navigation feel, or how legacy block metadata looks in the live Paper world.
 
 ## Release status
 
