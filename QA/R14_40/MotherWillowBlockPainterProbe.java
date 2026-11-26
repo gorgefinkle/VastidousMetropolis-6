@@ -42,8 +42,8 @@ public final class MotherWillowBlockPainterProbe {
         if(outerLeaves<=innerLeaves)
             throw new AssertionError("Leaves are not concentrated on the hanging outer crown.");
         if(stats.terminalForks<20)throw new AssertionError("Terminal willow limbs still taper without splitting: forks="+stats.terminalForks);
-        if(stats.terminalBranchlets<stats.terminalForks*2)
-            throw new AssertionError("Terminal forks are missing their paired/tripled hanging branchlets.");
+        if(stats.terminalBranchlets<stats.terminalForks*3)
+            throw new AssertionError("Terminal forks are missing their three- or four-way hanging branchlets.");
         System.out.println("MotherWillowBlockPainterProbe PASS: wood="+wood+", barkWood="+barkWood
                 +", directionalLogs="+logs+", leaves="+leaves+", inner/outer="+innerLeaves+"/"+outerLeaves+", misclassified="+misclassified
                 +", terminalForks="+stats.terminalForks+", branchlets="+stats.terminalBranchlets);
