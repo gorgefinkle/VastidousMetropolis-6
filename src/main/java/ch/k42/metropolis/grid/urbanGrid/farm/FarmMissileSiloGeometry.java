@@ -911,6 +911,7 @@ final class FarmMissileSiloGeometry {
         // Closed vehicle gate: double steel mesh panel, braced to concrete
         // posts. The gravel spur deliberately ends at the locked gate.
         for (int dx = -5; dx <= 5; dx++) {
+            put(dx, this.h + 1, 45, IRON_BARS, 0);
             put(dx, this.h + 2, 45, IRON_BARS, 0);
             put(dx, this.h + 3, 45, IRON_BARS, 0);
             if (dx % 2 == 0) put(dx, this.h + 4, 45, TRIPWIRE_HOOK, 0);
