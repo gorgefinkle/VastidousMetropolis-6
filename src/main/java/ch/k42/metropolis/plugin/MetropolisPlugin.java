@@ -232,6 +232,12 @@ public class MetropolisPlugin extends JavaPlugin {
          cmd.setExecutor(lake);
          cmd.setTabCompleter(lake);
       }
+      cmd = this.getCommand("massif");
+      if (cmd != null) {
+         ch.k42.metropolis.commands.CommandMetropolisMassif massif = new ch.k42.metropolis.commands.CommandMetropolisMassif(this);
+         cmd.setExecutor(massif);
+         cmd.setTabCompleter(massif);
+      }
       cmd = this.getCommand("windfarm");
       if (cmd != null) cmd.setExecutor(new ch.k42.metropolis.commands.CommandMetropolisWindFarm());
       cmd = this.getCommand("metrobiome");
