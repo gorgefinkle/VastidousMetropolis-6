@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.15-R14.39-Lake-and-Massif-Search-DEV
+version: 0.1.16-R14.40-Mother-Willow-Block-Painter-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
