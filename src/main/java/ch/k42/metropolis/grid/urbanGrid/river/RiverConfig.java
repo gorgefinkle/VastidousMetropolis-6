@@ -145,6 +145,15 @@ public class RiverConfig {
    // How many (variant, position) draws a tile's site gets before it gives up for good.
    private static int creekSiteAttempts = 24;
 
+   // Minimum straight-line separation between accepted creek origins, in world chunks.
+   // This is global across city boundaries; 0 disables the spacing arbitration.
+   private static int creekOriginSpacingChunks = 120;
+
+   public static int getCreekOriginSpacingChunks() { return creekOriginSpacingChunks; }
+   public static void setCreekOriginSpacingChunks(int value) {
+      creekOriginSpacingChunks = Math.max(0, Math.min(512, value));
+   }
+
    // The meander fades in from zero over this many chunks from the anchor, so the creek leaves the
    // building wall straight, exactly on the wall's centre.
    private static double creekMeanderRampChunks = 3.0;
