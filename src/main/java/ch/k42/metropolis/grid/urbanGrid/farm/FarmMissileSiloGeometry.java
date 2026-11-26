@@ -915,12 +915,13 @@ final class FarmMissileSiloGeometry {
     }
 
     private boolean gateGap(int dx, int dz) {
-        return dz == 45 && dx >= -5 && dx <= 5;
+        // Align the closed vehicle gate with the actual gravel spur and portal road.
+        return dz == 45 && dx >= 24 && dx <= 34;
     }
 
     private void paintPerimeterFence() {
         // Reinforced perimeter, steel mesh and a barbed-wire-like top edge.
-        // The only opening is the closed vehicle gate on the south side.
+        // The only opening in the fence line is the closed vehicle gate.
         for (int i = -45; i <= 45; i++) {
             for (int[] point : new int[][]{{i,-45},{i,45},{-45,i},{45,i}}) {
                 int dx = point[0], dz = point[1];
@@ -934,39 +935,41 @@ final class FarmMissileSiloGeometry {
                 }
             }
         }
+
         // Concrete security posts and short, non-habitable floodlight masts.
+        // Leave a clear span around the vehicle gate, then brace its two ends.
         for (int i = -45; i <= 45; i += 9) {
             for (int[] p : new int[][]{{i,-45},{i,45},{-45,i},{45,i}}) {
-                supportColumn(p[0], p[1], this.h + 1, this.h + 4, STONE_BRICKS, 0);
+                boolean gateSpan = p[1] == 45 && p[0] >= 23 && p[0] <= 36;
+                if (!gateSpan)
+                    supportColumn(p[0], p[1], this.h + 1, this.h + 4, STONE_BRICKS, 0);
                 if (Math.abs(p[0]) == 45 && Math.abs(p[1]) == 45) {
                     supportColumn(p[0], p[1], this.h + 5, this.h + 7, IRON_BARS, 0);
                     put(p[0], this.h + 8, p[1], GLOWSTONE, 0);
                 }
             }
         }
-        // Closed vehicle gate: double steel mesh panel, braced to concrete
-        // posts. The gravel spur deliberately ends at the locked gate.
-        for (int dx = -5; dx <= 5; dx++) {
+        supportColumn(23, 45, this.h + 1, this.h + 4, STONE_BRICKS, 0);
+        supportColumn(35, 45, this.h + 1, this.h + 4, STONE_BRICKS, 0);
+
+        // Closed vehicle gate: three-block-high steel mesh, aligned directly
+        // with the access spur. The gravel road reaches the inside face of it.
+        for (int dx = 24; dx <= 34; dx++) {
             put(dx, this.h + 1, 45, IRON_BARS, 0);
             put(dx, this.h + 2, 45, IRON_BARS, 0);
             put(dx, this.h + 3, 45, IRON_BARS, 0);
             if (dx % 2 == 0) put(dx, this.h + 4, 45, TRIPWIRE_HOOK, 0);
         }
-        for (int dx : new int[]{-6,6})
-            supportColumn(dx, 45, this.h + 1, this.h + 4, STONE_BRICKS, 0);
 
         // Vehicle spur from the gate to the low-profile access portal.
         for (int dz = 16; dz <= 44; dz++)
             for (int dx = 27; dx <= 31; dx++)
                 put(dx, this.h, dz, dz % 5 == 0 ? COBBLE : STONE_SLAB, 5);
         // Turn the vehicle spur west-to-north into the portal's west-facing
-        // personnel entrance; it must meet the actual door, not stop nearby.
+        // personnel entrance; it meets the actual door, not a nearby dead end.
         for (int dz = 9; dz <= 16; dz++)
             for (int dx = 30; dx <= 32; dx++)
                 put(dx, this.h, dz, dz % 4 == 0 ? COBBLE : STONE_SLAB, 5);
-        for (int dx = 26; dx <= 32; dx++) {
-            put(dx, this.h + 1, 44, STONE_BRICKS, 0);
-        }
     }
 
     private void paintSurfaceEquipment() {
