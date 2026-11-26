@@ -78,11 +78,15 @@ public final class MotherWillowGeometry {
     return leaderRootRadius(leaderIndex,attachNode)/(5.8-leaderIndex*.56);
   }
   private static double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
+  static final class GrowthStats {
+    int terminalForks;
+    int terminalBranchlets;
+  }
   private static class Maker {
-    final Sink out;final Terrain land;final long seed;
+    final Sink out;final Terrain land;final long seed;final GrowthStats stats;
     final int x0,x1,z0,z1;
     final HashMap<Long,String> blocks=new HashMap<>();
-    Maker(Sink out,Terrain land,long seed,int x0,int x1,int z0,int z1){this.out=out;this.land=land;this.seed=seed;this.x0=x0;this.x1=x1;this.z0=z0;this.z1=z1;}
+    Maker(Sink out,Terrain land,long seed,int x0,int x1,int z0,int z1,GrowthStats stats){this.out=out;this.land=land;this.seed=seed;this.x0=x0;this.x1=x1;this.z0=z0;this.z1=z1;this.stats=stats;}
     static long key(int x,int y,int z){return ((((long)x+1048576)&0x1fffffL)<<42)|(((((long)z+1048576)&0x1fffffL)<<21))|(((long)y+1048576)&0x1fffffL);}
     void putState(int x,int y,int z,String state,boolean priority,boolean root) {
       if(x<x0||x>x1||z<z0||z>z1||!land.allows(x,z))return;
@@ -231,6 +235,7 @@ public final class MotherWillowGeometry {
         // avoiding the dense "branching cap" silhouette from earlier drafts.
         P fork=pts[steps];
         int branchlets=2+(rand(hash(tag,401))>.48?1:0);
+        if(stats!=null){stats.terminalForks++;stats.terminalBranchlets+=branchlets;}
         double fan=(branchlets==2?.40:.54);
         for(int j=0;j<branchlets;j++){
           long child=hash(tag,4601+j);
@@ -274,8 +279,17 @@ public final class MotherWillowGeometry {
   public static void grow(Sink out,Terrain land,int cx,int cz,long worldSeed){growBounded(out,land,cx,cz,worldSeed,Integer.MIN_VALUE,Integer.MAX_VALUE,Integer.MIN_VALUE,Integer.MAX_VALUE);}
   public static void growChunk(Sink out,Terrain land,int cx,int cz,long worldSeed,int chunkX,int chunkZ){int x=chunkX<<4,z=chunkZ<<4;growBounded(out,land,cx,cz,worldSeed,x,x+15,z,z+15);}
   private static void growBounded(Sink out,Terrain land,int cx,int cz,long worldSeed,int x0,int x1,int z0,int z1){
+    growBounded(out,land,cx,cz,worldSeed,x0,x1,z0,z1,null);
+  }
+  static GrowthStats growWithStats(Sink out,Terrain land,int cx,int cz,long worldSeed) {
+    GrowthStats stats=new GrowthStats();
+    growBounded(out,land,cx,cz,worldSeed,Integer.MIN_VALUE,Integer.MAX_VALUE,Integer.MIN_VALUE,Integer.MAX_VALUE,stats);
+    return stats;
+  }
+  private static void growBounded(Sink out,Terrain land,int cx,int cz,long worldSeed,
+                                  int x0,int x1,int z0,int z1,GrowthStats stats){
     long s=mix(worldSeed^((long)cx*0x9e3779b97f4a7c15L)^((long)cz*0xc2b2ae3d27d4eb4fL));
-    Maker m=new Maker(out,land,s,x0,x1,z0,z1);double ground=land.groundAt(cx,cz);
+    Maker m=new Maker(out,land,s,x0,x1,z0,z1,stats);double ground=land.groundAt(cx,cz);
     P origin=p(cx,ground+1,cz);
     double wind=rand(hash(s,1))*6.283185307179586;
     // Fused old-growth boles: three reiterating leaders emerge at different
