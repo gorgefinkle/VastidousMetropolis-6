@@ -4,6 +4,7 @@ import ch.k42.metropolis.grid.urbanGrid.ocean.OceanConfig;
 import ch.k42.metropolis.grid.urbanGrid.ocean.OceanProvider;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverConfig;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
+import ch.k42.metropolis.grid.urbanGrid.wild.WildernessFeatures;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -15,10 +16,13 @@ public final class WaterFields {
    private WaterFields() {
    }
 
-   public static synchronized WaterField forSeed(long seed, int lattice) {
+   public static WaterField forSeed(long seed, int lattice) {
       long key = seed * 31 + lattice;
-      WaterField field = CACHE.get(key);
-      if (field == null) {
+      WaterField field;
+      boolean created = false;
+      synchronized (WaterFields.class) {
+         field = CACHE.get(key);
+         if (field == null) {
          OceanProvider ocean = new OceanProvider(seed);
          RiverProvider main;
          RiverProvider z = null;
@@ -32,9 +36,16 @@ public final class WaterFields {
          } else {
             main = new RiverProvider(seed);
          }
-         field = new WaterField(main, z, ocean, lattice);
-         CACHE.put(key, field);
+            field = new WaterField(main, z, ocean, lattice);
+            CACHE.put(key, field);
+            created = true;
+         }
       }
+      // Attach the deterministic wilderness landmark sources as soon as the
+      // shared water field exists, before any layout/road planner can query it.
+      // Do this outside the WaterFields lock to avoid lock inversion with the
+      // WildernessFeatures seed cache.
+      if (created) WildernessFeatures.install(seed);
       return field;
    }
 }
