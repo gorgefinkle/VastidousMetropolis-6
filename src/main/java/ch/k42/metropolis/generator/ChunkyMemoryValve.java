@@ -39,8 +39,12 @@ public final class ChunkyMemoryValve {
     private static final long STABILITY_NS = ChunkyBackpressurePolicy.STABILITY_NS;
     private static final long PROBE_NS = ChunkyBackpressurePolicy.PROBE_NS;
     private static final long MIN_FREE_PROBE = ChunkyBackpressurePolicy.MIN_FREE_PROBE;
+    private static final int MIN_STABLE_SAMPLES = ChunkyBackpressurePolicy.MIN_STABLE_SAMPLES;
+    private static final long RAPID_REPAUSE_COOLDOWN_NS = ChunkyBackpressurePolicy.RAPID_REPAUSE_COOLDOWN_NS;
 
     private static final Map<String, Integer> PENDING = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> DEFERRED = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> GROWTH = new ConcurrentHashMap<>();
     private static final Map<String, State> STATES = new HashMap<>(); // main thread only
     private static final AtomicBoolean STARTED = new AtomicBoolean();
     private static volatile boolean missingServiceWarned;
@@ -59,6 +63,11 @@ public final class ChunkyMemoryValve {
         long resumeConfirmUntil;
         boolean resumeUnconfirmed;
         boolean stableHighHeapMode;
+        int stableSamples;
+        boolean hasResumed;
+        long lastResumeAt;
+        boolean recoveryCooldownActive;
+        long recoveryNotBefore;
         int pauseCount;
         int probeCount;
         int unconfirmedResumes;
@@ -68,9 +77,22 @@ public final class ChunkyMemoryValve {
 
     public static void startFromPluginEnable() { startMonitorIfNeeded(); }
 
+    /** Updates durable deferred-populate jobs for one world. */
     public static void pending(World world, int count) {
+        updateQueue(world, DEFERRED, count);
+    }
+
+    /** Updates cached branch-growth builds for one world. */
+    public static void growthPending(World world, int count) {
+        updateQueue(world, GROWTH, count);
+    }
+
+    private static void updateQueue(World world, Map<String, Integer> source, int count) {
         if (world == null) return;
-        PENDING.put(world.getName(), Math.max(0, count));
+        String name = world.getName();
+        source.put(name, Math.max(0, count));
+        PENDING.put(name, ChunkyBackpressurePolicy.combinedQueueSize(
+                DEFERRED.getOrDefault(name, 0), GROWTH.getOrDefault(name, 0)));
         // Population may be reentrant through WorldEdit and chunk loads.
         // Never schedule Bukkit tasks from that callback; onEnable owns startup.
     }
@@ -84,7 +106,7 @@ public final class ChunkyMemoryValve {
                 return;
             }
             Bukkit.getScheduler().runTaskTimer(plugin, ChunkyMemoryValve::tick, 20L, 20L);
-            Bukkit.getLogger().info("[Metropolis] Chunky heap guard enabled: pause 74% (hard 86%), normal resume 68%; stable recovery band <=82% after 30s with headroom, queue <=128.");
+            Bukkit.getLogger().info("[Metropolis] Chunky heap guard enabled: pause 74% (hard 86%); every resume requires 30s stable post-GC heap, 10 healthy samples, >=512 MiB and >=8% free headroom, combined deferred/growth queue <=128; rapid repeat pause adds 60s cooldown.");
         } catch (RuntimeException | LinkageError ex) {
             STARTED.set(false);
             Bukkit.getLogger().severe("[Metropolis] Chunky heap guard NOT SCHEDULED: " + ex);
@@ -151,7 +173,8 @@ public final class ChunkyMemoryValve {
                     state.pausedAt = now;
                     state.initialPauseUsage = usage;
                     state.stableAtUsage = retainedUsage;
-                    state.stableSince = ChunkyBackpressurePolicy.hasStableHeadroom(retainedUsage, remaining, max) ? now : 0L;
+                    state.stableSince = 0L;
+                    state.stableSamples = 0;
                     state.stableHighHeapMode = false;
                     state.probeUntil = 0;
                     log.severe("[Metropolis] Chunky continueTask returned success but the task never became running in " + name
@@ -177,26 +200,35 @@ public final class ChunkyMemoryValve {
                     // A manual /chunky continue can occur during pause/shutdown;
                     // always reapply pause if running until recovery is permissible.
                     boolean coolEnough = usage <= NORMAL_RESUME;
-                    // Stability means the retained heap has stopped rising, not
-                    // that it remains within an unrealistically narrow 1% band.
-                    // This avoids resetting the timer on ordinary GC variation.
+                    // Expire a prior repeat-pause cooldown using monotonic-time
+                    // subtraction, which remains valid across a negative nanoTime origin.
+                    if (state.recoveryCooldownActive && now - state.recoveryNotBefore >= 0L) {
+                        state.recoveryCooldownActive = false;
+                    }
+                    // Begin measuring only after the worker has stopped and a
+                    // healthy headroom sample is observed. Material movement in
+                    // either direction restarts the dwell period.
                     boolean probeHeadroom = ChunkyBackpressurePolicy.hasStableHeadroom(retainedUsage, remaining, max);
                     if (!probeHeadroom) {
                         state.stableSince = 0L;
+                        state.stableSamples = 0;
                         state.stableAtUsage = retainedUsage;
-                    } else if (state.stableSince == 0L) {
+                    } else if (state.stableSamples == 0) {
                         state.stableSince = now;
                         state.stableAtUsage = retainedUsage;
-                    } else if (retainedUsage > state.stableAtUsage + 0.03) {
+                        state.stableSamples = 1;
+                    } else if (Math.abs(retainedUsage - state.stableAtUsage) > ChunkyBackpressurePolicy.STABILITY_DRIFT) {
                         state.stableSince = now;
                         state.stableAtUsage = retainedUsage;
+                        state.stableSamples = 1;
                     } else {
-                        state.stableAtUsage = Math.min(state.stableAtUsage, retainedUsage);
+                        state.stableSamples++;
                     }
                     boolean stableWithHeadroom = ChunkyBackpressurePolicy.stableRecoveryReady(
-                            retainedUsage, remaining, max, state.stableSince, now);
+                            retainedUsage, remaining, max, state.stableSince, state.stableSamples, now);
                     boolean recover = ChunkyBackpressurePolicy.canResume(
-                            queue, usage, retainedUsage, remaining, max, state.stableSince, now);
+                            queue, retainedUsage, remaining, max, state.stableSince, state.stableSamples,
+                            state.recoveryCooldownActive, state.recoveryNotBefore, now);
                     if (!recover || running) {
                         if (running) pause.invoke(api, name);
                         status(log, name, state, now, usage, retainedUsage, queue, max,
@@ -205,6 +237,10 @@ public final class ChunkyMemoryValve {
                     }
                     if (Boolean.TRUE.equals(resume.invoke(api, name))) {
                         state.ourPause = false;
+                        state.hasResumed = true;
+                        state.lastResumeAt = now;
+                        state.stableSince = 0L;
+                        state.stableSamples = 0;
                         state.resumeUnconfirmed = true;
                         state.resumeConfirmUntil = now + PROBE_NS;
                         state.stableHighHeapMode = stableWithHeadroom && !coolEnough;
@@ -231,16 +267,27 @@ public final class ChunkyMemoryValve {
                     state.pausedAt = now;
                     state.initialPauseUsage = usage;
                     state.stableAtUsage = retainedUsage;
-                    state.stableSince = ChunkyBackpressurePolicy.hasStableHeadroom(retainedUsage, remaining, max) ? now : 0L;
+                    state.stableSince = 0L;
+                    state.stableSamples = 0;
                     state.stableHighHeapMode = false;
                     state.lastStatusNs = now;
                     state.probeUntil = 0;
                     state.pauseCount++;
+                    boolean rapidRePause = ChunkyBackpressurePolicy.shouldApplyRapidRePauseCooldown(
+                            state.hasResumed, state.lastResumeAt, now);
+                    if (rapidRePause) {
+                        state.recoveryCooldownActive = true;
+                        state.recoveryNotBefore = now + RAPID_REPAUSE_COOLDOWN_NS;
+                    }
                     log.warning("[Metropolis] Chunky protective pause in " + name
                             + ": heap " + pct(usage) + "%, post-GC retained " + pct(retainedUsage)
                             + "%, free " + mib(remaining)
-                            + " MiB, queue " + queue + "; resume at <=68% or after 30s stable post-GC <=82% with >=8% free headroom."
-                            + " GC: " + gcStats() + "; planning: " + retentionStats());
+                            + " MiB, combined deferred/growth queue " + queue
+                            + "; resume only after 30s stable post-GC recovery, 10 healthy samples, and queue <=128"
+                            + (state.recoveryCooldownActive
+                                ? ", repeat-pause cooldown " + Math.max(0L, state.recoveryNotBefore - now) / 1_000_000_000L + "s"
+                                : "")
+                            + ". GC: " + gcStats() + "; planning: " + retentionStats());
                 }
             }
         } catch (ReflectiveOperationException | RuntimeException | LinkageError ex) {
@@ -259,6 +306,9 @@ public final class ChunkyMemoryValve {
                 + "; heap " + pct(usage) + "%, post-GC retained " + pct(retainedUsage)
                 + "%, free " + mib((long)(max * (1.0 - usage)))
                 + " MiB, pending " + queue + ", paused " + ((now - state.pausedAt) / 1_000_000_000L)
+                + " s, stable samples " + state.stableSamples + "/" + MIN_STABLE_SAMPLES
+                + ", recovery cooldown " + (state.recoveryCooldownActive
+                    ? Math.max(0L, state.recoveryNotBefore - now) / 1_000_000_000L : 0L)
                 + " s, probes " + state.probeCount + ", GC " + gcStats()
                 + ", planning " + retentionStats() + ".");
     }
