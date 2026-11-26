@@ -45,7 +45,7 @@ jobs:
           mkdir -p delivery
           cp target/Metropolis_R14_34_Chunky_Recovery_Backoff_DEV.jar delivery/
           zip -qr delivery/Metropolis_R14_34_FullSource.zip \
-            pom.xml src QA README_*.md .gitattributes .gitignore
+            pom.xml src QA README_*.md .github .gitattributes .gitignore
           (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
           ls -lh delivery
 
