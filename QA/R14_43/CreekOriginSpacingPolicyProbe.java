@@ -33,11 +33,9 @@ public final class CreekOriginSpacingPolicyProbe {
         check(!CreekOriginSpacingPolicy.winsAgainst(130, 100, rankB, tileB,
                         100, 100, rankA, tileA, berth),
                 "higher-ranked origin should lose the same cross-city conflict");
-        check(CreekOriginSpacingPolicy.winsAgainst(100, 100, rankB, tileB,
-                        100, 100, rankA, tileA, berth)
-                        == CreekOriginSpacingPolicy.winsAgainst(100, 100, rankB, tileB,
+        check(!CreekOriginSpacingPolicy.winsAgainst(100, 100, rankB, tileB,
                         100, 100, rankA, tileA, berth),
-                "same input must produce the same tie decision");
+                "a losing same-city-independent spacing candidate must be rejected consistently");
 
         check(CreekOriginSpacingPolicy.outranks(7L, tileA, 7L, tileB)
                         != CreekOriginSpacingPolicy.outranks(7L, tileB, 7L, tileA),
