@@ -221,7 +221,7 @@ public final class MotherWillowGeometry {
         for(int k=first;k<=steps;k+=Math.max(2,steps/6)){
           P tip=pts[k];
           if(rand(hash(tag,k+301))<.72)
-            bulb(tip,.70+rand(hash(tag,k+302))*.40,false,tag+k,"y");
+            bulb(tip,.82+rand(hash(tag,k+302))*.40,false,tag+k,"y");
           if(k>=steps-2 && rand(hash(tag,k+303))<.88)
             foliage(tip,hash(tag,k),.72+rand(hash(tag,k+304))*.42);
         }
