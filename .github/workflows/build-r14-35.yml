@@ -1,0 +1,58 @@
+name: R14.35 Queue-first Chunky recovery and branch-growth priority
+
+on:
+  push:
+    branches:
+      - fix/r14-35-queue-first-branch-growth
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'fix/r14-35-queue-first-branch-growth' || github.ref_name == 'fix/r14-35-queue-first-branch-growth'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Run R14.35 queue-first recovery regression probe
+        run: bash QA/R14_35/run_chunky_queue_first_recovery_probe.sh
+
+      - name: Build plugin JAR
+        run: mvn --batch-mode --no-transfer-progress clean package
+
+      - name: Verify embedded plugin version
+        run: |
+          expected='0.1.11-R14.35-Queue-First-Branch-Growth-DEV'
+          actual="$(unzip -p target/Metropolis_R14_35_Queue_First_Branch_Growth_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          test "$actual" = "$expected"
+          echo "Embedded plugin version: $actual"
+
+      - name: Assemble complete test delivery
+        run: |
+          mkdir -p delivery
+          cp target/Metropolis_R14_35_Queue_First_Branch_Growth_DEV.jar delivery/
+          zip -qr delivery/Metropolis_R14_35_FullSource.zip \
+            pom.xml src QA README_*.md .github .gitattributes .gitignore
+          (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
+          ls -lh delivery
+
+      - name: Upload JAR and full source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metropolis_R14_35_Queue_First_Branch_Growth
+          path: delivery/*
+          if-no-files-found: error
+          retention-days: 14

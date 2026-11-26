@@ -33,6 +33,11 @@ public abstract class DecayProvider {
       return 0;
    }
 
+   /** Number of retained growth builds currently able to flush without future chunk generation. */
+   public int pendingGrowthRunnableWorkCount() {
+      return 0;
+   }
+
    public void destroyWithin(int x1, int x2, int y1, int y2, int z1, int z2) {
       this.destroyWithin(x1, x2, y1, y2, z1, z2, DecayOption.getDefaultDecayOptions());
    }

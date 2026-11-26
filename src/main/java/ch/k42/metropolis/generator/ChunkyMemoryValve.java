@@ -31,20 +31,24 @@ import org.bukkit.plugin.Plugin;
  */
 public final class ChunkyMemoryValve {
     private static final double SOFT_PAUSE = ChunkyBackpressurePolicy.SOFT_PAUSE;
-    private static final double NORMAL_RESUME = ChunkyBackpressurePolicy.NORMAL_RESUME;
     private static final double HARD_PAUSE = ChunkyBackpressurePolicy.HARD_PAUSE;
     private static final int QUEUE_PAUSE = ChunkyBackpressurePolicy.QUEUE_PAUSE;
+    private static final int BRANCH_GROWTH_PAUSE = ChunkyBackpressurePolicy.BRANCH_GROWTH_PAUSE;
     private static final int QUEUE_RESUME = ChunkyBackpressurePolicy.QUEUE_RESUME;
+    private static final int BRANCH_GROWTH_RESUME = ChunkyBackpressurePolicy.BRANCH_GROWTH_RESUME;
     private static final long STATUS_NS = 60_000_000_000L;
-    private static final long STABILITY_NS = ChunkyBackpressurePolicy.STABILITY_NS;
-    private static final long PROBE_NS = ChunkyBackpressurePolicy.PROBE_NS;
-    private static final long MIN_FREE_PROBE = ChunkyBackpressurePolicy.MIN_FREE_PROBE;
-    private static final int MIN_STABLE_SAMPLES = ChunkyBackpressurePolicy.MIN_STABLE_SAMPLES;
+    private static final long RESUME_CONFIRM_NS = ChunkyBackpressurePolicy.RESUME_CONFIRM_NS;
+    private static final long MIN_FREE_RESUME_BYTES = ChunkyBackpressurePolicy.MIN_FREE_RESUME_BYTES;
+    private static final int MIN_STABLE_SAMPLES = ChunkyBackpressurePolicy.MIN_QUEUE_STABLE_SAMPLES;
     private static final long RAPID_REPAUSE_COOLDOWN_NS = ChunkyBackpressurePolicy.RAPID_REPAUSE_COOLDOWN_NS;
 
+    /** Weighted runnable backlog (deferred chunks + 2 x ready branch builds). */
     private static final Map<String, Integer> PENDING = new ConcurrentHashMap<>();
     private static final Map<String, Integer> DEFERRED = new ConcurrentHashMap<>();
+    /** All retained branch builds, including those waiting for future generation. */
     private static final Map<String, Integer> GROWTH = new ConcurrentHashMap<>();
+    /** Branch builds ready to flush now (not waiting for parcels or unloaded support chunks). */
+    private static final Map<String, Integer> GROWTH_RUNNABLE = new ConcurrentHashMap<>();
     private static final Map<String, State> STATES = new HashMap<>(); // main thread only
     private static final AtomicBoolean STARTED = new AtomicBoolean();
     private static volatile boolean missingServiceWarned;
@@ -55,21 +59,17 @@ public final class ChunkyMemoryValve {
     private static final class State {
         boolean ourPause;
         long pausedAt;
-        double initialPauseUsage;
-        double stableAtUsage;
+        /** Low queue-depth dwell; sample count, not a timestamp sentinel, marks tracking. */
         long stableSince;
         long lastStatusNs;
-        long probeUntil;
         long resumeConfirmUntil;
         boolean resumeUnconfirmed;
-        boolean stableHighHeapMode;
         int stableSamples;
         boolean hasResumed;
         long lastResumeAt;
         boolean recoveryCooldownActive;
         long recoveryNotBefore;
         int pauseCount;
-        int probeCount;
         int unconfirmedResumes;
     }
 
@@ -82,17 +82,22 @@ public final class ChunkyMemoryValve {
         updateQueue(world, DEFERRED, count);
     }
 
-    /** Updates cached branch-growth builds for one world. */
+    /** Updates all retained branch-growth builds for one world. */
     public static void growthPending(World world, int count) {
         updateQueue(world, GROWTH, count);
+    }
+
+    /** Updates the subset of branch-growth builds that can flush with loaded support chunks. */
+    public static void growthRunnablePending(World world, int count) {
+        updateQueue(world, GROWTH_RUNNABLE, count);
     }
 
     private static void updateQueue(World world, Map<String, Integer> source, int count) {
         if (world == null) return;
         String name = world.getName();
         source.put(name, Math.max(0, count));
-        PENDING.put(name, ChunkyBackpressurePolicy.combinedQueueSize(
-                DEFERRED.getOrDefault(name, 0), GROWTH.getOrDefault(name, 0)));
+        PENDING.put(name, ChunkyBackpressurePolicy.weightedActiveQueueSize(
+                DEFERRED.getOrDefault(name, 0), GROWTH_RUNNABLE.getOrDefault(name, 0)));
         // Population may be reentrant through WorldEdit and chunk loads.
         // Never schedule Bukkit tasks from that callback; onEnable owns startup.
     }
@@ -106,7 +111,7 @@ public final class ChunkyMemoryValve {
                 return;
             }
             Bukkit.getScheduler().runTaskTimer(plugin, ChunkyMemoryValve::tick, 20L, 20L);
-            Bukkit.getLogger().info("[Metropolis] Chunky heap guard enabled: pause 74% (hard 86%); every resume requires 30s stable post-GC heap, 10 healthy samples, >=512 MiB and >=8% free headroom, combined deferred/growth queue <=128; rapid repeat pause adds 60s cooldown.");
+            Bukkit.getLogger().info("[Metropolis] Chunky back-pressure enabled: pause at 74% heap, 128 ready branch-growth builds, or weighted active queue 1024; resume after 10s/10 samples at deferred <=64, ready branch growth <=16 and weighted queue <=64, with >=512 MiB absolute free heap; repeat pause adds 60s cooldown.");
         } catch (RuntimeException | LinkageError ex) {
             STARTED.set(false);
             Bukkit.getLogger().severe("[Metropolis] Chunky heap guard NOT SCHEDULED: " + ex);
@@ -142,21 +147,32 @@ public final class ChunkyMemoryValve {
             long remaining = Math.max(0, max - used);
             long postGcBytes = postGcHeapBytes();
             double retainedUsage = postGcBytes >= 0L ? postGcBytes / (double) max : usage;
-            // This periodic series is necessary to distinguish rising post-GC
-            // retention from ordinary temporary chunk/WorldEdit allocations.
+
+            // Retained heap remains observable, but recovery is governed by
+            // runnable backlog depth rather than a retained-heap percentage.
             if (lastDiagnosticNs == 0L || now - lastDiagnosticNs >= 300_000_000_000L) {
                 lastDiagnosticNs = now;
-                long deferred = 0;
-                for (int count : PENDING.values()) deferred += count;
+                long deferredTotal = sum(DEFERRED);
+                long growthTotal = sum(GROWTH);
+                long growthRunnableTotal = sum(GROWTH_RUNNABLE);
                 log.info("[Metropolis] GENERATION HEAP AUDIT: used=" + mib(used)
                         + " MiB, max=" + mib(max) + " MiB (" + pct(usage)
-                        + "%), free=" + mib(remaining) + " MiB, deferred=" + deferred
-                        + ", " + gcStats() + ", " + retentionStats());
+                        + "%), free=" + mib(remaining) + " MiB, deferred=" + deferredTotal
+                        + ", branchGrowth=" + growthTotal + ", branchGrowthReady=" + growthRunnableTotal
+                        + ", branchGrowthWaiting=" + Math.max(0L, growthTotal - growthRunnableTotal)
+                        + ", weightedActive=" + sum(PENDING)
+                        + ", postGcRetained=" + pct(retainedUsage) + "% (diagnostic only), "
+                        + gcStats() + ", " + retentionStats());
             }
+
             for (World world : Bukkit.getWorlds()) {
                 String name = world.getName();
                 State state = STATES.computeIfAbsent(name, ignored -> new State());
-                int queue = PENDING.getOrDefault(name, 0);
+                int deferred = DEFERRED.getOrDefault(name, 0);
+                int growthTotal = GROWTH.getOrDefault(name, 0);
+                int growthRunnable = GROWTH_RUNNABLE.getOrDefault(name, 0);
+                int growthWaiting = Math.max(0, growthTotal - growthRunnable);
+                int activeQueue = ChunkyBackpressurePolicy.weightedActiveQueueSize(deferred, growthRunnable);
                 boolean running = Boolean.TRUE.equals(isRunning.invoke(api, name));
 
                 // An API continueTask() success can precede the new worker becoming
@@ -166,75 +182,70 @@ public final class ChunkyMemoryValve {
                     state.resumeUnconfirmed = false;
                     state.unconfirmedResumes = 0;
                     log.info("[Metropolis] Chunky running confirmed after automatic resume in " + name + ".");
-                } else if (state.resumeUnconfirmed && now >= state.resumeConfirmUntil) {
+                } else if (state.resumeUnconfirmed && now - state.resumeConfirmUntil >= 0L) {
                     state.resumeUnconfirmed = false;
                     state.unconfirmedResumes++;
                     state.ourPause = true;
                     state.pausedAt = now;
-                    state.initialPauseUsage = usage;
-                    state.stableAtUsage = retainedUsage;
                     state.stableSince = 0L;
                     state.stableSamples = 0;
-                    state.stableHighHeapMode = false;
-                    state.probeUntil = 0;
                     log.severe("[Metropolis] Chunky continueTask returned success but the task never became running in " + name
                             + "; retry budget " + state.unconfirmedResumes + "/3, verify saved task.");
                 }
 
-                boolean probeActive = now < state.probeUntil;
-                boolean stableMode = state.stableHighHeapMode
-                        && ChunkyBackpressurePolicy.shouldKeepStableMode(retainedUsage, remaining, max);
-                if (state.stableHighHeapMode && !stableMode) {
-                    state.stableHighHeapMode = false;
-                    log.warning("[Metropolis] Chunky stable-heap run band exited in " + name
-                            + " at " + pct(usage) + "%; protective soft-pause is re-armed.");
-                }
-                boolean danger = ChunkyBackpressurePolicy.shouldPause(
-                        usage, retainedUsage, remaining, max, queue, stableMode, probeActive);
+                boolean danger = ChunkyBackpressurePolicy.shouldPause(usage, deferred, growthRunnable);
                 if (state.ourPause) {
                     if (state.unconfirmedResumes >= 3 && !running) {
-                        status(log, name, state, now, usage, retainedUsage, queue, max,
+                        status(log, name, state, now, usage, retainedUsage, remaining,
+                                deferred, growthTotal, growthRunnable,
                                 "3 continue attempts failed; task stopped and operator investigation required");
                         continue;
                     }
-                    // A manual /chunky continue can occur during pause/shutdown;
-                    // always reapply pause if running until recovery is permissible.
-                    boolean coolEnough = usage <= NORMAL_RESUME;
+
                     // Expire a prior repeat-pause cooldown using monotonic-time
                     // subtraction, which remains valid across a negative nanoTime origin.
                     if (state.recoveryCooldownActive && now - state.recoveryNotBefore >= 0L) {
                         state.recoveryCooldownActive = false;
                     }
-                    // Begin measuring only after the worker has stopped and a
-                    // healthy headroom sample is observed. Material movement in
-                    // either direction restarts the dwell period.
-                    boolean probeHeadroom = ChunkyBackpressurePolicy.hasStableHeadroom(retainedUsage, remaining, max);
-                    if (!probeHeadroom) {
+
+                    // Track the LOW QUEUE state, not the post-GC heap percentage.
+                    // A single spike above either low-water mark resets the dwell.
+                    boolean queuesLow = ChunkyBackpressurePolicy.queuesLowEnough(deferred, growthRunnable);
+                    if (!queuesLow) {
                         state.stableSince = 0L;
                         state.stableSamples = 0;
-                        state.stableAtUsage = retainedUsage;
                     } else if (state.stableSamples == 0) {
                         state.stableSince = now;
-                        state.stableAtUsage = retainedUsage;
-                        state.stableSamples = 1;
-                    } else if (Math.abs(retainedUsage - state.stableAtUsage) > ChunkyBackpressurePolicy.STABILITY_DRIFT) {
-                        state.stableSince = now;
-                        state.stableAtUsage = retainedUsage;
                         state.stableSamples = 1;
                     } else {
                         state.stableSamples++;
                     }
-                    boolean stableWithHeadroom = ChunkyBackpressurePolicy.stableRecoveryReady(
-                            retainedUsage, remaining, max, state.stableSince, state.stableSamples, now);
+
                     boolean recover = ChunkyBackpressurePolicy.canResume(
-                            queue, retainedUsage, remaining, max, state.stableSince, state.stableSamples,
+                            deferred, growthRunnable, usage, remaining,
+                            state.stableSince, state.stableSamples,
                             state.recoveryCooldownActive, state.recoveryNotBefore, now);
                     if (!recover || running) {
                         if (running) pause.invoke(api, name);
-                        status(log, name, state, now, usage, retainedUsage, queue, max,
-                                recover && running ? "waiting for Chunky worker stop/save" : "waiting for safe recovery");
+                        String reason;
+                        if (!queuesLow) {
+                            reason = "waiting for deferred/ready branch-growth queues to drain";
+                        } else if (remaining < MIN_FREE_RESUME_BYTES) {
+                            reason = "waiting for at least 512 MiB absolute free heap";
+                        } else if (usage >= HARD_PAUSE) {
+                            reason = "waiting below the 86% emergency heap ceiling";
+                        } else if (state.recoveryCooldownActive) {
+                            reason = "waiting for rapid repeat-pause cooldown";
+                        } else if (running) {
+                            reason = "waiting for Chunky worker stop/save";
+                        } else {
+                            reason = "waiting for ten seconds of stable low queue depth";
+                        }
+                        status(log, name, state, now, usage, retainedUsage, remaining,
+                                deferred, growthTotal, growthRunnable, reason);
                         continue;
                     }
+
                     if (Boolean.TRUE.equals(resume.invoke(api, name))) {
                         state.ourPause = false;
                         state.hasResumed = true;
@@ -242,36 +253,28 @@ public final class ChunkyMemoryValve {
                         state.stableSince = 0L;
                         state.stableSamples = 0;
                         state.resumeUnconfirmed = true;
-                        state.resumeConfirmUntil = now + PROBE_NS;
-                        state.stableHighHeapMode = stableWithHeadroom && !coolEnough;
-                        if (state.stableHighHeapMode) {
-                            state.probeUntil = now + PROBE_NS;
-                            state.probeCount++;
-                            log.info("[Metropolis] Chunky limited recovery probe in " + name
-                                    + ": heap " + pct(usage) + "%, post-GC retained " + pct(retainedUsage)
-                                    + "%, free headroom " + mib(remaining)
-                                    + " MiB, queue " + queue + "; pause if retained heap exceeds 82% or free headroom falls below 8% during next 30s.");
-                        } else {
-                            state.probeUntil = 0;
-                            log.info("[Metropolis] Chunky resumed after worker stop and recovery in " + name
-                                    + ": heap " + pct(usage) + "%, pending " + queue + ".");
-                        }
+                        state.resumeConfirmUntil = now + RESUME_CONFIRM_NS;
+                        log.info("[Metropolis] Chunky resumed after queue recovery in " + name
+                                + ": deferred=" + deferred
+                                + ", readyBranchGrowth=" + growthRunnable
+                                + ", waitingBranchGrowth=" + growthWaiting
+                                + ", weightedActive=" + activeQueue
+                                + ", heap=" + pct(usage) + "%, free=" + mib(remaining)
+                                + " MiB (post-GC retained " + pct(retainedUsage) + "% is diagnostic only).");
                     } else {
-                        status(log, name, state, now, usage, retainedUsage, queue, max,
+                        status(log, name, state, now, usage, retainedUsage, remaining,
+                                deferred, growthTotal, growthRunnable,
                                 "Chunky saved task is not yet resumable");
                     }
                     continue;
                 }
+
                 if (danger && running && Boolean.TRUE.equals(pause.invoke(api, name))) {
                     state.ourPause = true;
                     state.pausedAt = now;
-                    state.initialPauseUsage = usage;
-                    state.stableAtUsage = retainedUsage;
                     state.stableSince = 0L;
                     state.stableSamples = 0;
-                    state.stableHighHeapMode = false;
                     state.lastStatusNs = now;
-                    state.probeUntil = 0;
                     state.pauseCount++;
                     boolean rapidRePause = ChunkyBackpressurePolicy.shouldApplyRapidRePauseCooldown(
                             state.hasResumed, state.lastResumeAt, now);
@@ -279,13 +282,26 @@ public final class ChunkyMemoryValve {
                         state.recoveryCooldownActive = true;
                         state.recoveryNotBefore = now + RAPID_REPAUSE_COOLDOWN_NS;
                     }
+                    String pauseReason = growthRunnable >= BRANCH_GROWTH_PAUSE
+                            ? "ready branch-growth backlog reached its priority pause limit"
+                            : activeQueue >= QUEUE_PAUSE
+                                ? "weighted active queue reached its pause limit"
+                                : "heap protective threshold reached";
                     log.warning("[Metropolis] Chunky protective pause in " + name
-                            + ": heap " + pct(usage) + "%, post-GC retained " + pct(retainedUsage)
-                            + "%, free " + mib(remaining)
-                            + " MiB, combined deferred/growth queue " + queue
-                            + "; resume only after 30s stable post-GC recovery, 10 healthy samples, and queue <=128"
+                            + ": " + pauseReason
+                            + "; deferred=" + deferred
+                            + ", readyBranchGrowth=" + growthRunnable
+                            + ", waitingBranchGrowth=" + growthWaiting
+                            + ", weightedActive=" + activeQueue
+                            + ", heap=" + pct(usage) + "%, post-GC retained=" + pct(retainedUsage)
+                            + "% (diagnostic only), free=" + mib(remaining) + " MiB"
+                            + "; resume after deferred <= " + QUEUE_RESUME
+                            + ", ready branch growth <= " + BRANCH_GROWTH_RESUME
+                            + ", weighted active <= " + QUEUE_RESUME
+                            + " for 10s/10 samples, plus >=512 MiB free and below the 86% emergency ceiling"
                             + (state.recoveryCooldownActive
-                                ? ", repeat-pause cooldown " + Math.max(0L, state.recoveryNotBefore - now) / 1_000_000_000L + "s"
+                                ? ", repeat-pause cooldown "
+                                    + Math.max(0L, state.recoveryNotBefore - now) / 1_000_000_000L + "s"
                                 : "")
                             + ". GC: " + gcStats() + "; planning: " + retentionStats());
                 }
@@ -298,19 +314,32 @@ public final class ChunkyMemoryValve {
         }
     }
 
+    private static long sum(Map<String, Integer> values) {
+        long total = 0L;
+        for (int count : values.values()) total += Math.max(0, count);
+        return total;
+    }
+
     private static void status(Logger log, String name, State state, long now,
-                               double usage, double retainedUsage, int queue, long max, String reason) {
+                               double usage, double retainedUsage, long remaining,
+                               int deferred, int growthTotal, int growthRunnable, String reason) {
         if (now - state.lastStatusNs < STATUS_NS) return;
         state.lastStatusNs = now;
+        int growthWaiting = Math.max(0, growthTotal - growthRunnable);
+        int activeQueue = ChunkyBackpressurePolicy.weightedActiveQueueSize(deferred, growthRunnable);
         log.warning("[Metropolis] Chunky paused in " + name + ": " + reason
-                + "; heap " + pct(usage) + "%, post-GC retained " + pct(retainedUsage)
-                + "%, free " + mib((long)(max * (1.0 - usage)))
-                + " MiB, pending " + queue + ", paused " + ((now - state.pausedAt) / 1_000_000_000L)
-                + " s, stable samples " + state.stableSamples + "/" + MIN_STABLE_SAMPLES
-                + ", recovery cooldown " + (state.recoveryCooldownActive
+                + "; deferred=" + deferred
+                + ", readyBranchGrowth=" + growthRunnable
+                + ", waitingBranchGrowth=" + growthWaiting
+                + ", weightedActive=" + activeQueue
+                + ", heap=" + pct(usage) + "%, post-GC retained=" + pct(retainedUsage)
+                + "% (diagnostic only), free=" + mib(remaining) + " MiB"
+                + ", paused=" + ((now - state.pausedAt) / 1_000_000_000L)
+                + "s, low-queue samples=" + state.stableSamples + "/" + MIN_STABLE_SAMPLES
+                + ", recovery cooldown="
+                + (state.recoveryCooldownActive
                     ? Math.max(0L, state.recoveryNotBefore - now) / 1_000_000_000L : 0L)
-                + " s, probes " + state.probeCount + ", GC " + gcStats()
-                + ", planning " + retentionStats() + ".");
+                + "s, GC=" + gcStats() + ", planning=" + retentionStats() + ".");
     }
 
     private static int pct(double value) { return (int) Math.round(value * 100); }

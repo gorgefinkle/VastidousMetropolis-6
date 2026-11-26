@@ -107,9 +107,30 @@ public class DecayProviderNormal extends DecayProvider {
       return this.pendingBuilds.size();
    }
 
+   @Override
+   public int pendingGrowthRunnableWorkCount() {
+      int ready = 0;
+      for (PendingBuild pending : this.pendingBuilds.values()) {
+         if (!pending.growthReady) continue;
+         boolean supportChunksLoaded = true;
+         for (long key : pending.waitingChunks) {
+            int chunkX = (int) (key >> 32);
+            int chunkZ = (int) key;
+            if (pending.world == null || !pending.world.isChunkLoaded(chunkX, chunkZ)) {
+               supportChunksLoaded = false;
+               break;
+            }
+         }
+         if (supportChunksLoaded) ready++;
+      }
+      return ready;
+   }
+
    private void reportPendingGrowthWork() {
-      ch.k42.metropolis.generator.ChunkyMemoryValve.growthPending(
-              this.generator != null ? this.generator.getWorld() : null, this.pendingBuilds.size());
+      World world = this.generator != null ? this.generator.getWorld() : null;
+      ch.k42.metropolis.generator.ChunkyMemoryValve.growthPending(world, this.pendingBuilds.size());
+      ch.k42.metropolis.generator.ChunkyMemoryValve.growthRunnablePending(
+              world, this.pendingGrowthRunnableWorkCount());
    }
 
    Block safeRelative(Block block, int dx, int dy, int dz) {
@@ -377,6 +398,7 @@ public class DecayProviderNormal extends DecayProvider {
             this.flushBuild(build, pending);
          }
       }
+      this.reportPendingGrowthWork();
    }
 
    /**
@@ -485,6 +507,7 @@ public class DecayProviderNormal extends DecayProvider {
          return;
       }
       pending.growthReady = true;
+      this.reportPendingGrowthWork();
       Minions.dNode("[BUILD][TIMEOUT] %s -- readiness timeout; retaining full growth pool until support chunks are loaded.",
               this.describeBuild(build));
       this.flushBuild(build, pending);
@@ -510,6 +533,7 @@ public class DecayProviderNormal extends DecayProvider {
             return;
          }
          pending.growthReady = true;
+         this.reportPendingGrowthWork();
       }
       this.flushBuild(build, pending);
    }
@@ -538,6 +562,7 @@ public class DecayProviderNormal extends DecayProvider {
          }
          Minions.dNodeVerbose("[BUILD][DEFER] %s -- %d support chunks unloaded; preserving all %d candidates.",
                  this.describeBuild(build), missing.size(), pending.supportHits.size());
+         this.reportPendingGrowthWork();
          return;
       }
       this.clearGrowthWait(build, pending);

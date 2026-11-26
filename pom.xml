@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.10-R14.34-Chunky-Recovery-Backoff-DEV</version>
+    <version>0.1.11-R14.35-Queue-First-Branch-Growth-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.34 Chunky Recovery Backoff on R14.33)</name>
-    <description>Preserves R14.33 generation features and requires stable post-GC heap recovery, healthy samples, combined deferred/growth queue low-water, and repeat-pause cooldown before Chunky resumes</description>
+    <name>Metropolis for Paper 26.2 (R14.35 Queue-First Branch Growth on R14.34)</name>
+    <description>Preserves R14.34 generation features; prioritizes ready branch-growth work and gates Chunky recovery on sustained low queue depth with an absolute emergency memory floor</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_34_Chunky_Recovery_Backoff_DEV</finalName>
+        <finalName>Metropolis_R14_35_Queue_First_Branch_Growth_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
