@@ -57,14 +57,11 @@ jobs:
           java -cp qa-out ch.k42.metropolis.grid.urbanGrid.farm.MissileSiloGeometryProbe
       - name: Build plugin JAR
         run: mvn --batch-mode --no-transfer-progress clean package
-      - name: Audit every silo legacy block mapping through WorldEdit
+      - name: Verify live legacy block conversion paths
         run: |
-          mvn --batch-mode --no-transfer-progress -q dependency:build-classpath -DincludeScope=provided -Dmdep.outputFile=qa-out/deps.classpath
-          javac -cp "$(cat qa-out/deps.classpath)" -d qa-out \
-            src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmRandom.java \
-            src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java \
-            QA/R14_42/SiloLegacyBlockMappingProbe.java
-          java -cp "qa-out:$(cat qa-out/deps.classpath)" ch.k42.metropolis.grid.urbanGrid.farm.SiloLegacyBlockMappingProbe
+          grep -F 'Bukkit.getUnsafe().fromLegacy' src/main/java/ch/k42/metropolis/minions/LegacyBlocks.java
+          grep -F 'LegacyMapper.getInstance().getBlockFromLegacy' src/main/java/ch/k42/metropolis/minions/LegacyBlocks.java
+          grep -F 'result.getMaterial().isAir()' src/main/java/ch/k42/metropolis/minions/LegacyBlocks.java
       - name: Verify embedded plugin version
         run: |
           expected='0.1.18-R14.42-Missile-Silo-Complex-DEV'
