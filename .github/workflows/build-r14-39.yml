@@ -1,0 +1,61 @@
+name: R14.39 Lake and Massif Search
+
+on:
+  push:
+    branches:
+      - fix/r14-39-lake-and-massif-search
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'fix/r14-39-lake-and-massif-search' || github.ref_name == 'fix/r14-39-lake-and-massif-search'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Verify lake provider wiring and defaults
+        run: |
+          grep -q 'WildernessFeatures.install(seed)' src/main/java/ch/k42/metropolis/grid/urbanGrid/layout/WaterFields.java
+          grep -q 'water.setLakes(found)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -q 'water.setStreams(found)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -q 'generate: true' src/main/resources/config.yml
+          grep -q 'cityRings:' src/main/resources/config.yml
+          grep -q 'enabled: true' src/main/resources/config.yml
+          grep -q 'nearestLake(int blockX, int blockZ)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -q 'nearestMountain(int blockX, int blockZ)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -q 'CommandMetropolisMassif' src/main/java/ch/k42/metropolis/plugin/MetropolisPlugin.java
+          grep -q 'massif:' src/main/resources/plugin.yml
+      - name: Build plugin JAR
+        run: mvn --batch-mode --no-transfer-progress clean package
+      - name: Verify embedded plugin version
+        run: |
+          expected='0.1.15-R14.39-Lake-and-Massif-Search-DEV'
+          actual="$(unzip -p target/Metropolis_R14_39_Lake_and_Massif_Search_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          test "$actual" = "$expected"
+          echo "Embedded plugin version: $actual"
+      - name: Assemble test delivery
+        run: |
+          mkdir -p delivery
+          cp target/Metropolis_R14_39_Lake_and_Massif_Search_DEV.jar delivery/
+          zip -qr delivery/Metropolis_R14_39_FullSource.zip pom.xml src QA README_*.md .github .gitattributes .gitignore
+          (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
+          ls -lh delivery
+      - name: Upload JAR and full source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metropolis_R14_39_Lake_and_Massif_Search
+          path: delivery/*
+          if-no-files-found: error
+          retention-days: 14
