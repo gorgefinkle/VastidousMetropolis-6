@@ -37,6 +37,13 @@ jobs:
       - name: Build plugin JAR
         run: mvn --batch-mode --no-transfer-progress clean package
 
+      - name: Verify embedded plugin version
+        run: |
+          expected='0.1.10-R14.19-Chunky-Recovery-Backoff-DEV'
+          actual="$(unzip -p target/Metropolis_R14_19_Chunky_Recovery_Backoff_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          test "$actual" = "$expected"
+          echo "Embedded plugin version: $actual"
+
       - name: Assemble versioned test delivery
         run: |
           mkdir -p delivery
