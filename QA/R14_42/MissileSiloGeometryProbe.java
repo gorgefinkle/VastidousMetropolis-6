@@ -2,7 +2,6 @@ package ch.k42.metropolis.grid.urbanGrid.farm;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 
 /** Pure geometry audit: determinism, bounds, levels, access, variants and chunk clipping. */
 public final class MissileSiloGeometryProbe {
