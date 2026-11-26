@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.14-R14.38-Mother-Willow-Wooden-Scaffold-DEV</version>
+    <version>0.1.15-R14.39-Lake-and-Massif-Search-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.38 Mother Willow Wooden Scaffold on R14.37)</name>
-    <description>Preserves R14.37 features; restores open wooden willow scaffolds, removes recursive branching caps, and confines sparse weeping foliage to outer terminal branches</description>
+    <name>Metropolis for Paper 26.2 (R14.39 Lake and Massif Search on R14.38)</name>
+    <description>Preserves R14.38 features; activates planned lake sources at shared water-field creation, removes arbitrary lake search radius, and adds separate named massif discovery/teleport</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_38_Mother_Willow_Wooden_Scaffold_DEV</finalName>
+        <finalName>Metropolis_R14_39_Lake_and_Massif_Search_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
