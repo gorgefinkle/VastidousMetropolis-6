@@ -154,113 +154,95 @@ public final class MotherWillowGeometry {
       }
     }
     void foliage(P from,long salt,double maturity) {
-      // Pendent SHOOTS, not vertical sheets of leaves glued to scaffolds.
-      int shoots=4+(int)(rand(hash(salt,1))*4);
+      // Sparse pendent leaf curtains grow from the outer woody branch tips.
+      // The shoot axis remains wood; leaves are small, spaced clusters rather
+      // than a continuous sleeve or a dense ball around the scaffold.
+      int shoots=1+(int)(rand(hash(salt,1))*2);
       for(int j=0;j<shoots;j++){
         long sh=hash(salt,37+j);
         double a=rand(hash(sh,2))*Math.PI*2;
-        int length=20+(int)(rand(hash(sh,3))*34*maturity)+(rand(hash(sh,14))>.78?12:0);
-        double dx=(rand(hash(sh,5))-.5)*.12,dz=(rand(hash(sh,6))-.5)*.12;
-        P at=from.add(Math.cos(a)*1.4,rand(hash(sh,11))*1.9,Math.sin(a)*1.4);
+        int length=16+(int)(rand(hash(sh,3))*22*maturity)+(rand(hash(sh,14))>.91?8:0);
+        double dx=(rand(hash(sh,5))-.5)*.16,dz=(rand(hash(sh,6))-.5)*.16;
+        P at=from.add(Math.cos(a)*1.1,rand(hash(sh,11))*1.2,Math.sin(a)*1.1);
         P prev=from;
         for(int k=0;k<length;k++){
           double t=k/(double)length;
-          double sway=Math.sin(k*.15+rand(hash(sh,7))*6.283)*(.35+2.1*t);
-          P cur=p(at.x+dx*k+Math.cos(a)*sway,at.y-k*(.50+.56*t),at.z+dz*k+Math.sin(a)*sway);
-          // Only young shoot axes are woody; mature lower twigs droop to a fine tip.
-          // A continuous, slender fence shoot carries the leaves all the way
-          // down the pendulous trail instead of leaving isolated leaf clumps.
-          branchSegment(prev,cur,Math.max(.48,.78*(1.0-t*.48)),Math.max(.42,.78*(1.0-(t+.035)*.48)));
-          if(k%2==0 || k==length-1)bulb(cur,1.05+(1-t)*.62,false,sh+k,"y");
-          if(k%4==1 && rand(hash(sh,k))>.22) {
-            P bud=cur.add(Math.cos(a+1.4)*1.35,.25,Math.sin(a+1.4)*1.35);
-            bulb(bud,.95+(1-t)*.35,false,sh+k+99,"y");
+          double sway=Math.sin(k*.16+rand(hash(sh,7))*6.283)*(.22+1.25*t);
+          P cur=p(at.x+dx*k+Math.cos(a)*sway,at.y-k*(.55+.42*t),at.z+dz*k+Math.sin(a)*sway);
+          // Keep the entire twig woody to its fine tip.
+          branchSegment(prev,cur,Math.max(.44,.68*(1.0-t*.52)),Math.max(.40,.68*(1.0-(t+.035)*.52)));
+          if(k%4==0 || k==length-1)bulb(cur,.72+(1-t)*.38,false,sh+k,"y");
+          if(k%9==3 && rand(hash(sh,k))>.42) {
+            P bud=cur.add(Math.cos(a+1.4)*.95,.18,Math.sin(a+1.4)*.95);
+            bulb(bud,.66+(1-t)*.25,false,sh+k+99,"y");
           }
           prev=cur;
         }
       }
     }
-    /** Grow a branch along a noisy, tropic trajectory and recursively produce
-     * opposed, unequal daughter branches. All branches originate ON the parent. */
+    /**
+     * A sparse, long-lived woody scaffold. Primary arms remain continuous
+     * wood to their tips; only two subordinate orders are grown. No repeated
+     * terminal forks and no upright replacement crowns: those produced the
+     * dense branching cap and cluttered inner crown in the previous version.
+     */
     void branch(P origin,double azimuth,double initialSlope,double length,double radius,int order,long tag){
-      int steps=Math.max(6,(int)Math.ceil(length/5.5));
+      int steps=Math.max(8,(int)Math.ceil(length/6.0));
       P last=origin;
       P[] pts=new P[steps+1];pts[0]=origin;
-      double bend=(rand(hash(tag,19))-.5)*.48;
-      double drift=(rand(hash(tag,20))-.5)*.55;
-      double sag=order==0?.20+rand(hash(tag,23))*.35:order==1?.30+rand(hash(tag,24))*.20:order==2?.45:.70;
+      double bend=(rand(hash(tag,19))-.5)*.34;
+      double drift=(rand(hash(tag,20))-.5)*.38;
+      double sag=order==0?.10+rand(hash(tag,23))*.18:order==1?.28+rand(hash(tag,24))*.20:.58+rand(hash(tag,25))*.20;
       for(int k=1;k<=steps;k++){
         double t=k/(double)steps;
-        double bearing=azimuth+bend*t+drift*t*t+Math.sin(t*4.2+rand(hash(tag,32))*6.283)*.16*t;
-        // Young tips seek light (positive y); old long arms build tension
-        // wood and sag farther out. Tertiaries become strongly pendulous.
-        double elev=initialSlope*(1-t) + .24*(1-t)*(1-t) - sag*t*t;
+        double bearing=azimuth+bend*t+drift*t*t+Math.sin(t*3.6+rand(hash(tag,32))*6.283)*.10*t;
+        // Long primary arms travel outward before gradually bending down.
+        // Secondary limbs and terminal twigs become progressively pendulous.
+        double elev=initialSlope*(1-t)+.16*(1-t)*(1-t)-sag*t*t;
         double step=length/steps;
         P next=last.add(Math.cos(bearing)*step*Math.cos(elev),Math.sin(elev)*step,Math.sin(bearing)*step*Math.cos(elev));
-        double rr=Math.max(.43,radius*Math.pow(1-.85*t,.78));
-        branchSegment(last,next,Math.max(.44,radius*Math.pow(1-.85*(t-1.0/steps),.78)),rr);
+        double rr=Math.max(.42,radius*Math.pow(1-.90*t,.82));
+        branchSegment(last,next,Math.max(.44,radius*Math.pow(1-.90*(t-1.0/steps),.82)),rr);
         pts[k]=next;last=next;
       }
-      if(order==3){
-        // Leafing is restricted to young terminal growth and the thin distal
-        // branch system. The central scaffold remains visually exposed.
-        for(int k=steps/2;k<=steps;k++)if(k%2==0||k==steps) {
-          P tip=pts[k];bulb(tip,1.20+rand(hash(tag,k))*1.15,false,tag+k,"y");
-          if(k>=steps-3 && rand(hash(tag,k+48))<.78)foliage(tip,hash(tag,k),.95+rand(hash(tag,k+77))*.55);
+
+      if(order>=2){
+        // Foliage is restricted to the distal half of terminal branches.
+        // Leave the inner crown and the bole visibly open.
+        int first=(int)(steps*.62);
+        for(int k=first;k<=steps;k+=Math.max(3,steps/7)){
+          P tip=pts[k];
+          if(rand(hash(tag,k+301))<.72)bulb(tip,.72+rand(hash(tag,k+302))*.52,false,tag+k,"y");
+          if(k>=steps-2 && rand(hash(tag,k+303))<.82)
+            foliage(tip,hash(tag,k),.78+rand(hash(tag,k+304))*.48);
         }
         return;
       }
-      // Natural lateral shoots grow *along* the parent. Those are NOT a
-      // substitute for an endpoint fork: every principal limb must end as two
-      // tapering successor limbs, not as a capped cylinder past its last twig.
-      int daughters=order==0?3+(int)(rand(hash(tag,12))*2):order==1?2:1+(int)(rand(hash(tag,9))*2);
+
+      // A small number of lateral daughter limbs emerge well out along each
+      // parent, not beside the trunk. Their wood stays visible between forks.
+      int daughters=order==0?1+(int)(rand(hash(tag,12))*2):1;
       for(int j=0;j<daughters;j++){
         long child=hash(tag,j+8217);
-        double along=.28+(j+.4+rand(hash(child,3))*.4)/(daughters+.85)*.56;
-        int attach=Math.min(steps-2,Math.max(1,(int)Math.round(steps*along)));
-        double side=(j%2==0?1:-1)*(order==0?.42:order==1?.66:.90);
-        double ang=azimuth+side+(rand(hash(child,5))-.5)*.36;
-        double size=(order==0?.47:order==1?.49:.52)+(rand(hash(child,6))-.5)*.13;
-        double parentAtAttach=radius*Math.pow(1-.85*attach/(double)steps,.78);
-        double r=Math.min(parentAtAttach*.68,radius*Math.pow(size,1.0/2.35)*.68);
-        double len=length*(order==0?.47:order==1?.49:.54)*(.77+rand(hash(child,7))*.42);
-        double lift=order==0?.36:order==1?.27:-.08;
-        branch(pts[attach],ang,lift,len,Math.max(.48,r),order+1,child);
+        double along=.56+(j+.35+rand(hash(child,3))*.35)/(daughters+.65)*.28;
+        int attach=Math.min(steps-3,Math.max(2,(int)Math.round(steps*along)));
+        double side=(j%2==0?1:-1)*(order==0?.48:.72);
+        double ang=azimuth+side+(rand(hash(child,5))-.5)*.28;
+        double size=(order==0?.50:.55)+(rand(hash(child,6))-.5)*.08;
+        double parentAtAttach=radius*Math.pow(1-.90*attach/(double)steps,.82);
+        double r=Math.min(parentAtAttach*.62,radius*Math.pow(size,1.0/2.35)*.62);
+        double len=length*(order==0?.48:.56)*(.82+rand(hash(child,7))*.30);
+        double lift=order==0?.22:-.04;
+        branch(pts[attach],ang,lift,len,Math.max(.46,r),order+1,child);
       }
-      // The parent terminates at an honest bifurcation. Match the sum of its
-      // daughters' pipe areas to the endpoint radius (R^2.35) and orient them
-      // relative to the ACTUAL curved terminal tangent, not its initial azimuth.
-      // In particular, there can be no last thick, unsplit 'coat-hanger' tip.
-      P tip=pts[steps],preTip=pts[steps-1];
-      double terminalHeading=Math.atan2(tip.z-preTip.z,tip.x-preTip.x);
-      double terminalRadius=radius*Math.pow(.15,.78);
-      for(int j=0;j<2;j++){
-        long fork=hash(tag,18561+j);
-        double side=(j==0?-1:1);
-        double opening=(order==0?.33:order==1?.45:.58)+rand(hash(fork,3))*.18;
-        double forkAngle=terminalHeading+side*opening;
-        double forkRadius=Math.max(.48,terminalRadius*(.58+rand(hash(fork,4))*.07));
-        double forkLength=length*(order==0?.43:order==1?.47:.54)*(.85+rand(hash(fork,5))*.25);
-        double up=order==0?.22:order==1?.12:-.18;
-        branch(tip,forkAngle,up,forkLength,forkRadius,order+1,fork);
-      }
-      // Secondary reiteration: old scaffold limbs sprout upright replacement
-      // leaders. Their independently branched crowns break the coat-hanger
-      // roofline, rather than merely hanging shoots from horizontal arms.
-      if(order==0 && rand(hash(tag,77))>.16){
-        for(int k=0;k<2;k++){
-          long rep=hash(tag,780+k);
-          int attach=(int)Math.round(steps*(.44+k*.19+rand(hash(rep,2))*.07));
-          attach=Math.max(2,Math.min(steps-1,attach));
-          double direction=azimuth+(rand(hash(rep,3))-.5)*1.75;
-          double height=24+rand(hash(rep,4))*25;
-          branch(pts[attach],direction,.72+rand(hash(rep,6))*.15,height,
-                 Math.max(1.2,radius*.34),1,rep);
-        }
-      }
-      if(order>=1)for(int j=steps/2;j<steps;j+=2){
-        if(rand(hash(tag,j+400))<.65)continue;
-        bulb(pts[j],.7+rand(hash(tag,j+801))*.7,false,tag+j,"y");
+
+      // Do not split the end into a pair of competing forks. The parent is a
+      // continuous, tapered wooden limb with a natural fine terminal.
+      if(order==1 && rand(hash(tag,411))>.48){
+        int k=(int)(steps*.78);
+        P tip=pts[k];
+        branchSegment(tip,tip.add(Math.cos(azimuth+.34)*length*.16,-length*.12,
+                Math.sin(azimuth+.34)*length*.16),Math.max(.48,radius*.20),.44);
       }
     }
     void flush(){
@@ -378,22 +360,22 @@ public final class MotherWillowGeometry {
       m.branchSegment(mid,top,leaderMid,leaderTip);
       // Primary scaffolds arise along the leaders at staggered heights;
       // asymmetric crowding and self-pruning prevent a symmetric umbrella.
-      for(int j=0;j<5;j++){
+      for(int j=0;j<3;j++){
         long bh=hash(sh,120+j);double angle=a+((j+.3)*2.399963)+(.5-rand(hash(bh,4)))*.83;
-        double height=(j+.5)/6.0;
-        P start=lerp(j%2==0?p0:mid, j%2==0?mid:top, height);
-        double len=55+rand(hash(bh,6))*62-(j==0?13:0);
-        double radius=(3.45+rand(hash(bh,9))*1.25)*leaderScale*(i>=2?.72:1.0);
-        m.branch(start,angle,.10+rand(hash(bh,8))*.44,len,radius,0,bh);
+        double height=.28+j*.29+rand(hash(bh,5))*.10;
+        P start=lerp(mid,top,height);
+        double len=72+rand(hash(bh,6))*42-(j==0?8:0);
+        double radius=(3.45+rand(hash(bh,9))*1.10)*leaderScale*(i>=2?.72:1.0);
+        m.branch(start,angle,.08+rand(hash(bh,8))*.30,len,radius,0,bh);
       }
     }
     // Younger replacement shoots on the main crown, and a handful of
     // storm-broken stubs. Their positions vary by seed and have real parents.
-    for(int j=0;j<7;j++){
-      long bh=hash(s,81112+j);P start=nodes[6+j%12];
+    for(int j=0;j<3;j++){
+      long bh=hash(s,81112+j);P start=nodes[9+j*3];
       double a=wind+j*2.399963+rand(hash(bh,2))*.33;
-      if(j<5)m.branch(start,a,.78,30+rand(hash(bh,3))*38,3.1,1,bh);
-      else m.branchSegment(start,start.add(Math.cos(a)*9,-3,Math.sin(a)*9),3.2,1.4);
+      if(j<2)m.branch(start,a,.48,28+rand(hash(bh,3))*22,2.2,1,bh);
+      else m.branchSegment(start,start.add(Math.cos(a)*7,-2,Math.sin(a)*7),2.4,1.1);
     }
     m.flush();
   }
