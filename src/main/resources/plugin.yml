@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.13-R14.37-Lake-and-Mountain-Teleport-DEV
+version: 0.1.14-R14.38-Mother-Willow-Wooden-Scaffold-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
