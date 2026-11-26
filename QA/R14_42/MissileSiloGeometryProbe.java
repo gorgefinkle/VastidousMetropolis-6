@@ -40,11 +40,15 @@ public final class MissileSiloGeometryProbe {
     }
     private static int countAtY(Capture c, int y, int id) {
         int n = 0;
-        String prefix = null;
         for (Map.Entry<String,String> e : c.blocks.entrySet()) {
             String[] p = e.getKey().split(",");
             if (Integer.parseInt(p[1]) == y && e.getValue().startsWith(id + ":")) n++;
         }
+        return n;
+    }
+    private static int countId(Capture c, int id) {
+        int n = 0;
+        for (String state : c.blocks.values()) if (state.startsWith(id + ":")) n++;
         return n;
     }
     private static Capture render(FarmMissileSiloGeometry.Variant v, Integer chunkX, Integer chunkZ) {
