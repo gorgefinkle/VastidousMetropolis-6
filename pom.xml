@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.13-R14.37-Lake-and-Mountain-Teleport-DEV</version>
+    <version>0.1.14-R14.38-Mother-Willow-Wooden-Scaffold-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.37 Lake and Mountain Teleport on R14.36)</name>
-    <description>Preserves R14.36 generation features; adds deterministic lake shoreline teleport and includes named mountain massifs in mountain-biome teleport</description>
+    <name>Metropolis for Paper 26.2 (R14.38 Mother Willow Wooden Scaffold on R14.37)</name>
+    <description>Preserves R14.37 features; restores open wooden willow scaffolds, removes recursive branching caps, and confines sparse weeping foliage to outer terminal branches</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_37_Lake_and_Mountain_Teleport_DEV</finalName>
+        <finalName>Metropolis_R14_38_Mother_Willow_Wooden_Scaffold_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
