@@ -192,12 +192,15 @@ public final class MotherWillowGeometry {
       P[] pts=new P[steps+1];pts[0]=origin;
       double bend=(rand(hash(tag,19))-.5)*.34;
       double drift=(rand(hash(tag,20))-.5)*.38;
-      double sag=order==0?.10+rand(hash(tag,23))*.18:order==1?.28+rand(hash(tag,24))*.20:.58+rand(hash(tag,25))*.20;
+      double sag=order==0?.08+rand(hash(tag,23))*.16
+              :order==1?.24+rand(hash(tag,24))*.18
+              :order==2?.48+rand(hash(tag,25))*.18
+              :.78+rand(hash(tag,26))*.16;
       for(int k=1;k<=steps;k++){
         double t=k/(double)steps;
         double bearing=azimuth+bend*t+drift*t*t+Math.sin(t*3.6+rand(hash(tag,32))*6.283)*.10*t;
-        // Long primary arms travel outward before gradually bending down.
-        // Secondary limbs and terminal twigs become progressively pendulous.
+        // The large limbs sweep outward first; each successive order hangs
+        // lower, until the finest terminal branchlets fall almost vertically.
         double elev=initialSlope*(1-t)+.16*(1-t)*(1-t)-sag*t*t;
         double step=length/steps;
         P next=last.add(Math.cos(bearing)*step*Math.cos(elev),Math.sin(elev)*step,Math.sin(bearing)*step*Math.cos(elev));
@@ -206,21 +209,45 @@ public final class MotherWillowGeometry {
         pts[k]=next;last=next;
       }
 
-      if(order>=2){
-        // Foliage is restricted to the distal half of terminal branches.
-        // Leave the inner crown and the bole visibly open.
-        int first=(int)(steps*.62);
-        for(int k=first;k<=steps;k+=Math.max(3,steps/7)){
+      if(order>=3){
+        // Final branchlets carry the foliage, not the thick scaffold. Keep
+        // their wood visible through the leaves, with the densest leaf detail
+        // on the outermost hanging half.
+        int first=(int)(steps*.42);
+        for(int k=first;k<=steps;k+=Math.max(2,steps/6)){
           P tip=pts[k];
-          if(rand(hash(tag,k+301))<.72)bulb(tip,.72+rand(hash(tag,k+302))*.52,false,tag+k,"y");
-          if(k>=steps-2 && rand(hash(tag,k+303))<.82)
-            foliage(tip,hash(tag,k),.78+rand(hash(tag,k+304))*.48);
+          if(rand(hash(tag,k+301))<.64)
+            bulb(tip,.58+rand(hash(tag,k+302))*.36,false,tag+k,"y");
+          if(k>=steps-2 && rand(hash(tag,k+303))<.88)
+            foliage(tip,hash(tag,k),.72+rand(hash(tag,k+304))*.42);
         }
         return;
       }
 
-      // A small number of lateral daughter limbs emerge well out along each
-      // parent, not beside the trunk. Their wood stays visible between forks.
+      if(order==2){
+        // A real willow branch does not finish as a single sharpened spike.
+        // Its distal end opens into a small fan of finer, strongly pendulous
+        // branchlets. The fork sits at the outer tip, not beside the trunk,
+        // avoiding the dense "branching cap" silhouette from earlier drafts.
+        P fork=pts[steps];
+        int branchlets=2+(rand(hash(tag,401))>.48?1:0);
+        double fan=(branchlets==2?.40:.54);
+        for(int j=0;j<branchlets;j++){
+          long child=hash(tag,4601+j);
+          double t=branchlets==2?j-.5:j-1.0;
+          double angle=azimuth+t*fan+(rand(hash(child,4))-.5)*.16;
+          double childLength=length*(.25+rand(hash(child,5))*.13);
+          double childRadius=Math.max(.44,radius*(.34+rand(hash(child,6))*.08));
+          // A slightly different initial downward angle gives the fork
+          // irregular, overlapping curtains rather than a symmetric trident.
+          double drop=-.24-rand(hash(child,7))*.22;
+          branch(fork,angle,drop,childLength,childRadius,3,child);
+        }
+        return;
+      }
+
+      // A small number of lateral daughters emerge well out along each
+      // parent. The parent remains continuous wood to its own terminal fork.
       int daughters=order==0?1+(int)(rand(hash(tag,12))*2):1;
       for(int j=0;j<daughters;j++){
         long child=hash(tag,j+8217);
@@ -234,15 +261,6 @@ public final class MotherWillowGeometry {
         double len=length*(order==0?.48:.56)*(.82+rand(hash(child,7))*.30);
         double lift=order==0?.22:-.04;
         branch(pts[attach],ang,lift,len,Math.max(.46,r),order+1,child);
-      }
-
-      // Do not split the end into a pair of competing forks. The parent is a
-      // continuous, tapered wooden limb with a natural fine terminal.
-      if(order==1 && rand(hash(tag,411))>.48){
-        int k=(int)(steps*.78);
-        P tip=pts[k];
-        branchSegment(tip,tip.add(Math.cos(azimuth+.34)*length*.16,-length*.12,
-                Math.sin(azimuth+.34)*length*.16),Math.max(.48,radius*.20),.44);
       }
     }
     void flush(){
