@@ -19,7 +19,7 @@ public enum WildBiome {
    DECIDUOUS("deciduous", "forest", 9, 0, "forest", 0.66, 0.0),
    COASTAL_DUNES("coastalDunes", "forest", 4, 0, "forest", 0.0, 0.65),
    VOLCANIC_BARRENS("karstlands", "forest", 4, 6, "forest", 0.0, 0.35),
-   BLOOMLANDS("bloomlands", "forest", 2, 8, "forest", 0.12, 0.25);
+   BLOOMLANDS("bloomlands", "forest", 1, 8, "forest", 0.12, 0.25);
 
    public static final WildBiome[] ALL = values();
    private final String key;
