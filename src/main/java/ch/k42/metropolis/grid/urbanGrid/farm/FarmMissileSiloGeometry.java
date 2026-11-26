@@ -539,8 +539,8 @@ final class FarmMissileSiloGeometry {
                     put(24, y + 4, dz, IRON_BARS, 0);
                     put(24, y + 3, dz, WATER, 0);
                 }
-                bed(33, y + 1, 7, 0);
-                bed(33, y + 1, 10, 0);
+                bed(30, y + 1, 7, 0);
+                bed(30, y + 1, 10, 0);
                 for (int dz = -10; dz <= 10; dz += 4) {
                     put(42, y + 1, dz, IRON_BLOCK, 0);
                     put(42, y + 2, dz, GLASS, 0);
@@ -771,6 +771,41 @@ final class FarmMissileSiloGeometry {
                     put(dx, floor + 3, -1, IRON_BLOCK, 0);
             }
         }
+        // The lower access-portal pair (Doors 6 and 7) protects the entry
+        // entrapment room before crew members enter the control-centre levels.
+        paintAccessPortalBlastLock(levels[0]);
+    }
+
+    private void paintAccessPortalBlastLock(int floor) {
+        // A compact five-block-wide entrapment chamber sits between the caged
+        // access ladder and the crew quarters. Doors 6 and 7 are each three
+        // blocks wide, with reinforced jambs, ceiling and observation glazing.
+        for (int dx = 33; dx <= 38; dx++) {
+            for (int dz : new int[]{7, 11}) {
+                for (int y = floor + 1; y <= floor + 3; y++) put(dx, y, dz, IRON_BLOCK, 0);
+                put(dx, floor + 2, dz, GLASS_PANE, 0);
+            }
+            for (int dz = 7; dz <= 11; dz++)
+                put(dx, floor + 4, dz, this.wallId, this.wallData);
+        }
+
+        int[] doors = {33, 38};
+        for (int bulkhead : doors) {
+            for (int y = floor + 1; y <= floor + 3; y++) {
+                put(bulkhead, y, 7, IRON_BLOCK, 0);
+                put(bulkhead, y, 11, IRON_BLOCK, 0);
+            }
+            for (int dz = 7; dz <= 11; dz++)
+                put(bulkhead, floor + 3, dz, IRON_BLOCK, 0);
+            for (int dz = 8; dz <= 10; dz++)
+                door(bulkhead, floor + 1, dz, 0);
+        }
+
+        // An intercom / identification console occupies the side of the
+        // chamber without blocking the straight route between both doors.
+        console(35, floor, 9, 0);
+        put(37, floor + 3, 8, REDSTONE_LAMP, 0);
+        put(37, floor + 3, 10, REDSTONE_LAMP, 0);
     }
 
     private void paintPortalBlockhouseAndLockedLadder() {
