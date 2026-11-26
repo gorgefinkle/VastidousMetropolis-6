@@ -369,18 +369,21 @@ final class FarmLayout {
       }
    }
 
-   /** Rare full-scale sealed military installation; reserve its complete 3x3-chunk footprint. */
+   /** Rare full-scale missile installation; reserve its complete 6x6-chunk footprint before fields. */
    private void planMissileSilo(int[][] gy, boolean[][] used) {
       if (this.extra.nextInt(100) >= 4) return;
-      int side=CELL_CHUNKS-2;
-      int startX=this.extra.nextInt(side), startZ=this.extra.nextInt(side);
-      for(int n=0;n<side*side;n++) {
-         int a=(startX+n)%side;
-         int c=(startZ+(startX+n)/side)%side;
-         if(!this.rectFree(gy,used,a,a+2,c,c+2)) continue;
-         int cx=this.x0+a*16+24, cz=this.z0+c*16+24;
-         this.features.add(new FarmMissileSilo(cx,cz,gy[a][c],this.seed));
-         this.markUsed(used,a,a+2,c,c+2);
+      final int footprint = 6;
+      final int side = CELL_CHUNKS - footprint + 1;
+      int startX = this.extra.nextInt(side), startZ = this.extra.nextInt(side);
+      for (int n = 0; n < side * side; n++) {
+         int a = (startX + n) % side;
+         int c = (startZ + (startX + n) / side) % side;
+         if (!this.rectFree(gy, used, a, a + footprint - 1, c, c + footprint - 1)) continue;
+         int cx = this.x0 + a * 16 + footprint * 8;
+         int cz = this.z0 + c * 16 + footprint * 8;
+         int variant = this.extra.nextInt(3);
+         this.features.add(new FarmMissileSilo(cx, cz, gy[a][c], this.seed, variant));
+         this.markUsed(used, a, a + footprint - 1, c, c + footprint - 1);
          return;
       }
    }
