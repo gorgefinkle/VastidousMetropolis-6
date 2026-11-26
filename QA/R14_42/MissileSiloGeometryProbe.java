@@ -74,6 +74,10 @@ public final class MissileSiloGeometryProbe {
         check(countAtY(c, H, 101) > 500, v + ": full-aperture iron-bar grating is missing");
         check("42:0".equals(state(c, 48, H, 48)), v + ": central structural grating beam is missing");
         check("0:0".equals(state(c, 49, H, 49)), v + ": launch duct aperture is sealed beneath the grating");
+        check(state(c, 64, H + 1, 40) == null,
+                v + ": ventilation riser intrudes into the launch-duct viewing aperture");
+        check("98:0".equals(state(c, 75, H + 1, 62)),
+                v + ": outer apron ventilation riser is missing");
         check("71:2".equals(state(c, 81, H + 1, 57)), v + ": locked west-facing portal door lower half missing");
         check("71:8".equals(state(c, 81, H + 2, 57)), v + ": locked portal door upper half missing");
         for (int dx = 34; dx <= 39; dx++) for (int y = H + 1; y <= H + 2; y++)
