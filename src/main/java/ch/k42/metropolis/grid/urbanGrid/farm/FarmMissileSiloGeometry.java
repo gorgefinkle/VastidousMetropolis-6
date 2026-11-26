@@ -709,8 +709,11 @@ final class FarmMissileSiloGeometry {
         int[] levels = lccLevels();
         for (int i = 0; i < levels.length; i++) {
             int floor = levels[i];
-            // The cable/service tunnel passes through the east shaft shell and
-            // meets a doorway in the control-centre west wall.
+
+            // A narrow reinforced service cableway reaches through the east
+            // shell of the launch duct. Only the upper control level carries
+            // the personnel blast-lock sequence; the other floors stay service
+            // conduits and cannot become accidental second entrances.
             for (int dx = 15; dx <= 20; dx++) {
                 for (int dz = -2; dz <= 2; dz++) {
                     put(dx, floor, dz, STONE_SLAB, 5);
@@ -721,28 +724,57 @@ final class FarmMissileSiloGeometry {
                     }
                 }
             }
-            // These apertures cut only the east side of the cylindrical shell.
-            for (int dx = 17; dx <= 20; dx++)
-                for (int dz = -2; dz <= 2; dz++)
-                    for (int y = floor + 1; y <= floor + 3; y++)
-                        put(dx, y, dz, AIR, 0);
 
-            // A sealed double blast-lock pair on the upper connecting route.
-            if (i == 3) {
-                door(17, floor + 1, 0, 0);
-                door(22, floor + 1, 0, 0);
-                for (int y = floor + 1; y <= floor + 3; y++) {
-                    put(17, y, -2, IRON_BARS, 0);
-                    put(17, y, 2, IRON_BARS, 0);
-                    put(22, y, -2, IRON_BARS, 0);
-                    put(22, y, 2, IRON_BARS, 0);
+            // The cableway punches only through the east-facing arc of the
+            // circular shaft. The central launch duct and its rocket remain
+            // untouched.
+            for (int dx = 17; dx <= 20; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    for (int y = floor + 1; y <= floor + 3; y++) put(dx, y, dz, AIR, 0);
                 }
+            }
+
+            if (i == 3) {
+                // Continue a short, clearly bounded passage into the control
+                // module. Two reinforced bulkheads create a real air-lock
+                // chamber rather than two doors floating in an open room.
+                for (int dx = 21; dx <= 23; dx++) {
+                    for (int dz = -2; dz <= 2; dz++) {
+                        put(dx, floor, dz, STONE_SLAB, 5);
+                        put(dx, floor + 4, dz, STONE_BRICKS, 0);
+                        for (int y = floor + 1; y <= floor + 3; y++) {
+                            if (Math.abs(dz) == 2) put(dx, y, dz, IRON_BARS, 0);
+                            else put(dx, y, dz, AIR, 0);
+                        }
+                    }
+                }
+
+                int[] bulkheads = {17, 23};
+                for (int bulkhead : bulkheads) {
+                    for (int y = floor + 1; y <= floor + 3; y++) {
+                        put(bulkhead, y, -2, IRON_BLOCK, 0);
+                        put(bulkhead, y, -1, IRON_BLOCK, 0);
+                        put(bulkhead, y, 1, IRON_BLOCK, 0);
+                        put(bulkhead, y, 2, IRON_BLOCK, 0);
+                    }
+                    // A continuous lintel and heavy jambs frame each door.
+                    for (int dz = -1; dz <= 1; dz++) put(bulkhead, floor + 3, dz, IRON_BLOCK, 0);
+                    door(bulkhead, floor + 1, 0, 0);
+                }
+
+                // Status lamps and cable trays live above the chamber, outside
+                // the player clearance envelope.
+                put(20, floor + 5, -1, REDSTONE_LAMP, 0);
+                put(20, floor + 5, 1, REDSTONE_LAMP, 0);
+                for (int dx = 15; dx <= 20; dx += 2)
+                    put(dx, floor + 3, -1, IRON_BLOCK, 0);
             }
         }
     }
 
     private void paintPortalBlockhouseAndLockedLadder() {
-        // Low-profile ground access portal; no elevated platform or lookout.
+        // Low-profile access blockhouse. The locked entrance is on the west
+        // face, aligned with the approach spur and a clear internal corridor.
         for (int dx = 33; dx <= 44; dx++) {
             for (int dz = 3; dz <= 15; dz++) {
                 put(dx, this.h, dz, STONE_BRICKS, 0);
@@ -757,14 +789,20 @@ final class FarmMissileSiloGeometry {
             }
         }
 
-        // Only one entrance, and it is a closed iron door with no exterior
-        // button, lever, pressure plate or redstone supply.
-        door(44, this.h + 1, 9, 0);
-        put(43, this.h + 1, 9, IRON_BARS, 0);
-        put(43, this.h + 2, 9, IRON_BARS, 0);
+        // Exterior has only a closed iron door: no button, lever, plate or
+        // redstone source. This opens into a short vestibule, not directly
+        // into the ladder void.
+        door(33, this.h + 1, 9, 2);
+        for (int y = this.h + 1; y <= this.h + 2; y++) {
+            for (int dx = 34; dx <= 38; dx++) put(dx, y, 9, AIR, 0);
+            // Open the west face of the cage at the secured surface landing.
+            put(39, y, 9, AIR, 0);
+        }
 
-        // Vertical ladder to the control-centre access well. It continues
-        // below every floor and terminates in a lower landing, not a ceiling.
+        // Vertical ladder to the control-centre access well. It stays caged
+        // outside the vestibule and is continuously supported by the east
+        // wall. Players enter the cage from its west landing and reach the
+        // ladder from the clear x=40..41 approach strip.
         int low = this.bottom + 18;
         for (int y = low + 1; y <= this.h; y++) {
             put(42, y, 9, LADDER, 4);
@@ -774,46 +812,57 @@ final class FarmMissileSiloGeometry {
             put(40, y, 8, IRON_BARS, 0);
             put(40, y, 10, IRON_BARS, 0);
         }
-        // Landing platforms are solid on both sides of the ladder. The ladder
-        // cell itself remains open, so there is no accidental dead-end.
-        for (int floor : lccLevels()) {
+
+        // Each control-centre level has a guarded steel landing. Keep the
+        // ladder cell open on all intermediate floors, but cap the bottom
+        // at a real landing rather than leaving a fall-through shaft.
+        int[] levels = lccLevels();
+        for (int floor : levels) {
             fill(40, 43, floor, 8, 10, IRON_BARS, 0);
             put(42, floor, 9, AIR, 0);
             put(42, floor + 1, 9, LADDER, 4);
         }
+        put(42, levels[0], 9, IRON_BARS, 0);
     }
 
     private void paintSurfaceApronAndGrating() {
-        // Reinforced circular apron with alternating material bands.
+        // The apron deliberately surrounds an OPEN shaft. Do not fill the
+        // launch duct with stone underneath a decorative layer of bars.
         for (int dx = -22; dx <= 22; dx++) {
             for (int dz = -22; dz <= 22; dz++) {
                 double d = Math.hypot(dx, dz);
-                if (d <= 22.0) {
-                    int mat = d > 19.5 ? COBBLE : (d > 11.0 ? STONE_BRICKS : STONE);
+                if (d > 20.0 && d <= 22.0) {
+                    int mat = d > 21.0 ? COBBLE : STONE_BRICKS;
                     put(dx, this.h, dz, mat, 0);
                 }
             }
         }
 
-        // Steel-beam grid over the launch duct. The open sections are visible
-        // through the grating; no iron trapdoor blocks are used.
-        for (int dx = -10; dx <= 10; dx++) {
-            for (int dz = -10; dz <= 10; dz++) {
-                if (Math.abs(dx) % 3 == 0 || Math.abs(dz) % 3 == 0)
-                    put(dx, this.h + 1, dz, IRON_BARS, 0);
+        // Full-aperture steel grating at the same grade as the surrounding
+        // apron. One-block mesh openings preserve a view down the launch duct;
+        // reinforced cardinal beams and a steel collar carry the ring.
+        for (int dx = -19; dx <= 19; dx++) {
+            for (int dz = -19; dz <= 19; dz++) {
+                if (Math.hypot(dx, dz) <= 19.6
+                        && (Math.floorMod(dx, 2) == 0 || Math.floorMod(dz, 2) == 0)) {
+                    put(dx, this.h, dz, IRON_BARS, 0);
+                }
             }
         }
-        for (int d = -10; d <= 10; d++) {
-            put(d, this.h + 1, 0, IRON_BLOCK, 0);
-            put(0, this.h + 1, d, IRON_BLOCK, 0);
+        for (int d = -19; d <= 19; d++) {
+            put(d, this.h, 0, IRON_BLOCK, 0);
+            put(0, this.h, d, IRON_BLOCK, 0);
         }
-        for (int dx = -22; dx <= 22; dx++)
-            for (int dz = -22; dz <= 22; dz++)
-                if (Math.abs(Math.hypot(dx, dz) - 21.0) < .4)
-                    put(dx, this.h + 2, dz, IRON_BARS, 0);
+        for (int dx = -20; dx <= 20; dx++) {
+            for (int dz = -20; dz <= 20; dz++) {
+                double d = Math.hypot(dx, dz);
+                if (d >= 19.6 && d <= 20.2) put(dx, this.h, dz, IRON_BLOCK, 0);
+                if (Math.abs(d - 21.0) < .4) put(dx, this.h + 1, dz, IRON_BARS, 0);
+            }
+        }
 
-        // Four low blast shutters and ventilation risers are part of the
-        // equipment apron, not freestanding guard towers.
+        // Four low ventilation risers with protected intakes. They remain
+        // equipment plinths, not habitable towers or raised lookout platforms.
         int[][] vents = {{-16,-8},{16,-8},{-16,8},{16,8}};
         for (int[] vent : vents) {
             for (int y = this.h + 1; y <= this.h + 5; y++) {
