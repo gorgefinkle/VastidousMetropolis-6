@@ -1,4 +1,4 @@
-# Metropolis R14.40 — Mother Willow Block Painter Fix
+# Metropolis R14.40 — Mother Willow Wooden Scaffold, Split Weeping Branchlets
 
 ## Root cause
 
@@ -24,7 +24,11 @@ branches missing.
   unchanged.
 - R14.39 lake activation/search and independent `/massif` commands are retained.
 
-## Regression gate
+## Willow reference design
+
+The crown silhouette follows mature *Salix babylonica* references: broad and rounded, with thin pendulous branches sweeping from the outer canopy toward the ground. Its slender branchlets hang as a curtain rather than ending as single spikes. The revised procedural scaffold therefore keeps the inner crown open and wooden, then forks each distal terminal limb into two or three finer, drooping branchlets. Foliage appears on these outer branchlets and their hanging shoots, not as an all-over solid crown.
+
+Reference descriptions: Oregon State University's Landscape Plants entry describes a broad, rounded crown with thin pendulous branches; Purdue Arboretum identifies downward-hanging branchlets; Virginia Tech's fact sheet describes very slender, long, pendulous twigs.\n\n## Regression gate
 
 `QA/R14_40/MotherWillowBlockPainterProbe.java` runs the production geometry
 through the exact same state classifier used by the live chunk painter. It
