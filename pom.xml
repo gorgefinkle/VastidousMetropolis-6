@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.12-R14.36-Mother-Willow-Structure-DEV</version>
+    <version>0.1.13-R14.37-Lake-and-Mountain-Teleport-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.36 Mother Willow Structure on R14.35)</name>
-    <description>Preserves R14.35 generation features; rebuilds Mother Willow as a large-scale weeping tree using Minecraft 26.3 poplar materials</description>
+    <name>Metropolis for Paper 26.2 (R14.37 Lake and Mountain Teleport on R14.36)</name>
+    <description>Preserves R14.36 generation features; adds deterministic lake shoreline teleport and includes named mountain massifs in mountain-biome teleport</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_36_Mother_Willow_Structure_DEV</finalName>
+        <finalName>Metropolis_R14_37_Lake_and_Mountain_Teleport_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
