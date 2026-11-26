@@ -1304,6 +1304,7 @@ public class PluginConfig {
    private static final String pathCreekMaxTraceChunks   = "generator.river.creekMaxTraceChunks";
    private static final String pathCreekSiteChancePercent = "generator.river.creekSiteChancePercent";
    private static final String pathCreekSiteAttempts      = "generator.river.creekSiteAttempts";
+   private static final String pathCreekOriginSpacingChunks = "generator.river.creekOriginSpacingChunks";
    private static final String pathRiverPeelMaxDimension = "generator.river.peelMaxDimension";
    private static final String pathRiverReclaimEnabled     = "generator.river.reclaim.enabled";
    private static final String pathRiverReclaimBerthChunks = "generator.river.reclaim.berthChunks";
@@ -1984,12 +1985,15 @@ public class PluginConfig {
       wildLootMax = Math.max(wildLootMin, Math.min(5, cfg.getInt(pathWildLootMax, wildLootMax)));
       for (WildBiome biome : WildBiome.ALL) {
          int configuredShare = Math.max(0, cfg.getInt(pathWildSharePrefix + biome.key(), biome.defaultShare()));
-         // Keep old configs from silently retaining shares too small for the
-         // rare-habitat pipeline. A configured zero remains an explicit disable.
+         // Keep the limestone province above its historical minimum. Bloomlands
+         // has a smaller rare-province quota now: migrate the former shipped
+         // default of 2 to 1, while preserving explicit zero and other custom values.
          if (configuredShare > 0 && biome == WildBiome.VOLCANIC_BARRENS)
             configuredShare = Math.max(4, configuredShare);
+         if (biome == WildBiome.BLOOMLANDS && configuredShare == 2)
+            configuredShare = 1;
          if (configuredShare > 0 && biome == WildBiome.BLOOMLANDS)
-            configuredShare = Math.max(2, configuredShare);
+            configuredShare = Math.max(1, configuredShare);
          wildShares[biome.ordinal()] = configuredShare;
          int configuredAway = Math.max(0, cfg.getInt(pathWildAwayPrefix + biome.key(), biome.defaultAway()));
          // Migrate only the two historical defaults. Operator-tuned values
@@ -2171,6 +2175,7 @@ public class PluginConfig {
       RiverConfig.setCreekMaxTraceChunks(Math.max(1, cfg.getInt(pathCreekMaxTraceChunks, RiverConfig.getCreekMaxTraceChunks())));
       RiverConfig.setCreekSiteChancePercent(Math.max(0, Math.min(100, cfg.getInt(pathCreekSiteChancePercent, RiverConfig.getCreekSiteChancePercent()))));
       RiverConfig.setCreekSiteAttempts(Math.max(1, cfg.getInt(pathCreekSiteAttempts, RiverConfig.getCreekSiteAttempts())));
+      RiverConfig.setCreekOriginSpacingChunks(Math.max(0, Math.min(512, cfg.getInt(pathCreekOriginSpacingChunks, RiverConfig.getCreekOriginSpacingChunks()))));
       RiverConfig.setRiverPeelMaxDimension(Math.max(1, cfg.getInt(pathRiverPeelMaxDimension, RiverConfig.getRiverPeelMaxDimension())));
       RiverConfig.setRiverReclaimEnabled(cfg.getBoolean(pathRiverReclaimEnabled, RiverConfig.isRiverReclaimEnabled()));
       // NOT clamped to 0 here, unlike most of the knobs above: the berth's
