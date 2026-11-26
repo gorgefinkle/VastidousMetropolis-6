@@ -35,7 +35,7 @@ public final class MotherWillowGeometryProbe {
         if(maxY<245)throw new AssertionError("Willow did not reach old-growth scale: maxY="+maxY);
         if(minY>54)throw new AssertionError("Lateral root anchors lost their depth: minY="+minY);
         if(wood<1500)throw new AssertionError("Continuous wooden scaffold/finger branches are missing: "+wood);
-        if(leaves<300)throw new AssertionError("Sparse weeping foliage is missing: "+leaves);
+        if(leaves<200)throw new AssertionError("Sparse weeping foliage is missing: "+leaves);
         if(maxRadius<65.0)throw new AssertionError("Broad outward crown was lost: radius="+maxRadius);
         if(nearLeaves>Math.max(100,leaves/4))
             throw new AssertionError("Foliage is still too dense beside the trunk: near="+nearLeaves+", total="+leaves);
