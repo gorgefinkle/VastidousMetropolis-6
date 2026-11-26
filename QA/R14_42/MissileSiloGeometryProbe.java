@@ -100,6 +100,20 @@ public final class MissileSiloGeometryProbe {
             }
         }
 
+        int accessLockY = bottom + 19;
+        for (int dz = 56; dz <= 58; dz++) {
+            check("71:0".equals(state(c, 81, accessLockY, dz)),
+                    v + ": access blast door 7 lower panel missing at z=" + dz);
+            check("71:8".equals(state(c, 81, accessLockY + 1, dz)),
+                    v + ": access blast door 7 upper panel missing at z=" + dz);
+            check("71:0".equals(state(c, 86, accessLockY, dz)),
+                    v + ": access blast door 6 lower panel missing at z=" + dz);
+            check("71:8".equals(state(c, 86, accessLockY + 1, dz)),
+                    v + ": access blast door 6 upper panel missing at z=" + dz);
+        }
+        check("0:0".equals(state(c, 87, accessLockY, 57)),
+                v + ": access cage does not open onto the first blast lock");
+
         int lockY = bottom + 49;
         check("71:0".equals(state(c, 65, lockY, 48)), v + ": first blast-lock door missing");
         check("71:0".equals(state(c, 71, lockY, 48)), v + ": second blast-lock door missing");
