@@ -15,6 +15,10 @@ public final class ChunkyBackpressurePolicy {
     public static final double MIN_FREE_FRACTION = 0.08;
     public static final long STABILITY_NS = 30_000_000_000L;
     public static final long PROBE_NS = 30_000_000_000L;
+    public static final int MIN_STABLE_SAMPLES = 10;
+    public static final double STABILITY_DRIFT = 0.03;
+    public static final long RAPID_REPAUSE_WINDOW_NS = 15_000_000_000L;
+    public static final long RAPID_REPAUSE_COOLDOWN_NS = 60_000_000_000L;
 
     private ChunkyBackpressurePolicy() {}
 
@@ -30,16 +34,46 @@ public final class ChunkyBackpressurePolicy {
     }
 
     public static boolean stableRecoveryReady(double usage, long remaining, long max,
-                                              long stableSince, long now) {
+                                              long stableSince, int stableSamples, long now) {
         return hasStableHeadroom(usage, remaining, max)
-                && stableSince > 0L && now - stableSince >= STABILITY_NS;
+                && stableSince > 0L
+                && stableSamples >= MIN_STABLE_SAMPLES
+                && now - stableSince >= STABILITY_NS;
     }
 
+    /**
+     * Every recovery, including a heap reading below the ordinary 68% target,
+     * must first demonstrate a complete stable window. A single post-GC dip
+     * is not sufficient evidence that generation can safely resume.
+     */
+    public static boolean canResume(int pending, double usage, long remaining, long max,
+                                     long stableSince, int stableSamples,
+                                     long recoveryNotBefore, long now) {
+        return pending <= QUEUE_RESUME
+                && now >= recoveryNotBefore
+                && stableRecoveryReady(usage, remaining, max, stableSince, stableSamples, now);
+    }
+
+    /** Compatibility overload: callers still have to satisfy the full window. */
+    public static boolean stableRecoveryReady(double usage, long remaining, long max,
+                                              long stableSince, long now) {
+        return stableRecoveryReady(usage, remaining, max, stableSince, MIN_STABLE_SAMPLES, now);
+    }
+
+    /** Compatibility overload: the former <=68% shortcut is intentionally removed. */
     public static boolean canResume(int pending, double usage, long remaining, long max,
                                      long stableSince, long now) {
-        return pending <= QUEUE_RESUME
-                && (usage <= NORMAL_RESUME
-                    || stableRecoveryReady(usage, remaining, max, stableSince, now));
+        return canResume(pending, usage, remaining, max, stableSince,
+                MIN_STABLE_SAMPLES, 0L, now);
+    }
+
+    /** Returns a 60-second cooldown only when a protective pause quickly follows a resume. */
+    public static long rapidRePauseCooldownUntil(long lastResumeAt, long pauseAt) {
+        if (lastResumeAt <= 0L || pauseAt < lastResumeAt
+                || pauseAt - lastResumeAt > RAPID_REPAUSE_WINDOW_NS) {
+            return 0L;
+        }
+        return pauseAt + RAPID_REPAUSE_COOLDOWN_NS;
     }
 
     /**
