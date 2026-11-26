@@ -67,9 +67,16 @@ public final class MissileSiloGeometryProbe {
             check(!e.getValue().startsWith("167:"), v + ": iron trapdoor found at " + e.getKey());
         }
 
-        check(countAtY(c, H + 1, 101) > 100, v + ": top iron-bar grating is missing");
-        check("71:0".equals(state(c, 92, H + 1, 57)), v + ": locked surface door lower half missing");
-        check("71:8".equals(state(c, 92, H + 2, 57)), v + ": locked surface door upper half missing");
+        check(countAtY(c, H, 101) > 500, v + ": full-aperture iron-bar grating is missing");
+        check("42:0".equals(state(c, 48, H, 48)), v + ": central structural grating beam is missing");
+        check("0:0".equals(state(c, 49, H, 49)), v + ": launch duct aperture is sealed beneath the grating");
+        check("71:2".equals(state(c, 81, H + 1, 57)), v + ": locked west-facing portal door lower half missing");
+        check("71:8".equals(state(c, 81, H + 2, 57)), v + ": locked portal door upper half missing");
+        for (int dx = 34; dx <= 39; dx++) for (int y = H + 1; y <= H + 2; y++)
+            check("0:0".equals(state(c, 48 + dx, y, 57)),
+                    v + ": portal vestibule/cage passage is blocked at x-offset " + dx);
+        check("101:0".equals(state(c, 90, H - FarmMissileSiloGeometry.SHAFT_DEPTH + 18, 57)),
+                v + ": bottom access landing does not cap the ladder shaft");
 
         int bottom = H - FarmMissileSiloGeometry.SHAFT_DEPTH;
         for (int i = 0; i < FarmMissileSiloGeometry.GALLERY_COUNT; i++) {
@@ -91,7 +98,16 @@ public final class MissileSiloGeometryProbe {
 
         int lockY = bottom + 49;
         check("71:0".equals(state(c, 65, lockY, 48)), v + ": first blast-lock door missing");
-        check("71:0".equals(state(c, 70, lockY, 48)), v + ": second blast-lock door missing");
+        check("71:0".equals(state(c, 71, lockY, 48)), v + ": second blast-lock door missing");
+        check("42:0".equals(state(c, 65, lockY, 46)), v + ": first blast-lock bulkhead frame is missing");
+        check("42:0".equals(state(c, 71, lockY, 50)), v + ": second blast-lock bulkhead frame is missing");
+
+        if (v == FarmMissileSiloGeometry.Variant.MILITARY)
+            check(countId(c, 26) >= 8, "military variant is missing furnished crew bunks");
+        if (v == FarmMissileSiloGeometry.Variant.TEST_FACILITY)
+            check(countId(c, 117) >= 4, "test facility is missing laboratory apparatus");
+        if (v == FarmMissileSiloGeometry.Variant.VAULT)
+            check(countId(c, 59) >= 8, "vault variant is missing its hydroponics/food-growing room");
 
         // The rocket clearance cylinder must remain free of gallery deck blocks.
         for (int i = 0; i < 8; i++) {
