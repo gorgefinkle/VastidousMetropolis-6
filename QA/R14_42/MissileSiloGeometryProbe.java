@@ -79,6 +79,16 @@ public final class MissileSiloGeometryProbe {
         for (int dx = 34; dx <= 39; dx++) for (int y = H + 1; y <= H + 2; y++)
             check("0:0".equals(state(c, 48 + dx, y, 57)),
                     v + ": portal vestibule/cage passage is blocked at x-offset " + dx);
+        check("44:5".equals(state(c, 80, H, 57)),
+                v + ": portal access spur does not reach the entry threshold");
+        check("101:0".equals(state(c, 75, H + 1, 93)),
+                v + ": closed vehicle gate is not aligned with the gravel spur");
+        check("98:0".equals(state(c, 48, H + 1, 93)),
+                v + ": south perimeter was accidentally opened away from the gate");
+        check("44:5".equals(state(c, 75, H, 92)),
+                v + ": gravel spur does not meet the inside face of the vehicle gate");
+        check(state(c, 74, H + 1, 92) == null,
+                v + ": stray curb blocks the road immediately inside the vehicle gate");
         check("101:0".equals(state(c, 90, H - FarmMissileSiloGeometry.SHAFT_DEPTH + 18, 57)),
                 v + ": bottom access landing does not cap the ladder shaft");
 
