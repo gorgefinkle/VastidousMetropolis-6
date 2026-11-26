@@ -26,6 +26,10 @@ commands:
     description: Finds the nearest creek-origin landmark
     usage: /creek [tp]
     permission: metropolis.command
+  lake:
+    description: Finds the nearest planned wilderness lake and teleports to its shoreline
+    usage: /lake [tp]
+    permission: metropolis.command
   windfarm:
     description: Finds the nearest valid planned wind farm and its road connection
     usage: /windfarm [tp] [radiusChunks] [minimumTurbines] | verify x y z
