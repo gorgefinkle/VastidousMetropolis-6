@@ -751,15 +751,16 @@ final class FarmMissileSiloGeometry {
 
                 int[] bulkheads = {17, 23};
                 for (int bulkhead : bulkheads) {
+                    // Each pressure bulkhead is three blocks wide, with
+                    // reinforced side jambs and a continuous steel lintel.
                     for (int y = floor + 1; y <= floor + 3; y++) {
                         put(bulkhead, y, -2, IRON_BLOCK, 0);
-                        put(bulkhead, y, -1, IRON_BLOCK, 0);
-                        put(bulkhead, y, 1, IRON_BLOCK, 0);
                         put(bulkhead, y, 2, IRON_BLOCK, 0);
                     }
-                    // A continuous lintel and heavy jambs frame each door.
-                    for (int dz = -1; dz <= 1; dz++) put(bulkhead, floor + 3, dz, IRON_BLOCK, 0);
-                    door(bulkhead, floor + 1, 0, 0);
+                    for (int dz = -2; dz <= 2; dz++)
+                        put(bulkhead, floor + 3, dz, IRON_BLOCK, 0);
+                    for (int dz = -1; dz <= 1; dz++)
+                        door(bulkhead, floor + 1, dz, 0);
                 }
 
                 // Status lamps and cable trays live above the chamber, outside
