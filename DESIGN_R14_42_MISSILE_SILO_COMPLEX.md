@@ -90,7 +90,7 @@ Sources:
 8. **Control-center floors:** all four levels have complete floors/ceilings, supporting walls/columns, clear circulation and distinct furnishings.
 9. **Variant identity:** all three variants have distinct room layouts, material palettes, and characteristic furniture; each is deterministic and can occur.
 10. **Security perimeter:** continuous mesh except for the designed gate; barbed upper detail and support posts; no guard tower or habitable lookout structure.
-11. **Block validity:** every legacy ID/data pair resolves to a non-air block in the supported mapping; no unknown IDs or trapdoor regression.
+11. **Legacy block adapter:** no unknown numeric IDs or trapdoor regression; CI checks that the geometry remains within the legacy ID/data range and that both Paper's `Unsafe.fromLegacy` and the WorldEdit fallback are wired. Exact non-air resolution of every emitted state remains a live Paper-server integration check.
 12. **Build and packaging:** Java 25 full Maven build, focused geometry/painter QA, embedded version check, complete source ZIP, one JAR, and checksums.
 
 ## Explicit non-goals
@@ -111,6 +111,7 @@ The first code review identified three false positives in the initial geometry: 
 - The entry route now has the lower Door 6 / Door 7 pair and its observation-sided entrapment chamber. The silo cableway has the upper Door 8 / Door 9 pair, each three blocks wide, with an enclosed chamber between reinforced bulkheads.
 - The vehicle gate is closed from ground level through its mesh height. The access spur turns toward the actual portal door.
 - The geometry probe now checks the open aperture, continuous ladder, bottom landing, all four blast doors, each variant's signature furnishings, all eight galleries, deterministic replay and per-chunk clipping.
+- A headless attempt to instantiate WorldEdit's `LegacyMapper` failed because it requires a registered platform configuration supplied by the live Bukkit integration. That setup failure was not treated as a block-mapping pass: the invalid standalone probe was removed, and CI now checks the production Paper/WorldEdit conversion paths instead. Live state conversion remains unverified until the plugin is exercised on Paper.
 
 This is still a development design, not an in-game visual approval. The geometry probe can prove block-operation consistency and required structural features, but it cannot confirm the final Minecraft silhouette, navigation feel, or how legacy block metadata looks in the live Paper world.
 
