@@ -23,14 +23,25 @@ public final class WildHabitatBias {
             weights[at] = before * suitability;
             weights[forest] += before - weights[at];
         }
+        double requestedTotal = 0.0;
+        for (double addition : additions) requestedTotal += Math.max(0.0, addition);
         int[] favored = {WildBiome.COASTAL_DUNES.ordinal(), WildBiome.VOLCANIC_BARRENS.ordinal()};
         int[] percentages = {dunesPct, barrensPct};
         for (int i = 0; i < favored.length; i++) {
             int at = favored[i];
-            if (at >= additions.length || additions[at] <= 0 || percentages[i] <= 0) continue;
+            if (at >= additions.length || additions[at] <= 0 || percentages[i] <= 0
+                    || requestedTotal <= 0.0) continue;
             double suitability = geography.regionSuitability(WildBiome.ALL[at], x, z);
+            // The configured percentage is the strength of THIS habitat's
+            // requested share, not a replacement fraction of the entire
+            // biome mixture. Treating 88% core strength as 88% of all land
+            // turned almost every inland column into Karst and erased rare
+            // Bloomlands in the final production picker.
+            double core = i == 1 ? smooth(0.12, 0.58, suitability)
+                    : smooth(0.32, 0.78, suitability);
+            double requestedFraction = Math.max(0.0, additions[at]) / requestedTotal;
             double share = Math.max(0, Math.min(0.92, percentages[i] / 100.0))
-                * smooth(0.32, 0.78, suitability);
+                    * requestedFraction * core;
             if (share <= 0) continue;
             for (int index = 0; index < weights.length; index++) weights[index] *= 1.0 - share;
             weights[at] += share;

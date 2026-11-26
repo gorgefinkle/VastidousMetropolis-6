@@ -1,2 +1,11 @@
-sources=253 classes=531
-a3a132a28c7a563eccf533f4b5590df7f0380457096138c98e860f5aff5a858f  /mnt/data/r14_5/Metropolis_R14_5_RoadCornerOrder_DEV.jar
+R14.18 DEV — Branch Growth Throughput and Karst Mountain Enclosure
+
+R14.18 removes the artificial one-build-per-tick and one-generated-chunk-load-per-tick limits from the branch-growth drain. Work is advanced in a fair rotating queue with explicit per-tick scan, completion, chunk-load and elapsed-time budgets. Large support footprints move through bounded 128-chunk ticket windows rather than waiting indefinitely for every support chunk to be loaded at once. Failed chunk loads enter a retry cooldown, while natural/player chunk-load notifications wake affected builds.
+
+The branch cache now stores packed support coordinates rather than retaining Bukkit Block wrappers. Candidate scanning is batched by support chunk, but raw candidates are collected and evaluated as one complete building before the per-building fairness sampler and growth budget run. Readiness notifications use a per-UrbanGrid pending-build index rather than copying every pending build in the world. Chunky queue pressure now includes both deferred-populate jobs and pending branch-growth builds, so it pauses generation when either work queue accumulates.
+
+Karstlands are placed as central rare provinces surrounded on all eight neighbouring sides by reserved MOUNTAINS provinces on the same deterministic physical lattice. The Karstlands-specific city keep-away is disabled; the mountain enclosure is the geographic buffer. Watercourse separation remains an independent geographic suitability rule. The R14.18 QA includes deterministic multi-seed mountain-ring checks.
+
+R14.18 retains all R14.17 changes, including the shutdown-safe branch-growth timeout guard, R14.16 mushroom cap/stem occlusion correction, R14.15 one creek origin per city, R14.14 Bloomlands province sizing/picker corrections, and inherited Karst, bridge, marine, and Morphomos fixes.
+
+Run the R14.18 workflow with Java 25 and `mvn -B -ntp clean verify`. Local source probes are under `QA/R14_18/`.

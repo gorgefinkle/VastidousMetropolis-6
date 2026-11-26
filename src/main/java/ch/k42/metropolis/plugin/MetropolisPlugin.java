@@ -1,6 +1,7 @@
 package ch.k42.metropolis.plugin;
 
 import ch.k42.metropolis.commands.CommandMetropolisLandmark;
+import ch.k42.metropolis.commands.CommandMetropolisBiome;
 import ch.k42.metropolis.commands.CommandMetropolisFreder;
 import ch.k42.metropolis.commands.CommandMetropolisGrot;
 import ch.k42.metropolis.commands.CommandMetropolisMaria;
@@ -12,6 +13,7 @@ import ch.k42.metropolis.generator.populators.PopulatorConfig;
 import ch.k42.metropolis.grid.common.Factory;
 import ch.k42.metropolis.grid.urbanGrid.clipboard.DeferredSchematicMetadata;
 import ch.k42.metropolis.grid.urbanGrid.parcel.PlacedParcels;
+import ch.k42.metropolis.grid.urbanGrid.parcel.MetropolisBuildFlagExporter;
 import ch.k42.metropolis.grid.urbanGrid.provider.BranchGrowthDrain;
 import ch.k42.metropolis.grid.urbanGrid.enums.ContextType;
 import ch.k42.metropolis.grid.urbanGrid.clipboard.ClipboardProvider;
@@ -44,6 +46,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class MetropolisPlugin extends JavaPlugin {
    // R30ea field: registered at enable, flushed periodically and at shutdown.
    private CityNameExporter cityNameExporter;
+   private MetropolisBuildFlagExporter buildFlagExporter;
    private PopulatorConfig populatorConfig = new PopulatorConfig();
    private ContextConfig contextConfig = new ContextConfig();
    private ClipboardProvider clipboardProvider;
@@ -52,6 +55,10 @@ public class MetropolisPlugin extends JavaPlugin {
 
    public void recordCityChunk(World world, int x, int z, ContextType type) {
       if (this.cityNameExporter != null) this.cityNameExporter.record(world, x, z, type);
+   }
+
+   public MetropolisBuildFlagExporter getBuildFlagExporter() {
+      return this.buildFlagExporter;
    }
 
    public MetropolisGenerator generatorForWorld(World world) {
@@ -75,6 +82,7 @@ public class MetropolisPlugin extends JavaPlugin {
          generator.saveDeferredQueue();
       }
       if (this.cityNameExporter != null) this.cityNameExporter.flush();
+      if (this.buildFlagExporter != null) this.buildFlagExporter.close();
       super.onDisable();
    }
 
@@ -143,6 +151,7 @@ public class MetropolisPlugin extends JavaPlugin {
       this.loadJsonConfigs();
       this.loadPluginConfig();
       this.cityNameExporter = new CityNameExporter(this.getLogger());
+      this.buildFlagExporter = new MetropolisBuildFlagExporter(this.getDataFolder().toPath(), this.getLogger());
       this.getServer().getScheduler().runTaskTimer(this, () -> this.cityNameExporter.flush(), 200L, 200L);
       Minions.initBranchNodeLog(this.getDataFolder());
       this.loadClipboards();
@@ -181,6 +190,14 @@ public class MetropolisPlugin extends JavaPlugin {
       this.registerCommands();
       ChunkyMemoryValve.startFromPluginEnable();
       for (MetropolisGenerator generator : generators) generator.resumeDeferredQueue();
+
+      // Independent watchdog: re-request both services every second. Drain
+      // scheduling is idempotent per world, so this does not create duplicate
+      // flush tasks; it only recovers from a rejected/lost scheduler submission.
+      this.getServer().getScheduler().runTaskTimer(this, () -> {
+         ChunkyMemoryValve.startFromPluginEnable();
+         for (MetropolisGenerator generator : generators) generator.resumeDeferredQueue();
+      }, 20L, 20L);
    }
 
    private void schedulePendingGrowth(MetropolisGenerator generator, World world, int x, int z) {
@@ -211,6 +228,12 @@ public class MetropolisPlugin extends JavaPlugin {
       if (cmd != null) cmd.setExecutor(new ch.k42.metropolis.commands.CommandMetropolisCreek(this));
       cmd = this.getCommand("windfarm");
       if (cmd != null) cmd.setExecutor(new ch.k42.metropolis.commands.CommandMetropolisWindFarm());
+      cmd = this.getCommand("metrobiome");
+      if (cmd != null) {
+         CommandMetropolisBiome biome = new CommandMetropolisBiome(this);
+         cmd.setExecutor(biome);
+         cmd.setTabCompleter(biome);
+      }
       cmd = this.getCommand("citynames");
       if (cmd != null) cmd.setExecutor((sender, command, label, args) -> {
          if (args.length < 1 || args.length > 2 || !"export".equalsIgnoreCase(args[0])) {

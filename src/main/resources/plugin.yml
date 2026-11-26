@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.6-R14.6-DiskBackpressure-DEV
+version: 0.1.9-R14.18-Branch-Growth-Throughput-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
@@ -29,6 +29,10 @@ commands:
   windfarm:
     description: Finds the nearest valid planned wind farm and its road connection
     usage: /windfarm [tp] [radiusChunks] [minimumTurbines] | verify x y z
+    permission: metropolis.command
+  metrobiome:
+    description: Finds and teleports to the nearest safe location in any Metropolis wilderness biome
+    usage: /metrobiome tp <biome> | /metrobiome list | /metrobiome cancel
     permission: metropolis.command
   citynames:
     description: Export named inner and outer city limits from pregenerated chunks without loading them

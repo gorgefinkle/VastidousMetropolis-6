@@ -43,6 +43,42 @@ public final class PlanRegions {
       return ((long) a << 32) ^ (b & 0xffffffffL);
    }
 
+   // Boundary families are broader than MorphomosRegion ownership. FARM is
+   // its own family; FOREST/RIVER/OCEAN blocks plus ZONE (water/creek/coast)
+   // and NATURAL (wilderness) are one natural family. Only FOREST/FARM still
+   // create MorphomosRegions and retain their existing terrain painters.
+   private static int boundaryFamily(ContextType context) {
+      return MorphomosBoundaryFamily.of(context);
+   }
+
+   private int boundaryFamilyAt(int x, int z) {
+      int kind = this.layout.kindAt(x, z);
+      if (kind == WorldLayout.BLOCK) {
+         WorldLayout.Rect block = this.layout.blockAt(x, z);
+         return boundaryFamily(block == null ? null : this.layout.contextOf(block));
+      }
+      if (kind == WorldLayout.ZONE || kind == WorldLayout.NATURAL) return 2;
+      return 0;
+   }
+
+   private boolean farmAt(int x, int z) {
+      return this.layout.kindAt(x, z) == WorldLayout.BLOCK
+              && this.boundaryFamilyAt(x, z) == 1;
+   }
+
+   private boolean naturalBlockAndExteriorNear(int x, int z) {
+      boolean naturalBlock = false, naturalExterior = false;
+      for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+         if (dx == 0 && dz == 0) continue;
+         int kind = this.layout.kindAt(x + dx, z + dz);
+         if (kind == WorldLayout.BLOCK && this.boundaryFamilyAt(x + dx, z + dz) == 2)
+            naturalBlock = true;
+         else if (kind == WorldLayout.ZONE || kind == WorldLayout.NATURAL)
+            naturalExterior = true;
+      }
+      return naturalBlock && naturalExterior;
+   }
+
    private static final int PASSES = 3;
    private static final int CHAIN = 256;                      // a dangling chain longer than this is taken to be anchored
    private static final int[] DX = {0, 1, 0, -1}, DZ = {-1, 0, 1, 0};
@@ -80,17 +116,21 @@ public final class PlanRegions {
               || this.protectedShortPlannedBoundaryTurn(x,z)
               || this.protectedUrbanCorner(x,z)
               || this.protectedWaterfrontContinuation(x,z)) return false;
-      // Accepted city frontage is immutable, but FARM/FARM and FOREST/FOREST
-      // internal seams must remain eligible for Morphomos merging. An
-      // individual countryside rectangle is not the final merged district.
-      // Farm/forest mixed seams remain retained by mixed()/separatesKinds().
+      // This is a boundary-family decision, not a region-owner decision.
+      // Same-family natural faces (including FOREST/water/creek) dissolve;
+      // FARM only dissolves against FARM. Roads between FARM and any natural
+      // family member remain intact. STREET/LANE neighbours are not owners.
+      int family = 0;
       for (int i = 0; i < 4; i++) {
          int nx = x + DX[i], nz = z + DZ[i];
-         if (this.layout.kindAt(nx, nz) != WorldLayout.BLOCK) continue;
-         WorldLayout.Rect parcel = this.layout.blockAt(nx, nz);
-         ContextType context = parcel == null ? null : this.layout.contextOf(parcel);
-         if (context == null || !context.isMorphomos()) return false;
+         int kind = this.layout.kindAt(nx, nz);
+         if (kind == WorldLayout.STREET || kind == WorldLayout.LANE) continue;
+         int neighbourFamily = this.boundaryFamilyAt(nx, nz);
+         if (!MorphomosBoundaryFamily.compatible(family, neighbourFamily)) return false;
+         family = neighbourFamily;
       }
+      // A street can meet its natural blocks only diagonally at a planned
+      // corner; ruleDissolves() still evaluates the full eight-cell frame.
       Boolean known = this.dissolved.get(k);
       if (known != null) {
          return known;
@@ -109,20 +149,20 @@ public final class PlanRegions {
     */
    private boolean protectedCountrysideWaterFace(int x,int z) {
       if(this.layout.kindAt(x,z)!=WorldLayout.STREET) return false;
-      return countrysideAt(x-1,z) && waterAt(x+1,z)
-            || countrysideAt(x+1,z) && waterAt(x-1,z)
-            || countrysideAt(x,z-1) && waterAt(x,z+1)
-            || countrysideAt(x,z+1) && waterAt(x,z-1);
+      return farmAt(x-1,z) && waterAt(x+1,z)
+            || farmAt(x+1,z) && waterAt(x-1,z)
+            || farmAt(x,z-1) && waterAt(x,z+1)
+            || farmAt(x,z+1) && waterAt(x,z-1);
    }
 
    /** Keep required road frontage against explicitly unclaimed or dry-natural
     * countryside exterior; it is not an interior like-context seam. */
    private boolean protectedCountrysideDryExteriorFace(int x,int z) {
       if(this.layout.kindAt(x,z)!=WorldLayout.STREET)return false;
-      return countrysideAt(x-1,z)&&dryExteriorAt(x+1,z)
-          || countrysideAt(x+1,z)&&dryExteriorAt(x-1,z)
-          || countrysideAt(x,z-1)&&dryExteriorAt(x,z+1)
-          || countrysideAt(x,z+1)&&dryExteriorAt(x,z-1);
+      return farmAt(x-1,z)&&dryExteriorAt(x+1,z)
+          || farmAt(x+1,z)&&dryExteriorAt(x-1,z)
+          || farmAt(x,z-1)&&dryExteriorAt(x,z+1)
+          || farmAt(x,z+1)&&dryExteriorAt(x,z-1);
    }
    private boolean dryExteriorAt(int x,int z) {
       int kind=this.layout.kindAt(x,z);
@@ -153,7 +193,7 @@ public final class PlanRegions {
          WorldLayout.Rect r=this.layout.blockAt(px,pz);
          if(r==null)continue;
          ContextType c=this.layout.contextOf(r);
-         if(c==null || c.isMorphomos())continue;
+         if(c==null || boundaryFamily(c)!=0)continue;
          if((x==r.minX-1||x==r.maxX+1) && (z==r.minZ-1||z==r.maxZ+1)) return true;
       }
       return false;
@@ -227,6 +267,9 @@ public final class PlanRegions {
     */
    private boolean protectedWaterfrontContinuation(int x,int z) {
       if(this.layout.kindAt(x,z)!=WorldLayout.STREET)return false;
+      // A shoreline street between natural land and water is not a road
+      // frontage: both sides belong to the shared natural boundary family.
+      if (naturalBlockAndExteriorNear(x,z)) return false;
       // If water lies east/west, preserve the N/S street between protected landings.
       if((waterAt(x+1,z) || waterAt(x-1,z))
               && waterfrontAnchored(x,z,0,-1,1,0)
@@ -254,10 +297,8 @@ public final class PlanRegions {
       return false;
    }
 
-   private boolean countrysideAt(int x,int z) {
-      if(this.layout.kindAt(x,z)!=WorldLayout.BLOCK) return false;
-      WorldLayout.Rect r=this.layout.blockAt(x,z);
-      return r!=null && this.layout.contextOf(r)!=null && this.layout.contextOf(r).isMorphomos();
+   private boolean countrysideAt(int x, int z) {
+      return this.layout.kindAt(x,z)==WorldLayout.BLOCK && this.boundaryFamilyAt(x,z)!=0;
    }
 
    private boolean waterAt(int x,int z) {
@@ -340,24 +381,15 @@ public final class PlanRegions {
       Long k = key(x, z);
       Boolean known = this.mixedCache.get(k);
       if (known == null) {
-         ContextType first = null;
+         int first = 0;
          boolean different = false;
          for (int dx = -1; dx <= 1 && !different; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
-               if (dx == 0 && dz == 0 || this.layout.kindAt(x + dx, z + dz) != WorldLayout.BLOCK) {
-                  continue;
-               }
-               WorldLayout.Rect r = this.layout.blockAt(x + dx, z + dz);
-               ContextType c = r == null ? null : this.layout.contextOf(r);
-               if (c == null || !c.isMorphomos()) {
-                  continue;
-               }
-               if (first == null) {
-                  first = c;
-               } else if (first != c) {
-                  different = true;
-                  break;
-               }
+               if (dx == 0 && dz == 0 || this.layout.kindAt(x + dx, z + dz) != WorldLayout.BLOCK) continue;
+               int family = this.boundaryFamilyAt(x + dx, z + dz);
+               if (family == 0) continue;
+               if (first == 0) first = family;
+               else if (first != family) { different = true; break; }
             }
          }
          known = different;
@@ -398,40 +430,20 @@ public final class PlanRegions {
     * (farm | road | farm, forest | road | forest) can dissolve.
     */
    private boolean separatesKinds(int x, int z) {
-      ContextType first = null;
-      boolean ground = false;
+      int first = 0;
       for (int dx = -1; dx <= 1; dx++) {
          for (int dz = -1; dz <= 1; dz++) {
-            if (dx == 0 && dz == 0) {
-               continue;
-            }
+            if (dx == 0 && dz == 0) continue;
             int nx = x + dx, nz = z + dz;
-            int k = this.layout.kindAt(nx, nz);
-            if (k == WorldLayout.STREET || k == WorldLayout.LANE) {
-               continue;
-            }
-            if (k == WorldLayout.ZONE && !this.layout.isWater(nx, nz)) {
-               ground = true;                     // the shore's ground: a boundary, unless it is only forest beside it (below)
-               continue;
-            }
-            if (k != WorldLayout.BLOCK) {
-               return true;                       // water, unclaimed: not the countryside around it
-            }
-            WorldLayout.Rect r = this.layout.blockAt(nx, nz);
-            ContextType c = r == null ? null : this.layout.contextOf(r);
-            if (c == null || !c.isMorphomos()) {
-               return true;                       // a block of the city
-            }
-            if (first == null) {
-               first = c;
-            } else if (first != c) {
-               return true;                       // two kinds of countryside
-            }
+            int kind = this.layout.kindAt(nx, nz);
+            if (kind == WorldLayout.STREET || kind == WorldLayout.LANE) continue;
+            int family = this.boundaryFamilyAt(nx, nz);
+            if (family == 0) return true;
+            if (first == 0) first = family;
+            else if (first != family) return true;
          }
       }
-      // Forest and the shore's ground are one wilderness: a street between them is no boundary (it dissolves, like a forest
-      // street at the water). Ground beside anything else (a farm, a city block, nothing) is still a boundary.
-      return ground && first != ContextType.FOREST;
+      return false;
    }
 
    /** Road neighbours of a built chunk at the given pass: built streets and highway lanes, on the four sides. */
@@ -464,7 +476,7 @@ public final class PlanRegions {
             if (k == WorldLayout.BLOCK) {
                WorldLayout.Rect r = this.layout.blockAt(x + dx, z + dz);
                ContextType c = r == null ? null : this.layout.contextOf(r);
-               if (c == null || !c.isMorphomos()) {
+               if (c == null || boundaryFamily(c) == 0) {
                   return true;
                }
             }
@@ -539,51 +551,36 @@ public final class PlanRegions {
    }
 
    private boolean decide(int x, int z) {
-      if (this.layout.kindAt(x, z) != WorldLayout.STREET) {
-         return false;
-      }
+      if (this.layout.kindAt(x, z) != WorldLayout.STREET) return false;
       List<WorldLayout.Rect> seen = new ArrayList<WorldLayout.Rect>(4);
-      ContextType seenContext = null;
-      boolean water = false;
+      int family = 0;
+      boolean naturalExterior = false;
       for (int dx = -1; dx <= 1; dx++) {
          for (int dz = -1; dz <= 1; dz++) {
-            if (dx == 0 && dz == 0) {
-               continue;
-            }
+            if (dx == 0 && dz == 0) continue;
             int nx = x + dx, nz = z + dz;
-            int k = this.layout.kindAt(nx, nz);
-            if (k == WorldLayout.STREET || k == WorldLayout.LANE) {
-               continue;
-            }
-            if (k == WorldLayout.BLOCK) {
-               WorldLayout.Rect r = this.layout.blockAt(nx, nz);
-               ContextType c = r == null ? null : this.layout.contextOf(r);
-               if (c == null || !c.isMorphomos()) {
-                  return false;
-               }
-               if (seenContext == null) {
-                  seenContext = c;
-               } else if (seenContext != c) {
-                  return false;
-               }
-               if (!seen.contains(r)) {
-                  seen.add(r);
-               }
-            } else if (k == WorldLayout.ZONE) {
-               water = true;       // water, or the ground beside it: the shore. A farm street there stays, a forest street goes
+            int kind = this.layout.kindAt(nx, nz);
+            if (kind == WorldLayout.STREET || kind == WorldLayout.LANE) continue;
+            if (kind == WorldLayout.BLOCK) {
+               WorldLayout.Rect block = this.layout.blockAt(nx, nz);
+               ContextType context = block == null ? null : this.layout.contextOf(block);
+               int neighbourFamily = boundaryFamily(context);
+               if (neighbourFamily == 0 || (family != 0 && family != neighbourFamily)) return false;
+               family = neighbourFamily;
+               if (!seen.contains(block)) seen.add(block);
+            } else if (kind == WorldLayout.ZONE || kind == WorldLayout.NATURAL) {
+               if (family == 1) return false;
+               family = 2;
+               naturalExterior = true;
             } else {
-               return false;       // unclaimed
+               return false;
             }
          }
       }
-      // Water/shore is a DIFFERENT boundary context, not a second forest.
-      // A district has roads on every side unless the opposing rectangles
-      // are both the same Morphomos context. Never dissolve FOREST/water
-      // frontage merely because FOREST is countryside.
-      if (water) {
-         return false;
-      }
-      return seen.size() >= 2;
+      // FARM remains separate: only two or more FARM rectangles dissolve
+      // their shared road. Natural land/water/creek seams dissolve when at
+      // least one natural block owns the seam; no painter ownership is merged.
+      return MorphomosBoundaryFamily.shouldDissolve(family, seen.size(), naturalExterior);
    }
 
    /**

@@ -97,6 +97,16 @@ public enum ContextType {
       return this == FOREST || this == FARM;
    }
 
+   /**
+    * Natural districts share Morphomos boundary behavior without sharing a
+    * terrain painter or a MorphomosRegion. Water parcels remain owned by their
+    * river/ocean painters; creek and unzoned wilderness cells are classified
+    * by WorldLayout as ZONE/NATURAL in PlanRegions.
+    */
+   public boolean isNaturalBoundaryFamily() {
+      return this == FOREST || this == RIVER || this == OCEAN;
+   }
+
    public static ContextType getByString(String string) {
       for (ContextType d : values()) {
          if (d.string.equals(string)) {

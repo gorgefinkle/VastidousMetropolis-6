@@ -2,7 +2,6 @@ package ch.k42.metropolis.grid.urbanGrid.provider;
 
 import ch.k42.metropolis.grid.urbanGrid.provider.DecayProviderNormal.Ctx;
 import ch.k42.metropolis.grid.urbanGrid.provider.DecayProviderNormal.GNode;
-import ch.k42.metropolis.grid.urbanGrid.provider.DecayProviderNormal.SupportHit;
 import ch.k42.metropolis.minions.DecayOption;
 import ch.k42.metropolis.minions.Minions;
 import ch.k42.metropolis.plugin.PluginConfig;
@@ -131,22 +130,38 @@ final class DecayProviderBranch {
         if (PluginConfig.getMasterBranchIntensity() <= 0 || options.getLeavesScale() <= 0) {
             return;
         }
+        PackedSupportHitBuffer rawCandidatePoints = new PackedSupportHitBuffer();
+        this.collectRawGrowthCandidates(world, ctx.supportHits, rawCandidatePoints);
+        this.generateGrowthFromPackedCandidates(world, options, ctx, rawCandidatePoints);
+    }
 
-        // Building components are computed ONCE, up front, straight from the
-        // full unsampled candidate set -- not from whatever survives
-        // sampling. Computing it any later means components (and therefore
-        // per-building fairness) can only reflect buildings that happened to
-        // survive an earlier, building-blind sampling pass; a short building
-        // that lost that earlier competition would already be invisible by
-        // the time components are built, making the "fairness" downstream
-        // meaningless for it.
-        List<GNode> rawCandidatePoints = this.collectRawGrowthCandidates(ctx);
-        if (rawCandidatePoints.isEmpty()) {
-            return;
-        }
+    /**
+     * Executes one building's growth after its complete support surface has
+     * been scanned. The drain may collect raw candidates in bounded chunk
+     * batches, but components, fairness sampling and branch budgets remain a
+     * single whole-building operation.
+     */
+    void generateGrowthFromCandidates(World world, DecayOption options, Ctx ctx,
+                                      List<GNode> rawCandidatePoints) {
+        if (PluginConfig.getMasterBranchIntensity() <= 0 || options.getLeavesScale() <= 0
+                || rawCandidatePoints == null || rawCandidatePoints.isEmpty()) return;
         Map<Long, Integer> cellComponents = this.buildCellComponents(rawCandidatePoints);
-
         List<GNode> candidatePoints = this.sampleGrowthCandidates(rawCandidatePoints, cellComponents);
+        this.generateSampledGrowth(world, options, ctx, cellComponents, candidatePoints);
+    }
+
+    /** Same complete-building fairness path, with primitive storage for the unsampled raw pool. */
+    void generateGrowthFromPackedCandidates(World world, DecayOption options, Ctx ctx,
+                                             PackedSupportHitBuffer rawCandidatePoints) {
+        if (PluginConfig.getMasterBranchIntensity() <= 0 || options.getLeavesScale() <= 0
+                || rawCandidatePoints == null || rawCandidatePoints.isEmpty()) return;
+        Map<Long, Integer> cellComponents = this.buildCellComponents(rawCandidatePoints);
+        List<GNode> candidatePoints = this.sampleGrowthCandidates(rawCandidatePoints, cellComponents);
+        this.generateSampledGrowth(world, options, ctx, cellComponents, candidatePoints);
+    }
+
+    private void generateSampledGrowth(World world, DecayOption options, Ctx ctx,
+                                       Map<Long, Integer> cellComponents, List<GNode> candidatePoints) {
         if (candidatePoints.isEmpty()) {
             return;
         }
@@ -431,7 +446,38 @@ final class DecayProviderBranch {
         return false;
     }
 
-    private List<GNode> collectRawGrowthCandidates(Ctx ctx) {
+    List<GNode> collectRawGrowthCandidates(World world, Ctx ctx) {
+        return this.collectRawGrowthCandidates(world, ctx.supportHits);
+    }
+
+    List<GNode> collectRawGrowthCandidates(World world, PackedSupportHitBuffer hits) {
+        List<GNode> raw = new ArrayList<>();
+        for (int i = 0; i < hits.size(); i++) {
+            this.collectRawGrowthCandidates(world, hits.x(i), hits.y(i), hits.z(i), raw);
+        }
+        return raw;
+    }
+
+    /** Appends one resident support-chunk batch without allocating a GNode per raw candidate. */
+    void collectRawGrowthCandidates(World world, PackedSupportHitBuffer hits, PackedSupportHitBuffer output) {
+        for (int i = 0; i < hits.size(); i++) {
+            this.collectRawGrowthCandidates(world, hits.x(i), hits.y(i), hits.z(i),
+                    hits.sourceOrder(i), output);
+        }
+    }
+
+    private void collectRawGrowthCandidates(World world, int x, int y, int z,
+                                            int sourceOrder, PackedSupportHitBuffer raw) {
+        Block support = world.getBlockAt(x, y, z);
+        if (this.isThinStandaloneSupport(support) || !this.owner.isBranchableSupport(support)) return;
+        for (Block neighbour : this.getOutwardNeighbours(support)) {
+            if (neighbour.isEmpty()) {
+                raw.add(neighbour.getX(), neighbour.getY(), neighbour.getZ(), false, sourceOrder);
+            }
+        }
+    }
+
+    private void collectRawGrowthCandidates(World world, int x, int y, int z, List<GNode> raw) {
         // Every exposed, empty neighbour of every qualifying support hit,
         // completely unsampled. This is the SAME set of Block queries
         // collectGrowthCandidates() used to make while sampling inline --
@@ -440,27 +486,26 @@ final class DecayProviderBranch {
         // see every building's true candidate set, including buildings that
         // a height-banded sample would otherwise have thrown away before
         // fairness ever got a chance to run.
-        List<GNode> raw = new ArrayList<>();
-        for (SupportHit hit : ctx.supportHits) {
-            if (this.isThinStandaloneSupport(hit.block)) {
-                continue;
+            // Support positions are coordinate-only while cached. Create a
+            // Bukkit Block wrapper only when the owning chunk is verified loaded.
+            Block support = world.getBlockAt(x, y, z);
+            if (this.isThinStandaloneSupport(support)) {
+                return;
             }
             // Glass panes (etc) are still perfectly normal SupportHits --
             // they decay and host vines like anything else -- they're just
             // not a valid branch anchor. See
             // DecayProviderNormal.isBranchableSupport()/nonBranchSupportBlocks,
             // a set deliberately independent of vine/decay eligibility.
-            if (!this.owner.isBranchableSupport(hit.block)) {
+            if (!this.owner.isBranchableSupport(support)) {
+                return;
+            }
+        for (Block neighbour : this.getOutwardNeighbours(support)) {
+            if (!neighbour.isEmpty()) {
                 continue;
             }
-            for (Block neighbour : this.getOutwardNeighbours(hit.block)) {
-                if (!neighbour.isEmpty()) {
-                    continue;
-                }
-                raw.add(new GNode(neighbour.getX(), neighbour.getY(), neighbour.getZ()));
-            }
+            raw.add(new GNode(neighbour.getX(), neighbour.getY(), neighbour.getZ()));
         }
-        return raw;
     }
 
     /**
@@ -483,6 +528,65 @@ final class DecayProviderBranch {
      * top -- regardless of how many other buildings of what height happen
      * to share the same tile or district.
      */
+    private static final class CandidateIndexBuffer {
+        int[] values = new int[64];
+        int size;
+        int minY = Integer.MAX_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        void add(int value, int y) {
+            if (size == values.length) values = java.util.Arrays.copyOf(values, values.length * 2);
+            values[size++] = value;
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+        }
+    }
+
+    private List<GNode> sampleGrowthCandidates(PackedSupportHitBuffer rawCandidates,
+                                                Map<Long, Integer> cellComponents) {
+        long[] orderedCandidates = new long[rawCandidates.size()];
+        for (int i = 0; i < rawCandidates.size(); i++) {
+            orderedCandidates[i] = ((long) rawCandidates.sourceOrder(i) << 32) | (i & 0xffffffffL);
+        }
+        java.util.Arrays.sort(orderedCandidates);
+        Map<Integer, CandidateIndexBuffer> byComponent = new HashMap<>();
+        for (long encoded : orderedCandidates) {
+            int i = (int) encoded;
+            Integer component = cellComponents.get(buildingCellKey(rawCandidates.x(i), rawCandidates.z(i)));
+            int key = component != null ? component : -1;
+            byComponent.computeIfAbsent(key, ignored -> new CandidateIndexBuffer()).add(i, rawCandidates.y(i));
+        }
+
+        long totalCap = (long) MAX_GROWTH_CANDIDATES_PER_BUILDING * Math.max(1, byComponent.size());
+        List<GNode> combined = new ArrayList<>((int) Math.min(totalCap, rawCandidates.size()));
+        for (CandidateIndexBuffer component : byComponent.values()) {
+            int bandCount = Math.max(1, Math.min(10, component.maxY - component.minY + 1));
+            int span = Math.max(1, component.maxY - component.minY + 1);
+            int perBandCap = Math.max(1, MAX_GROWTH_CANDIDATES_PER_BUILDING / bandCount);
+            int[][] reservoirs = new int[bandCount][perBandCap];
+            int[] bandSeen = new int[bandCount];
+            int[] retained = new int[bandCount];
+            for (int i = 0; i < component.size; i++) {
+                int candidateIndex = component.values[i];
+                int band = (int) ((long) (rawCandidates.y(candidateIndex) - component.minY) * bandCount / span);
+                band = Math.min(bandCount - 1, Math.max(0, band));
+                int seen = ++bandSeen[band];
+                if (retained[band] < perBandCap) {
+                    reservoirs[band][retained[band]++] = candidateIndex;
+                } else {
+                    int slot = this.random.nextInt(seen);
+                    if (slot < perBandCap) reservoirs[band][slot] = candidateIndex;
+                }
+            }
+            for (int band = 0; band < bandCount; band++) {
+                for (int i = 0; i < retained[band]; i++) {
+                    int at = reservoirs[band][i];
+                    combined.add(new GNode(rawCandidates.x(at), rawCandidates.y(at), rawCandidates.z(at)));
+                }
+            }
+        }
+        return combined;
+    }
+
     private List<GNode> sampleGrowthCandidates(List<GNode> rawCandidates, Map<Long, Integer> cellComponents) {
         Map<Integer, List<GNode>> byComponent = new HashMap<>();
         for (GNode g : rawCandidates) {
@@ -1605,9 +1709,19 @@ final class DecayProviderBranch {
      */
     private Map<Long, Integer> buildCellComponents(List<GNode> allCandidates) {
         Set<Long> occupiedCells = new HashSet<>();
-        for (GNode g : allCandidates) {
-            occupiedCells.add(buildingCellKey(g.x, g.z));
+        for (GNode g : allCandidates) occupiedCells.add(buildingCellKey(g.x, g.z));
+        return this.buildCellComponents(occupiedCells);
+    }
+
+    private Map<Long, Integer> buildCellComponents(PackedSupportHitBuffer allCandidates) {
+        Set<Long> occupiedCells = new HashSet<>();
+        for (int i = 0; i < allCandidates.size(); i++) {
+            occupiedCells.add(buildingCellKey(allCandidates.x(i), allCandidates.z(i)));
         }
+        return this.buildCellComponents(occupiedCells);
+    }
+
+    private Map<Long, Integer> buildCellComponents(Set<Long> occupiedCells) {
         Map<Long, Integer> componentOf = new HashMap<>();
         int nextComponent = 0;
         for (Long startCell : occupiedCells) {

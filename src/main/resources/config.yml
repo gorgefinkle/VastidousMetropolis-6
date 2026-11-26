@@ -115,7 +115,7 @@ generator:
     blend: 30                              # 0..100 how softly one biome grades into the next. 15 = a gentle gradient, 50 = very soft
     mesaDesertMerge: 48                    # blocks the border between mesa and desert waves in and out by (0..512). the two meet along a smooth wave this far either side of the line, with no scattered columns of one in the other. 0 = a clean straight-ish line. larger = bigger, slower waves
     mesaFoot: 60                           # 0..100: how far a mesa height carries on into the desert past its border as an eroded slope, so it does not end in a sandy cliff. 0 = off (the old behaviour), 100 = the longest, gentlest apron. only the relief changes, not where the sand starts
-    smoothBlocks: 192                      # blocks the biome weights are averaged over, so a spot or a sliver of one biome narrower than this (little islands inside another biome, thin bands of a third between two) never forms. 0 = off. raise it (64-96) to remove bigger spots; too high and small biome patches shrink or vanish
+    smoothBlocks: 192                      # blocks the common-biome weights are averaged over. Bloomlands and karst keep their core selection through this smoothing step while broad borders remain field-driven. 0 = off.
     decorations: 100                       # percent of the default amount of set pieces left in the wilderness: crashed passenger jets and military helicopters, abandoned camps, open-cast mine pits in the low mesa, dead wind turbines, radio masts, and mesa rock spires. they gather in "forgotten places" with bare land between. 0 = none, 200 = twice as many
     spacing:
       all: 100            # percent of the default distance between wilderness pieces, applied to every kind. 100 = default, 200 = twice as far apart (a quarter as many), 50 = half the distance
@@ -131,7 +131,7 @@ generator:
     lootMinLevel: 1                        # loot level range (1..5) of those chests. crash sites use the military collection, camps residential, mines and masts industrial
     lootMaxLevel: 4
     hardBorders: true                      # true = EVERY biome border (forest/mountain, mountain/mesa, ...) is one waved line, as mesa/desert already was, instead of a speckle of single columns. the waviness is mesaDesertMerge blocks. false = the old speckled borders (mesa/desert stay waved either way)
-    share:                                 # BASE biome-seeding weights, normalized if they do not add up to 100. Habitat rules additionally restrict dunes to coasts and use existing geological suitability for karstlands; final post-filter shares therefore differ from these seeding weights.
+    share:                                 # BASE biome-seeding weights, normalized if they do not add up to 100. Dunes remain coast-restricted; karst is selected from the deterministic fractured-limestone habitat field. Bloomlands remains the rarest biome.
       forest: 56
       mountains: 18                        # 0 here, or forest.mountains.enabled false, means no mountain biome. height, treeLine, snowLine and rampBlocks come from forest.mountains
       desert: 20
@@ -143,15 +143,15 @@ generator:
       oldGrowth: 7                        # humid old conifer forest with mossy earth and mature canopy
       deciduous: 9                        # broadleaf woodland with oak and birch; gentle slopes
       coastalDunes: 4                     # coastal land only, within duneInlandBlocks of the actual ocean shore
-      karstlands: 3                       # Sunken Karstlands; uses the existing geological province selection
-      bloomlands: 2                       # rare giant-fungus and willow provinces, placed by the existing wilderness system
+      karstlands: 4                       # rare fractured-limestone basins; each is enclosed by a full mountain ring on all eight sides
+      bloomlands: 2                       # rarest biome: giant-fungus and willow provinces
     geography:
       riverWetlandReachChunks: 12          # radius from ACTUAL river banks, not lattice water reservations (1..24 chunks)
       duneInlandBlocks: 420                # coastal dunes taper out this far inland (32..1024 blocks)
-      minimumRegionBlocks: 480             # suppress isolated tiny habitat pockets (0 disables; 256-1024). Does not move actual coasts or rivers
+      minimumRegionBlocks: 480             # minimum-size averaging for the small geographic habitats; karst fracture valleys are exempt so their long narrow network is not erased
       wetlandCoreStrengthPercent: 86       # how strongly suitable river/coastal wetlands replace the background biome (0..92)
       duneCoreStrengthPercent: 86          # higher = stronger dune cores on exposed sandy coasts (0..92)
-      volcanicCoreStrengthPercent: 88       # legacy key: strength of the existing geological suitability for karstlands (0..92)
+      volcanicCoreStrengthPercent: 88       # legacy config key; strength of the Karstlands fracture-habitat core bias (0..92); city spacing comes from its mountain ring
     keepAway:                              # chunks from the nearest farm or city block at which a biome reaches full strength. it grows in from nothing at 40% of that distance, so there is none closer: farm beside forest or mountains looks natural, farm beside desert or mesa does not. 0 = may touch the cities. the wilderness between two cities' farm bands is only about 46 chunks wide at the default city spacing, so keep these well under that or the biome hardly appears. the shares above are measured without this, so a kept-away biome ends up with a little less than its share
       mountains: 0
       desert: 14
@@ -160,8 +160,8 @@ generator:
       dryForest: 8
       wetlands: 2
       oldGrowth: 5
-      karstlands: 8
-      bloomlands: 12
+      karstlands: 0                       # legacy value ignored at runtime; mountain enclosure supplies natural city spacing
+      bloomlands: 8
     transitions:
       - "forest>desert=dryForest"
       - "forest>mesa=dryForest"
@@ -388,11 +388,11 @@ generator:
     islandFraction: 0.42          # how much land can rise out of the water near the coast as islands (fraction of the base radius) -- bigger = more and larger islands, reaching further from shore. Never in the deep middle. 0 = no islands.
     seabedReliefFraction: 0.7     # how uneven the sea floor is, as a fraction of the water depth (basins, banks, hollows). Fades to nothing at the shoreline so the shallows stay a smooth slope. 0 = the old perfectly flat bed.
     seabed:                       # only ocean-owned water columns; does not move shoreline or overwrite ports
-      enabled: true               # underwater sediments, seagrass/kelp and sparse natural rock outcrops
-      patchSizeBlocks: 56         # 12..512: size of coherent sand/gravel/clay and plant habitat zones
-      rockPercent: 12             # 0..100: chance of small submerged boulder clusters inside rocky patches
-      seagrassPercent: 17         # 0..100: sparse growth on shallow sediment bottoms
-      kelpPercent: 9              # 0..100: growth in protected deeper water, with boat clearance
+      enabled: true               # varied underwater habitats: meadows, kelp forests, coral reefs, sponge gardens and rare vents
+      patchSizeBlocks: 44         # 12..512: size of coherent sand/gravel/clay and plant habitat zones
+      rockPercent: 18             # 0..100: chance of small submerged boulder clusters inside rocky patches
+      seagrassPercent: 34         # 0..100: sparse growth on shallow sediment bottoms
+      kelpPercent: 28              # 0..100: growth in protected deeper water, with boat clearance
       shelfVariationBlocks: 2.2   # 0..5: LOW, smooth rolling rises/hollows breaking the flat shelf; fades at shoreline
       midVariationBlocks: 2.0     # 0..6: mid-depth hills/hollows; deep ocean keeps existing broad relief
       bedformScaleBlocks: 110     # 24..512: width of the coherent low seabed rises; larger = broader, smoother shelves

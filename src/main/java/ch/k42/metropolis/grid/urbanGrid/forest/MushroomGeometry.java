@@ -1,12 +1,14 @@
 package ch.k42.metropolis.grid.urbanGrid.forest;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
  * Giant fungal growth geometry. The cap and trunk have coherent material
  * identities; the caller owns site choice and terrain permissions.
- * This is a source recovery of the shipped R30ea behavior, not a scale tweak.
+ * Stem height is clipped against assembled cap columns so it cannot pierce the upper surface.
  */
 public final class MushroomGeometry {
     public static final String STEM = "minecraft:mushroom_stem[down=true,east=true,north=true,south=true,up=true,west=true]";
@@ -24,6 +26,10 @@ public final class MushroomGeometry {
     static long mix(long v){ v^=v>>>30;v*= -4658895280553007687L; v^=v>>>27;v*= -7723592293110705685L;return v^(v>>>31); }
     static double unit(long v) {return (mix(v)>>>11)*0x1.0p-53;}
     public static String species(long seed) {return unit(seed ^ 131L)<.52?"minecraft:red_mushroom_block":"minecraft:brown_mushroom_block";}
+
+    private static long columnKey(int x,int z) {
+        return ((long)x<<32) ^ (z & 0xffffffffL);
+    }
 
     public static void grow(Sink sink,Terrain terrain,int x,int z,long worldSeed,int variant) {
         long seed=mix(worldSeed ^ mix(x*-7046029254386353131L + z*-4417276706812531889L));
@@ -105,7 +111,21 @@ public final class MushroomGeometry {
                 }
             }
         }
-        for(P q:trunk)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))sink.set(q.x,q.y,q.z,STEM);
+        // Determine the underside of the completed cap (including secondary
+        // crowns) per X/Z column. The older fixed-height trunk ignored the
+        // downward-curving cap profiles and could continue through the cap.
+        Map<Long,Integer> capBottomByColumn=new HashMap<>();
+        for(P q:crown) {
+            long key=columnKey(q.x,q.z);
+            Integer previous=capBottomByColumn.get(key);
+            if(previous==null||q.y<previous)capBottomByColumn.put(key,q.y);
+        }
+        for(P q:trunk) {
+            Integer capBottom=capBottomByColumn.get(columnKey(q.x,q.z));
+            if(capBottom!=null&&q.y>=capBottom)continue;
+            if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z))
+                sink.set(q.x,q.y,q.z,STEM);
+        }
         for(P q:crown)if(terrain.allows(q.x,q.z)&&q.y>terrain.groundAt(q.x,q.z)) {
             StringBuilder state=new StringBuilder(cap).append('[');
             for(int i=0;i<6;i++) {

@@ -6,10 +6,10 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.6-R14.6-disk-backpressure-DEV</version>
+    <version>0.1.10-R14.19-Chunky-Recovery-Backoff-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.6 disk queue prototype DEV)</name>
-    <description>R14.5 road planning preserved; disk-first bounded deferred population queue and Chunky pressure reporting</description>
+    <name>Metropolis for Paper 26.2 (R14.19 Chunky Recovery Backoff)</name>
+    <description>Preserves R14.18 branch-growth throughput; requires sustained healthy memory samples before Chunky resumes and backs off rapid repeat pauses</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_5_RoadCornerOrder_DEV</finalName>
+        <finalName>Metropolis_R14_19_Chunky_Recovery_Backoff_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

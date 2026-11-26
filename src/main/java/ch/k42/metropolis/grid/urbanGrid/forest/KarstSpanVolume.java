@@ -84,11 +84,11 @@ public final class KarstSpanVolume {
         // At the gorge margins natural relief already contains much of the
         // upland altitude; adding the full canyon depth there created the
         // old gigantic artificial retaining wall.
-        double upland=17*(KarstLandforms.noise(seed,x,z,240,0x55504c414e44L)-.5)
-                     +10*(KarstLandforms.noise(seed,x,z,102,0x5249444745L)-.5)
-                      +5*(KarstLandforms.noise(seed,x,z,36,0x42524f4bL)-.5);
+        double upland=KarstLandforms.massifUpland(seed,x,z);
         double broad=.8*n(seed,x,z,91,0x4445434b46414345L);
-        return upland+2.0+broad;
+        // The span joins the same broad mountain mass as the surrounding
+        // uplands; its own crown is only a modest rise above that bench.
+        return 90.0+upland+2.0+broad;
     }
     private static double centerHeight(long seed,int x,int z,double natural,double r){
         return crownDatum(seed,x,z,natural)-verticalRadius(seed,x,z,r);
@@ -120,7 +120,12 @@ public final class KarstSpanVolume {
         double bedding=1.35*n(seed,x,z,53,0x5348454c46424544L)
                       +.48*n(seed,x,z,17,0x4a4f494e5453414cL);
         double pits=Math.max(0,n(seed,x,z,27,0x4b415252454e4eL)-.22)*.85;
-        double top=highland-roundedDrop*rim+shelfMask*(bedding-pits);
+        // A recognizable natural-rock arch crown, rather than a flat
+        // mountain roof with a cave hollowed underneath it. The rise fades
+        // toward both portals and remains small enough to leave a broad,
+        // walkable limestone crest.
+        double crownRise=6.5*(1-smooth(q/.98))*smooth((1.18-r)/.48);
+        double top=highland+crownRise-roundedDrop*rim+shelfMask*(bedding-pits);
         // Blend only where the shelf is physically seated in the banks, not
         // halfway across the ravine. This replaces the R30dq long approach
         // grade that gave the bridge an unmistakable arched top silhouette.
@@ -140,21 +145,55 @@ public final class KarstSpanVolume {
     public static int floor(long seed,int x,int z,int topY,double natural){
         return topY-(int)Math.round(Math.max(0,upperRelief(seed,x,z,natural)-natural));
     }
-    /** Highest block removed from the natural uplift, calculated ONCE per
-     * column rather than performing 3-D noise and canyon search on every Y.
-     * The returned value is never below the original ravine floor.
+    /**
+     * Highest block removed beneath the bridge deck. This is the INTRADOS,
+     * not the bottom of a vertically inflated ellipsoid. The former
+     * topY-2*halfHeight calculation made the rock mass tens of blocks thick
+     * and allowed it to fill almost the entire gorge at broad sections.
+     *
+     * The new underside keeps a modest 8-block keystone over the middle of
+     * the ravine, then thickens smoothly toward both the bridge ends and the
+     * natural abutments. Where the original ravine floor rises into the
+     * underside, the opening closes naturally into the banks. The untouched
+     * pre-bridge floor is always preserved.
+     *
+     * This is evaluated ONCE per column; no per-Y noise or recursive
+     * neighbor repair is needed.
      */
     public static int undercutCeiling(long seed,int x,int z,int topY,int floor){
         if(floor>=topY || !eligible(seed,x,z))return floor;
         double r=gapRatio(seed,x,z);
         if(r>=1.23)return floor;
         double hh=halfHeight(seed,x,z,r);
-        if(hh<=0)return floor;
-        double center=topY-hh;
-        double nominalBottom=center-hh;
-        double eroded=1.6*noise3(seed,x,nominalBottom,z,20,0x554e444552534944L)
-                     +.75*noise3(seed,x,nominalBottom,z,8.8,0x524f434b4a4f494eL);
-        return Math.max(floor,Math.min(topY,(int)Math.ceil(nominalBottom-eroded)-1));
+        if(hh<3.35)return floor;
+
+        double q=Math.abs(across(seed,x,z)+skew(seed,x,z,r))
+                /Math.max(1.0,horizontalRadius(seed,x,z,r));
+        if(q>=.985)return floor;
+
+        // The bridge must retain a coherent rock roof, but that roof is thin
+        // over the gorge and becomes thicker only as it joins the abutments.
+        // q follows the span length; r follows the cross-gorge bank profile.
+        double endBlend=smooth((q-.10)/.88);
+        double bankBlend=smooth((r-.16)/.82);
+        // A substantial limestone keystone keeps this reading as a natural
+        // arch bridge, not a giant hollow mountain. Clearance remains open
+        // at the valley centre and the intrados rises into solid abutments.
+        double thickness=42.0+15.0*endBlend+27.0*bankBlend;
+
+        // Small XYZ bedding variation keeps the intrados geological without
+        // making a noisy curtain or creating isolated one-block stalactites.
+        double bedding=.70*noise3(seed,x,topY-thickness,z,26.0,0x554e444552534944L)
+                      +.30*noise3(seed,x,topY-thickness,z,11.0,0x524f434b4a4f494eL);
+        thickness+=1.25*bedding;
+        thickness=Math.max(38.0,Math.min(86.0,thickness));
+
+        int undersideY=topY-(int)Math.ceil(thickness);
+        int highestAir=undersideY-1;
+        // Never carve through the original ground. If the natural floor has
+        // already risen to the roof, this is the abutment, not an opening.
+        if(highestAir<=floor)return floor;
+        return Math.min(topY-1,highestAir);
     }
     /** Equivalent pointwise occupancy for geometry tests and debug views. */
     public static boolean retainRock(long seed,int x,int y,int z,int topY,int floor){
