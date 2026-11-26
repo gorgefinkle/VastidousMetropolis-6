@@ -1,0 +1,63 @@
+name: R14.42 Missile Silo Complex
+
+on:
+  push:
+    branches:
+      - feature/r14-42-missile-silo-complex
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/r14-42-missile-silo-complex' || github.ref_name == 'feature/r14-42-missile-silo-complex'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Verify planner integration and full footprint reservation
+        run: |
+          grep -F 'final int footprint = 6;' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmLayout.java
+          grep -F 'new FarmMissileSilo(cx, cz, gy[a][c], this.seed, variant)' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmLayout.java
+          grep -F 'FarmMissileSiloGeometry.paint' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSilo.java
+          ! grep -nE '167|IRON_TRAPDOOR' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
+      - name: Run deterministic geometry, variant, access and chunk-clipping audits
+        run: |
+          mkdir -p qa-out
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmRandom.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java \
+            QA/R14_42/MissileSiloGeometryProbe.java
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.farm.MissileSiloGeometryProbe
+      - name: Build plugin JAR
+        run: mvn --batch-mode --no-transfer-progress clean package
+      - name: Verify embedded plugin version
+        run: |
+          expected='0.1.18-R14.42-Missile-Silo-Complex-DEV'
+          actual="$(unzip -p target/Metropolis_R14_42_Missile_Silo_Complex_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          test "$actual" = "$expected"
+          echo "Embedded plugin version: $actual"
+      - name: Assemble test delivery
+        run: |
+          mkdir -p delivery
+          cp target/Metropolis_R14_42_Missile_Silo_Complex_DEV.jar delivery/
+          zip -qr delivery/Metropolis_R14_42_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
+          (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
+          ls -lh delivery
+      - name: Upload JAR and full source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Metropolis_R14_42_Missile_Silo_Complex
+          path: delivery/*
+          if-no-files-found: error
+          retention-days: 14
