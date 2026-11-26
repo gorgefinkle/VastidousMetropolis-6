@@ -831,7 +831,12 @@ final class FarmMissileSiloGeometry {
         for (int dx = -22; dx <= 22; dx++) {
             for (int dz = -22; dz <= 22; dz++) {
                 double d = Math.hypot(dx, dz);
-                if (d > 20.0 && d <= 22.0) {
+                if (d <= 20.0) {
+                    // Explicitly clear the generated ground layer: otherwise
+                    // the grate would sit on dirt/grass and the launch duct
+                    // would remain capped even though the geometry emits bars.
+                    put(dx, this.h, dz, AIR, 0);
+                } else if (d <= 22.0) {
                     int mat = d > 21.0 ? COBBLE : STONE_BRICKS;
                     put(dx, this.h, dz, mat, 0);
                 }
@@ -917,6 +922,11 @@ final class FarmMissileSiloGeometry {
         for (int dz = 16; dz <= 44; dz++)
             for (int dx = 27; dx <= 31; dx++)
                 put(dx, this.h, dz, dz % 5 == 0 ? COBBLE : STONE_SLAB, 5);
+        // Turn the vehicle spur west-to-north into the portal's west-facing
+        // personnel entrance; it must meet the actual door, not stop nearby.
+        for (int dz = 9; dz <= 16; dz++)
+            for (int dx = 30; dx <= 32; dx++)
+                put(dx, this.h, dz, dz % 4 == 0 ? COBBLE : STONE_SLAB, 5);
         for (int dx = 26; dx <= 32; dx++) {
             put(dx, this.h + 1, 44, STONE_BRICKS, 0);
         }
