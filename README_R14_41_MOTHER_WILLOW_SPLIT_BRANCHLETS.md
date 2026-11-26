@@ -7,7 +7,7 @@ The target is a monumental, broad, rounded weeping-willow crown rather than an u
 - A visible, fused, woody trunk and main scaffold.
 - Long primary arms that travel outward before turning downward.
 - Secondary and terminal branches that become progressively finer and more pendulous.
-- Actual forks at the end of terminal scaffold limbs: each splits into two or three slender hanging branchlets instead of ending as one tapered spike.
+- Actual forks at the end of terminal scaffold limbs: each splits into three or four slender hanging branchlets instead of ending as one tapered spike.
 - Several separate leaf-bearing shoots extend from each outer fork, with leaf clusters spaced along their hanging length. Leaves stay concentrated on the outer branchlets; the inner crown stays woody and open rather than becoming a solid ball.
 
 Reference sources:
@@ -21,7 +21,7 @@ MotherWillowGeometry emits internal poplar_log, poplar_wood, and yellow_poplar_l
 
 ## Regression coverage
 
-QA/R14_40/MotherWillowBlockPainterProbe.java runs the production geometry through the same state classifier used by the live painter. It checks that wood and leaves are not cross-classified, both wood block forms are present, the woody scaffold is not leaf-dominated, and terminal limbs have a minimum number of real two- or three-way forks, a minimum volume of outer foliage, and a cap on leaves in the inner crown.
+QA/R14_40/MotherWillowBlockPainterProbe.java runs the production geometry through the same state classifier used by the live painter. It checks that wood and leaves are not cross-classified, both wood block forms are present, the woody scaffold is not leaf-dominated, and terminal limbs have a minimum number of real three- or four-way forks, a minimum volume of outer foliage, and a cap on leaves in the inner crown.
 
 The tree remains based on the already approved deep, distributed lateral-root architecture. No central taproot, post-generation tree repair, or separate decoration pass was added.
 
