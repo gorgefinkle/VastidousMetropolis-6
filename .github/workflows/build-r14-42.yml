@@ -31,6 +31,22 @@ jobs:
           grep -F 'new FarmMissileSilo(cx, cz, gy[a][c], this.seed, variant)' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmLayout.java
           grep -F 'FarmMissileSiloGeometry.paint' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSilo.java
           ! grep -nE '167|IRON_TRAPDOOR' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
+      - name: Verify Bloomlands rarity migration and cross-city creek berth wiring
+        run: |
+          grep -F 'bloomlands: 1' src/main/resources/config.yml
+          grep -F 'configuredShare == 2' src/main/java/ch/k42/metropolis/plugin/PluginConfig.java
+          grep -F 'creekOriginSpacingChunks: 120' src/main/resources/config.yml
+          grep -F 'setCreekOriginSpacingChunks' src/main/java/ch/k42/metropolis/plugin/PluginConfig.java
+          grep -F 'isSpacingWinner(x, z, choice)' src/main/java/ch/k42/metropolis/grid/urbanGrid/river/BoundedRiverSites.java
+          grep -F 'candidate(otherTileX, otherTileZ)' src/main/java/ch/k42/metropolis/grid/urbanGrid/river/BoundedRiverSites.java
+      - name: Run deterministic creek-origin spacing policy audits
+        run: |
+          mkdir -p qa-out
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/river/CreekCityOriginPolicy.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/river/CreekOriginSpacingPolicy.java \
+            QA/R14_43/CreekOriginSpacingPolicyProbe.java
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.river.CreekOriginSpacingPolicyProbe
       - name: Run deterministic geometry, variant, access and chunk-clipping audits
         run: |
           mkdir -p qa-out
