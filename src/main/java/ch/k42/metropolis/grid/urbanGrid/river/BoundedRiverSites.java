@@ -269,6 +269,13 @@ public final class BoundedRiverSites {
             accepted.put(k,null);
             return null;
         }
+        // A different city can be only a few chunks away on the far side of
+        // its own boundary. Apply a second world-coordinate arbitration so
+        // separate city winners still keep a 120-chunk berth from one another.
+        if (!isSpacingWinner(x, z, choice)) {
+            accepted.put(k, null);
+            return null;
+        }
         int radius=Math.max(1,Math.min(6,PluginConfig.getLandmarkCloneRadius()));
         for(int dx=-radius;dx<=radius;dx++)for(int dz=-radius;dz<=radius;dz++){
             if(dx==0&&dz==0)continue;
@@ -286,6 +293,39 @@ public final class BoundedRiverSites {
             }
         }
         accepted.put(k,choice);return choice;
+    }
+
+    /**
+     * Only city winners participate in cross-city spacing. Each candidate
+     * checks every 64-chunk host tile that could contain an origin inside the
+     * configured radius; origin coordinates, not city boxes or tile centres,
+     * determine the actual separation.
+     */
+    private boolean isSpacingWinner(int tileX, int tileZ, Site site) {
+        int spacing = RiverConfig.getCreekOriginSpacingChunks();
+        if (spacing <= 0) return true;
+        int tileRadius = (spacing + TILE - 1) / TILE;
+        long ownRank = siteRank(tileX, tileZ);
+        long ownTileKey = CreekCityOriginPolicy.tileKey(tileX, tileZ);
+        for (int dx = -tileRadius; dx <= tileRadius; dx++) {
+            for (int dz = -tileRadius; dz <= tileRadius; dz++) {
+                if (dx == 0 && dz == 0) continue;
+                int otherTileX = tileX + dx;
+                int otherTileZ = tileZ + dz;
+                Site other = candidate(otherTileX, otherTileZ);
+                if (other == null) continue;
+                if (other.city != null && !isCityWinner(otherTileX, otherTileZ, other)) continue;
+                long otherRank = siteRank(otherTileX, otherTileZ);
+                long otherTileKey = CreekCityOriginPolicy.tileKey(otherTileX, otherTileZ);
+                if (!CreekOriginSpacingPolicy.winsAgainst(
+                        site.origin.chunkX, site.origin.chunkZ, ownRank, ownTileKey,
+                        other.origin.chunkX, other.origin.chunkZ, otherRank, otherTileKey,
+                        spacing)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private boolean isCityWinner(int tileX,int tileZ,Site site) {
