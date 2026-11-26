@@ -541,7 +541,7 @@ public final class ForestGenerator {
       WildField wild = wildFor(generator);
       if (wild == null) return -1;
       ForestTerrain terrain = terrainFor(generator);
-      if (!wildBiomeMatchesAt(wild, terrain, biome, x, z)) return -1;
+      if (!wildBiomeTargetMatches(generator, wild, terrain, biome, x, z)) return -1;
       WildBiomeOwner owner = wildBiomeOwner(generator, x >> 4, z >> 4);
       // -2 = no forest planner owner; -3 = a one-off field hit without a sustained core.
       if (owner == null) return -2;
@@ -552,10 +552,25 @@ public final class ForestGenerator {
       };
       for (int[] offset : offsets) {
          int sx = x + offset[0], sz = z + offset[1];
-         if (!wildBiomeMatchesAt(wild, terrain, biome, sx, sz)) return -3;
+         if (!wildBiomeTargetMatches(generator, wild, terrain, biome, sx, sz)) return -3;
          if (wildBiomeOwner(generator, sx >> 4, sz >> 4) == null) return -2;
       }
       return 10000;
+   }
+
+   /**
+    * Named old-growth massifs are a separate planner-owned overlay, not merely
+    * high-relief samples from the ordinary wilderness biome field. Count them
+    * as mountain targets so /metrobiome tp mountains can find both systems.
+    */
+   private static boolean wildBiomeTargetMatches(MetropolisGenerator generator, WildField wild,
+                                                  ForestTerrain terrain, WildBiome biome, int x, int z) {
+      if (biome == WildBiome.MOUNTAINS && generator != null && generator.getWorldSeed() != null
+              && PluginConfig.isCityRingsEnabled()
+              && WildernessFeatures.forSeed(generator.getWorldSeed()).mountainAt(x, z) != null) {
+         return true;
+      }
+      return wildBiomeMatchesAt(wild, terrain, biome, x, z);
    }
 
    private static boolean wildBiomeMatchesAt(WildField wild, ForestTerrain terrain,
@@ -581,7 +596,7 @@ public final class ForestGenerator {
       for (int lx = 0; lx < 16; lx++) for (int lz = 0; lz < 16; lz++) {
          int x = baseX + lx, z = baseZ + lz;
          double roll = ForestTerrain.unit(ForestTerrain.hash(ctx.terrain.getSeed(), x, z, 41));
-         if (ctx.wild.pick(x, z, roll) != biome) continue;
+         if (!wildBiomeTargetMatches(generator, ctx.wild, ctx.terrain, biome, x, z)) continue;
          int groundY = ctx.height(x, z);
          if (groundY < minY || groundY > maxY) continue;
          Material ground = chunk.getBlock(lx, groundY, lz).getType();
