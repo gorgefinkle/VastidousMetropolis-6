@@ -904,7 +904,7 @@ final class FarmMissileSiloGeometry {
 
         // Four low ventilation risers with protected intakes. They remain
         // equipment plinths, not habitable towers or raised lookout platforms.
-        int[][] vents = {{-16,-8},{16,-8},{-16,8},{16,8}};
+        int[][] vents = {{-27,-14},{27,-14},{-27,14},{27,14}};
         for (int[] vent : vents) {
             for (int y = this.h + 1; y <= this.h + 5; y++) {
                 put(vent[0], y, vent[1], STONE_BRICKS, 0);
