@@ -222,8 +222,13 @@ public final class MotherWillowGeometry {
           P tip=pts[k];
           if(rand(hash(tag,k+301))<.72)
             bulb(tip,.82+rand(hash(tag,k+302))*.40,false,tag+k,"y");
-          if(k>=steps-2 && rand(hash(tag,k+303))<.88)
+          // A second generation of pendant shoots hangs from the middle of
+          // each outer branchlet as well as its split tip. This gives the
+          // canopy its layered willow curtain without filling the inner bole.
+          if(k>=steps*.55 && k<steps-1 && rand(hash(tag,k+303))<.72)
             foliage(tip,hash(tag,k),.72+rand(hash(tag,k+304))*.42);
+          if(k>=steps-2 && rand(hash(tag,k+305))<.92)
+            foliage(tip,hash(tag,k+1),.76+rand(hash(tag,k+306))*.42);
         }
         return;
       }
@@ -234,14 +239,14 @@ public final class MotherWillowGeometry {
         // branchlets. The fork sits at the outer tip, not beside the trunk,
         // avoiding the dense "branching cap" silhouette from earlier drafts.
         P fork=pts[steps];
-        int branchlets=2+(rand(hash(tag,401))>.48?1:0);
+        int branchlets=3+(rand(hash(tag,401))>.72?1:0);
         if(stats!=null){stats.terminalForks++;stats.terminalBranchlets+=branchlets;}
-        double fan=(branchlets==2?.40:.54);
+        double fan=(branchlets==3?.46:.62);
         for(int j=0;j<branchlets;j++){
           long child=hash(tag,4601+j);
-          double t=branchlets==2?j-.5:j-1.0;
+          double t=branchlets==3?j-1.0:j-1.5;
           double angle=azimuth+t*fan+(rand(hash(child,4))-.5)*.16;
-          double childLength=length*(.25+rand(hash(child,5))*.13);
+          double childLength=length*(.32+rand(hash(child,5))*.14);
           double childRadius=Math.max(.44,radius*(.34+rand(hash(child,6))*.08));
           // A slightly different initial downward angle gives the fork
           // irregular, overlapping curtains rather than a symmetric trident.
