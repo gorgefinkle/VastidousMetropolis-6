@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.16-R14.40-Mother-Willow-Block-Painter-DEV
+version: 0.1.17-R14.41-Mother-Willow-Split-Branchlets-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
