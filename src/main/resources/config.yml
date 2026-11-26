@@ -144,7 +144,7 @@ generator:
       deciduous: 9                        # broadleaf woodland with oak and birch; gentle slopes
       coastalDunes: 4                     # coastal land only, within duneInlandBlocks of the actual ocean shore
       karstlands: 4                       # rare fractured-limestone drainage provinces; remains less common than ordinary wilderness biomes
-      bloomlands: 2                       # rarest biome: giant-fungus and willow provinces
+      bloomlands: 1                       # very rare giant-fungus and Mother Willow provinces
     geography:
       riverWetlandReachChunks: 12          # radius from ACTUAL river banks, not lattice water reservations (1..24 chunks)
       duneInlandBlocks: 420                # coastal dunes taper out this far inland (32..1024 blocks)
@@ -307,6 +307,7 @@ generator:
     creekMaxTraceChunks: 320    # actual maximum creek-to-river trace (CHUNKS). No hidden cap. 192=old effective max; 320 allows more reach; 920 is valid but can be very expensive in tile planning
     creekSiteChancePercent: 45 # 0..100 acceptance among valid origins. Higher = more creeks and closer nearest sites; preserves landmark, road, district and water checks
     creekSiteAttempts: 36      # full checks among seed-shuffled, centre+perimeter-zoned, creek-aligned park proposals; zoning misses do not spend this budget
+    creekOriginSpacingChunks: 120 # minimum straight-line berth between accepted creek origins, including origins in different nearby cities; 0 disables
     peelMaxDimension: 20       # rectangles wider/taller than this bisect first instead of peeling a road at the river's edge (prevents a staircase of many thin roads near a diagonal river)
     bankMaxRunChunks: 2        # 0 = the bank's elevation ramp runs the whole way from the water to the reclaimed district's edge. Set a chunk count to finish the rise early and leave the rest flat (same height either way -- only the slope's length changes).
 
