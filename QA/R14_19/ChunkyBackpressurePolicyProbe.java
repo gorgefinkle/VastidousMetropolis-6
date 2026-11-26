@@ -6,6 +6,12 @@ package ch.k42.metropolis.generator;
  */
 public final class ChunkyBackpressurePolicyProbe {
     private static final long SECOND = 1_000_000_000L;
+    private static final long GIB = 1024L * 1024L * 1024L;
+    private static final long MAX_HEAP = 10L * GIB;
+    private static final long FREE_AT_40_PERCENT = 6L * GIB;
+    private static final long FREE_AT_67_PERCENT = 3_300L * 1024L * 1024L;
+    private static final long FREE_AT_80_PERCENT = 2L * GIB;
+    private static final long FREE_AT_83_PERCENT = 1_700L * 1024L * 1024L;
 
     private ChunkyBackpressurePolicyProbe() {}
 
@@ -14,42 +20,42 @@ public final class ChunkyBackpressurePolicyProbe {
 
         // A low one-off reading must not bypass the stability window.
         require(!ChunkyBackpressurePolicy.canResume(
-                0, 0.40, 6_000, 10_000, 1 * SECOND,
+                0, 0.40, FREE_AT_40_PERCENT, MAX_HEAP, 1 * SECOND,
                 1, 0L, 31 * SECOND),
                 "40% heap with one healthy sample resumed too early");
         checks++;
 
         // Elapsed time alone is insufficient without enough consecutive samples.
         require(!ChunkyBackpressurePolicy.canResume(
-                0, 0.40, 6_000, 10_000, 1 * SECOND,
+                0, 0.40, FREE_AT_40_PERCENT, MAX_HEAP, 1 * SECOND,
                 ChunkyBackpressurePolicy.MIN_STABLE_SAMPLES - 1, 0L, 31 * SECOND),
                 "recovery resumed without the required healthy samples");
         checks++;
 
         // A full stable window with enough samples can resume at the normal target.
         require(ChunkyBackpressurePolicy.canResume(
-                0, 0.40, 6_000, 10_000, 1 * SECOND,
+                0, 0.40, FREE_AT_40_PERCENT, MAX_HEAP, 1 * SECOND,
                 ChunkyBackpressurePolicy.MIN_STABLE_SAMPLES, 0L, 31 * SECOND),
                 "healthy 40% recovery was incorrectly blocked");
         checks++;
 
         // The normal 68% target no longer bypasses stability.
         require(!ChunkyBackpressurePolicy.canResume(
-                0, 0.67, 2_000, 10_000, 30 * SECOND,
+                0, 0.67, FREE_AT_67_PERCENT, MAX_HEAP, 30 * SECOND,
                 1, 0L, 31 * SECOND),
                 "68% threshold bypassed the stable window");
         checks++;
 
         // High-but-safe recovery remains allowed after the same stable window.
         require(ChunkyBackpressurePolicy.canResume(
-                0, 0.80, 1_000, 10_000, 1 * SECOND,
+                0, 0.80, FREE_AT_80_PERCENT, MAX_HEAP, 1 * SECOND,
                 ChunkyBackpressurePolicy.MIN_STABLE_SAMPLES, 0L, 31 * SECOND),
                 "stable 80% recovery with 10% free headroom was blocked");
         checks++;
 
         // A high reading outside the 82% band is not eligible.
         require(!ChunkyBackpressurePolicy.canResume(
-                0, 0.83, 1_700, 10_000, 1 * SECOND,
+                0, 0.83, FREE_AT_83_PERCENT, MAX_HEAP, 1 * SECOND,
                 40, 0L, 50 * SECOND),
                 "83% heap incorrectly passed the stable recovery band");
         checks++;
@@ -57,21 +63,21 @@ public final class ChunkyBackpressurePolicyProbe {
         // A queue above the low-water mark blocks resume even with healthy memory.
         require(!ChunkyBackpressurePolicy.canResume(
                 ChunkyBackpressurePolicy.QUEUE_RESUME + 1,
-                0.40, 6_000, 10_000, 1 * SECOND,
+                0.40, FREE_AT_40_PERCENT, MAX_HEAP, 1 * SECOND,
                 40, 0L, 50 * SECOND),
                 "pending queue above low-water mark did not block resume");
         checks++;
 
         // The recovery cooldown blocks an otherwise healthy, stable heap.
         require(!ChunkyBackpressurePolicy.canResume(
-                0, 0.40, 6_000, 10_000, 1 * SECOND,
+                0, 0.40, FREE_AT_40_PERCENT, MAX_HEAP, 1 * SECOND,
                 40, 90 * SECOND, 50 * SECOND),
                 "recovery cooldown was ignored");
         checks++;
 
         // Both the absolute and percentage free-headroom gates remain active.
         require(!ChunkyBackpressurePolicy.canResume(
-                0, 0.80, 700, 10_000, 1 * SECOND,
+                0, 0.80, 700L * 1024L * 1024L, MAX_HEAP, 1 * SECOND,
                 40, 0L, 50 * SECOND),
                 "recovery passed with less than 8% free headroom");
         checks++;
