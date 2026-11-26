@@ -219,38 +219,68 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
     * Feature cells are widely spaced, so search outward by cell rings and inspect
     * one ring beyond the first hit before choosing the closest lake centre.
     */
-   public synchronized LakeSite nearestLake(int blockX, int blockZ, int maxRings) {
+   /**
+    * Find the nearest planned named lake with no arbitrary search-radius cap.
+    * Search complete feature-cell rings and one extra ring after the first hit
+    * so a nearer site at the edge cannot be overlooked. Run asynchronously:
+    * candidate planning may calculate a connected outlet route.
+    */
+   public LakeSite nearestLake(int blockX, int blockZ) {
       int chunkX = Math.floorDiv(blockX, 16);
       int chunkZ = Math.floorDiv(blockZ, 16);
       int originGX = Math.floorDiv(chunkX, this.cellSize);
       int originGZ = Math.floorDiv(chunkZ, this.cellSize);
-      int limit = Math.max(0, maxRings);
       int firstHitRing = -1;
       LakeSite best = null;
       double bestDistance = Double.POSITIVE_INFINITY;
-
-      for (int ring = 0; ring <= limit; ring++) {
+      for (int ring = 0; ; ring++) {
          for (int dx = -ring; dx <= ring; dx++) {
             for (int dz = -ring; dz <= ring; dz++) {
                if (ring > 0 && Math.max(Math.abs(dx), Math.abs(dz)) != ring) continue;
-               FeatureCell feature = cell(originGX + dx, originGZ + dz);
-               LakeSite lake = feature.lake;
+               LakeSite lake = cell(originGX + dx, originGZ + dz).lake;
                if (lake == null) continue;
-               double ox = lake.centerX - (blockX + 0.5);
-               double oz = lake.centerZ - (blockZ + 0.5);
+               double ox = lake.centerX - (blockX + 0.5), oz = lake.centerZ - (blockZ + 0.5);
                double distance = ox * ox + oz * oz;
-               if (distance < bestDistance) {
-                  bestDistance = distance;
-                  best = lake;
-               }
+               if (distance < bestDistance) { bestDistance = distance; best = lake; }
             }
          }
          if (best != null) {
             if (firstHitRing < 0) firstHitRing = ring;
-            else if (ring > firstHitRing) break;
+            else if (ring > firstHitRing) return best;
          }
+         if (ring == Integer.MAX_VALUE) return best;
       }
-      return best;
+   }
+
+   /**
+    * Find a separately planned named massif. This search is independent of the
+    * broad /metrobiome mountains field.
+    */
+   public MountainSite nearestMountain(int blockX, int blockZ) {
+      int chunkX = Math.floorDiv(blockX, 16);
+      int chunkZ = Math.floorDiv(blockZ, 16);
+      int originGX = Math.floorDiv(chunkX, this.cellSize);
+      int originGZ = Math.floorDiv(chunkZ, this.cellSize);
+      int firstHitRing = -1;
+      MountainSite best = null;
+      double bestDistance = Double.POSITIVE_INFINITY;
+      for (int ring = 0; ; ring++) {
+         for (int dx = -ring; dx <= ring; dx++) {
+            for (int dz = -ring; dz <= ring; dz++) {
+               if (ring > 0 && Math.max(Math.abs(dx), Math.abs(dz)) != ring) continue;
+               MountainSite mountain = cell(originGX + dx, originGZ + dz).mountain;
+               if (mountain == null) continue;
+               double ox = mountain.centerX - (blockX + 0.5), oz = mountain.centerZ - (blockZ + 0.5);
+               double distance = ox * ox + oz * oz;
+               if (distance < bestDistance) { bestDistance = distance; best = mountain; }
+            }
+         }
+         if (best != null) {
+            if (firstHitRing < 0) firstHitRing = ring;
+            else if (ring > firstHitRing) return best;
+         }
+         if (ring == Integer.MAX_VALUE) return best;
+      }
    }
 
    public MountainSite mountainAt(int blockX, int blockZ) {
