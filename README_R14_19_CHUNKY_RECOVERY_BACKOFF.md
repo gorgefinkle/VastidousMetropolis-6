@@ -36,6 +36,10 @@ Run the standalone probe by compiling it together with
 `ChunkyBackpressurePolicy.java` and executing
 `ch.k42.metropolis.generator.ChunkyBackpressurePolicyProbe`.
 
+## CI
+
+The draft pull request runs the Java 25 build and standalone recovery-policy probe through `.github/workflows/build-r14-19.yml`.
+
 ## Validation status
 
 The standalone policy regression probe is included. A Java 25 full Maven build
