@@ -76,9 +76,18 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       WildernessFeatures found = CACHE.get(key);
       if (found != null) return found;
       WaterField water = WaterFields.forSeed(seed, lattice);
+      // WaterFields may have installed this feature plan while creating the
+      // shared field. Reuse it rather than replacing the provider after roads
+      // have already retained its lake/stream masks.
+      found = CACHE.get(key);
+      if (found != null) return found;
       HighwayNetwork highways = HighwayNetworks.forSeed(seed);
       found = new WildernessFeatures(seed, spacing, water, highways);
       CACHE.put(key, found);
+      if (PluginConfig.isCityRingsEnabled() && PluginConfig.isForestGenerationEnabled()) {
+         water.setLakes(found);
+         water.setStreams(found);
+      }
       return found;
    }
 
