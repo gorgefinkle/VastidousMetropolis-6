@@ -612,12 +612,18 @@ public final class BiomeEcology {
     private static void willow(Chunk c,ForestGenerator.TreeSite site,int cx,int cz,long seed) {
         MotherWillowGeometry.growChunk((x,y,z,state)->{
             if(!inChunk(c,x,z)||!validVegetationY(y,c.getWorld().getMinHeight(),c.getWorld().getMaxHeight())||!site.allows(x,z))return;
-            boolean isWood=state.startsWith("minecraft:oak_log");
-            if(isWood) {
+            // MotherWillowGeometry emits poplar_log/poplar_wood states.
+            // Treating only the obsolete oak_log prefix as wood silently
+            // converted every trunk and branch voxel into OAK_LEAVES.
+            if(MotherWillowBlockState.isWood(state)) {
                 Axis axis=state.endsWith("axis=x]")?Axis.X:state.endsWith("axis=z]")?Axis.Z:Axis.Y;
                 if(y<=site.groundAt(x,z))willowRoot(c,site,x,y,z,axis);
+                else if(MotherWillowBlockState.isBarkWood(state))
+                    log(c,site,x,y,z,Material.OAK_WOOD,Axis.Y);
                 else log(c,site,x,y,z,Material.OAK_LOG,axis);
-            } else put(c,site,x,y,z,Material.OAK_LEAVES);
+            } else if(MotherWillowBlockState.isLeaves(state)) {
+                put(c,site,x,y,z,Material.OAK_LEAVES);
+            }
         },new MotherWillowGeometry.Terrain(){
             public int groundAt(int x,int z){return site.groundAt(x,z);}
             public boolean allows(int x,int z){return site.allows(x,z);}
