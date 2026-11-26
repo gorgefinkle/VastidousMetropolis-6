@@ -6,7 +6,7 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.15-R14.39-Lake-and-Massif-Search-DEV</version>
+    <version>0.1.16-R14.40-Mother-Willow-Block-Painter-DEV</version>
     <packaging>jar</packaging>
     <name>Metropolis for Paper 26.2 (R14.39 Lake and Massif Search on R14.38)</name>
     <description>Preserves R14.38 features; activates planned lake sources at shared water-field creation, removes arbitrary lake search radius, and adds separate named massif discovery/teleport</description>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_39_Lake_and_Massif_Search_DEV</finalName>
+        <finalName>Metropolis_R14_40_Mother_Willow_Block_Painter_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
