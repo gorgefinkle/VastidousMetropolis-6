@@ -34,7 +34,7 @@ final class FarmMissileSiloGeometry {
     private static final int STONE_BRICKS = 98, REDSTONE_LAMP = 123, QUARTZ = 155;
     private static final int TERRACOTTA = 159, HAY = 170, REDSTONE_BLOCK = 152;
     private static final int BREWING_STAND = 117, HOPPER = 154, TRIPWIRE_HOOK = 131;
-    private static final int COBBLE_STAIRS = 67, STONE_BUTTON = 77, IRON_TRAPDOOR = 167;
+    private static final int COBBLE_STAIRS = 67, STONE_BUTTON = 77;
     private static final int WOOD_SLAB = 126, PUMPKIN = 86, WHEAT = 59;
 
     private final Sink out;
