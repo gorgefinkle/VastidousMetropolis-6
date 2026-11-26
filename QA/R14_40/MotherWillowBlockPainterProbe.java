@@ -12,7 +12,7 @@ public final class MotherWillowBlockPainterProbe {
             public int groundAt(int x,int z) { return 64; }
             public boolean allows(int x,int z) { return true; }
         };
-        MotherWillowGeometry.grow(sink,terrain,0,0,0x26_03_2026L);
+        MotherWillowGeometry.GrowthStats stats=MotherWillowGeometry.growWithStats(sink,terrain,0,0,0x26_03_2026L);
         int wood=0,barkWood=0,logs=0,leaves=0,misclassified=0;
         for(String state:blocks.values()) {
             boolean actualWood=state.contains("poplar_log")||state.contains("poplar_wood");
@@ -34,7 +34,11 @@ public final class MotherWillowBlockPainterProbe {
         if(logs<100)throw new AssertionError("Directional log sections were not preserved: "+logs);
         if(leaves<200)throw new AssertionError("Foliage output disappeared: "+leaves);
         if(wood<=leaves)throw new AssertionError("Willow painter output is still leaf-dominated: wood="+wood+", leaves="+leaves);
+        if(stats.terminalForks<20)throw new AssertionError("Terminal willow limbs still taper without splitting: forks="+stats.terminalForks);
+        if(stats.terminalBranchlets<stats.terminalForks*2)
+            throw new AssertionError("Terminal forks are missing their paired/tripled hanging branchlets.");
         System.out.println("MotherWillowBlockPainterProbe PASS: wood="+wood+", barkWood="+barkWood
-                +", directionalLogs="+logs+", leaves="+leaves+", misclassified="+misclassified);
+                +", directionalLogs="+logs+", leaves="+leaves+", misclassified="+misclassified
+                +", terminalForks="+stats.terminalForks+", branchlets="+stats.terminalBranchlets);
     }
 }
