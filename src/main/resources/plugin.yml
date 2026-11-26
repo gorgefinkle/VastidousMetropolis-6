@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.14-R14.38-Mother-Willow-Wooden-Scaffold-DEV
+version: 0.1.15-R14.39-Lake-and-Massif-Search-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
@@ -29,6 +29,10 @@ commands:
   lake:
     description: Finds the nearest planned wilderness lake and teleports to its shoreline
     usage: /lake [tp]
+    permission: metropolis.command
+  massif:
+    description: Finds and teleports to separately planned named mountain massifs
+    usage: /massif [tp]
     permission: metropolis.command
   windfarm:
     description: Finds the nearest valid planned wind farm and its road connection
