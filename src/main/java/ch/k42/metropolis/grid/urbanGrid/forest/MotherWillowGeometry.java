@@ -186,9 +186,9 @@ public final class MotherWillowGeometry {
     }
     /**
      * A sparse, long-lived woody scaffold. Primary arms remain continuous
-     * wood to their tips; only two subordinate orders are grown. No repeated
-     * terminal forks and no upright replacement crowns: those produced the
-     * dense branching cap and cluttered inner crown in the previous version.
+     * wood through the secondary orders, then each outer terminal limb forks
+     * into fine, pendulous branchlets. These forks stay at the distal crown,
+     * avoiding a dense branching cap beside the trunk.
      */
     void branch(P origin,double azimuth,double initialSlope,double length,double radius,int order,long tag){
       int steps=Math.max(8,(int)Math.ceil(length/6.0));
@@ -220,8 +220,8 @@ public final class MotherWillowGeometry {
         int first=(int)(steps*.42);
         for(int k=first;k<=steps;k+=Math.max(2,steps/6)){
           P tip=pts[k];
-          if(rand(hash(tag,k+301))<.64)
-            bulb(tip,.58+rand(hash(tag,k+302))*.36,false,tag+k,"y");
+          if(rand(hash(tag,k+301))<.72)
+            bulb(tip,.70+rand(hash(tag,k+302))*.40,false,tag+k,"y");
           if(k>=steps-2 && rand(hash(tag,k+303))<.88)
             foliage(tip,hash(tag,k),.72+rand(hash(tag,k+304))*.42);
         }
