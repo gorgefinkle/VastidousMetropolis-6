@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.11-R14.35-Queue-First-Branch-Growth-DEV
+version: 0.1.12-R14.36-Mother-Willow-Structure-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch
