@@ -102,6 +102,16 @@ public class DecayProviderNormal extends DecayProvider {
       this.branchGrower = new DecayProviderBranch(this, random);
    }
 
+   @Override
+   public int pendingGrowthWorkCount() {
+      return this.pendingBuilds.size();
+   }
+
+   private void reportPendingGrowthWork() {
+      ch.k42.metropolis.generator.ChunkyMemoryValve.growthPending(
+              this.generator != null ? this.generator.getWorld() : null, this.pendingBuilds.size());
+   }
+
    Block safeRelative(Block block, int dx, int dy, int dz) {
       int x = block.getX() + dx;
       int z = block.getZ() + dz;
@@ -378,6 +388,7 @@ public class DecayProviderNormal extends DecayProvider {
     */
    private void cacheBuildGrowth(Parcel build, Ctx ctx, World world, DecayOption options) {
       PendingBuild acc = this.pendingBuilds.computeIfAbsent(build, b -> new PendingBuild());
+      this.reportPendingGrowthWork();
       acc.supportHits.addAll(ctx.supportHits);
       acc.chunkArea += ctx.footprintChunks;
       acc.world = world;
@@ -539,6 +550,7 @@ public class DecayProviderNormal extends DecayProvider {
       // retry the same cached candidate pool instead of silently losing it.
       if (pending.supportHits.isEmpty()) {
          this.pendingBuilds.remove(build);
+         this.reportPendingGrowthWork();
          return;
       }
       Ctx ctx = new Ctx();
@@ -560,6 +572,7 @@ public class DecayProviderNormal extends DecayProvider {
       }
       this.refreshChunksInBounds(pending.world, ctx);
       this.pendingBuilds.remove(build);
+      this.reportPendingGrowthWork();
    }
 
    static Set<Long> missingGrowthChunks(World world, List<SupportHit> supportHits) {
