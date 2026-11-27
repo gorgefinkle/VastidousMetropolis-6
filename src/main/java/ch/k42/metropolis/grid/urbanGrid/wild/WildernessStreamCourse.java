@@ -75,6 +75,11 @@ public final class WildernessStreamCourse extends RiverProvider {
    }
    /** Exact receiving-network junction shared with the receiver plan. */
    public HydrologyConvergenceKey convergenceKey(){return this.convergenceKey;}
+   /** The receiving network owns this exact terminal chunk, not the tributary. */
+   public boolean terminatesAt(int chunkX,int chunkZ) {
+      return this.convergenceKey!=null&&this.convergenceKey.chunkX()==chunkX
+              &&this.convergenceKey.chunkZ()==chunkZ;
+   }
 
    public int pointCount() {
       return this.xs.length;
