@@ -1,7 +1,7 @@
 package ch.k42.metropolis.grid.urbanGrid.forest;
 
-import ch.k42.metropolis.grid.urbanGrid.wild.WildBiome;
 import ch.k42.metropolis.plugin.PluginConfig;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Pure pre-generation sample of the same natural wilderness surface that
@@ -13,7 +13,7 @@ public final class WildernessTerrainProfile {
    private final ForestTerrain terrain;
    private final ForestGenerator.WildField wild;
    private final int baseline;
-   private final double[] forestWeights=new double[ForestType.ALL.length];
+   private final ConcurrentHashMap<Long,Integer> heightCache=new ConcurrentHashMap<>();
 
    public WildernessTerrainProfile(long worldSeed) {
       this.terrain=new ForestTerrain(worldSeed);
@@ -25,6 +25,9 @@ public final class WildernessTerrainProfile {
 
    /** The undisturbed natural surface at a world column, before any water layer is applied. */
    public int surfaceHeight(int x,int z) {
+      long key=((long)x<<32)^(z&0xffffffffL);
+      Integer cached=this.heightCache.get(key);
+      if(cached!=null)return cached;
       double relief;
       if(this.wild!=null) {
          double[] biome=this.wild.sharp(x,z);
@@ -36,7 +39,10 @@ public final class WildernessTerrainProfile {
          this.terrain.typeWeights(x,z,forest);
          relief=this.terrain.relief(x,z,forest);
       }
-      return this.baseline+(int)Math.round(relief);
+      int result=this.baseline+(int)Math.round(relief);
+      if(this.heightCache.size()>131072)this.heightCache.clear();
+      Integer prior=this.heightCache.putIfAbsent(key,result);
+      return prior==null?result:prior;
    }
 
    /**
