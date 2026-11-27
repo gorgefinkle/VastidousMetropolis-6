@@ -4,11 +4,9 @@ import ch.k42.metropolis.generator.MetropolisGenerator;
 import ch.k42.metropolis.grid.urbanGrid.UrbanGrid;
 import ch.k42.metropolis.grid.urbanGrid.enums.ContextType;
 import ch.k42.metropolis.grid.urbanGrid.enums.SchematicType;
-import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildernessFeatures;
 import ch.k42.metropolis.grid.urbanGrid.wild.HydrologySample;
 import ch.k42.metropolis.minions.Cartesian2D;
-import ch.k42.metropolis.minions.GridRandom;
 import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -35,9 +33,7 @@ public final class LakeParcel extends Parcel {
       WildernessFeatures.announceLake(lake,world.getName());
       int baseX=chunkX<<4,baseZ=chunkZ<<4;
       int minY=Math.max(world.getMinHeight()+1,1),maxY=world.getMaxHeight()-1;
-      GridRandom rand=grid.getRandom();
       ch.k42.metropolis.grid.urbanGrid.layout.WaterField hydrology=grid.planWater();
-      RiverProvider stream=hydrology.streamCarrierAt(chunkX,chunkZ);
       for(int lx=0;lx<16;lx++)for(int lz=0;lz<16;lz++){
          int x=baseX+lx,z=baseZ+lz;
          HydrologySample sample=hydrology.hydrologySampleAt(x,z);
@@ -46,14 +42,6 @@ public final class LakeParcel extends Parcel {
          if(sample.feature()!=HydrologySample.Feature.LAKE)continue;
          int waterY=Math.min(maxY-4,Math.max(minY+4,sample.waterY()));
          double distance=sample.signedDistanceBlocks();
-         if(distance<=0.0&&stream!=null){
-            double signed=stream.distanceFromCenterBlock(x,z);
-            double reach=stream.getHalfWidthBlocks()+stream.getFallbackBankMarginBlocks();
-            if(Double.isFinite(signed)&&Math.abs(signed)<=reach){
-               RiverParcel.carveColumnWithCreeks(world,stream,grid,rand,x,z);
-               world.setBiome(x,z,Biome.RIVER);continue;
-            }
-         }
          if(distance>0.0){
             // A rooted tree column becomes a natural wooded island, not a
             // severed trunk or a canopy suspended over newly carved water.
