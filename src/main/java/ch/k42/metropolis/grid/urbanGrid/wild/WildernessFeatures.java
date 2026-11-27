@@ -36,9 +36,10 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private static final int MAX_ROUTE_EXPANSIONS = 500000;
    private static final int MAX_HIGHWAY_CROSSING_CHUNKS = 2;
    private static final int MOUNTAIN_THRESHOLD = 2;
-   // The earlier 8% lake share over very large feature cells made ordinary
-   // player test areas overwhelmingly likely to contain no visible basin.
-   private static final int LAKE_THRESHOLD = 38;
+   // Keep lakes frequent enough to encounter in ordinary wilderness exploration.
+   // With 58% of feature cells assigned to lakes, empty cells remain common
+   // while inland water is no longer a once-per-large-region rarity.
+   private static final int LAKE_THRESHOLD = 60;
 
    private static final Map<String, WildernessFeatures> CACHE = new HashMap<>();
    private static final Set<String> ANNOUNCED = ConcurrentHashMap.newKeySet();
@@ -114,10 +115,11 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private WildernessFeatures(long seed, int spacing, WaterField water, HighwayNetwork highways) {
       this.seed = seed;
       this.spacing = Math.max(16, spacing);
-      // Landmark spacing is independent of city-to-city spacing. This keeps
-      // basins discoverable during ordinary exploration while the neighbouring
-      // feature-cell halo still contains the complete outlet search.
-      this.cellSize = Math.max(320, MAX_STREAM_RANGE + 96);
+      // A 192-chunk cell is 3,072 blocks wide. Candidate lakes stay at least
+      // 40 chunks apart at their closest possible opposing offsets, leaving a
+      // real gap between their maximum 17-chunk radii while making them much
+      // more discoverable than the former 416-chunk lattice.
+      this.cellSize = 192;
       // An unanchored main river's cross-axis baseline may be anywhere inside
       // OceanConfig.maxDistanceFromSpawn. A lake can sit near the far edge of
       // the adjacent two landmark cells, so the route window must account for
