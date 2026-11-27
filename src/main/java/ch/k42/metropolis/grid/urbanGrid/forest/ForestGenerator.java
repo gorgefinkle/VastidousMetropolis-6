@@ -398,6 +398,37 @@ public final class ForestGenerator {
       }
    }
 
+   /** Shared wilderness climate/type wiring used by both the live painter and the
+    * pre-generation hydrology terrain sampler. Keeping this one implementation
+    * prevents candidate basins from being tested against a different forest. */
+   static void configureWildTerrain(final WildField field,ForestTerrain terrain) {
+      terrain.setRainfall(new ForestTerrain.Rainfall() {
+         @Override public double at(int x,int z) {
+            return field.sharp(x,z)[WildBiome.RAINFOREST.ordinal()];
+         }
+      });
+      terrain.setTypeBias(new ForestTerrain.TypeBias() {
+         @Override public void apply(int x,int z,double[] weights) {
+            double[] biomes=field.sharp(x,z);
+            double prairie=biomes[WildBiome.PRAIRIE.ordinal()];
+            double wetlands=biomes[WildBiome.WETLANDS.ordinal()];
+            double oldGrowth=biomes[WildBiome.OLD_GROWTH.ordinal()];
+            double deciduous=biomes[WildBiome.DECIDUOUS.ordinal()];
+            double influence=Math.min(1.0,prairie+wetlands+oldGrowth+deciduous);
+            if(influence<=0.001)return;
+            for(int i=0;i<weights.length;i++)weights[i]*=1.0-influence;
+            weights[ForestType.MEADOW_WOODS.ordinal()]+=prairie;
+            weights[ForestType.DARK_FOREST.ordinal()]+=wetlands*.7+oldGrowth*.25;
+            weights[ForestType.SPRUCE_TAIGA.ordinal()]+=oldGrowth*.75;
+            weights[ForestType.OAK_WOODLAND.ordinal()]+=deciduous*.6+wetlands*.3;
+            weights[ForestType.BIRCH_GROVE.ordinal()]+=deciduous*.4;
+            double sum=0.0;
+            for(double value:weights)sum+=value;
+            if(sum>0)for(int i=0;i<weights.length;i++)weights[i]/=sum;
+         }
+      });
+   }
+
    /** The wilderness fields of this world, or null when generator.wilderness.biomes is off. */
    private static synchronized WildField wildFor(MetropolisGenerator generator) {
       // With the vanilla wilderness on there is no desert / mesa / mountain biome inland to meet, so shores plant plain forest
@@ -408,34 +439,7 @@ public final class ForestGenerator {
       if (f == null) {
          f = new WildField(generator.getWorldSeed());
          WILDS.put(generator, f);
-         // the rainforest is a wilderness biome: its weight there is its share of every forest column's type weights
-         final WildField field = f;
-         terrainFor(generator).setRainfall(new ForestTerrain.Rainfall() {
-            @Override
-            public double at(int x, int z) {
-               return field.sharp(x, z)[WildBiome.RAINFOREST.ordinal()];
-            }
-         });
-         terrainFor(generator).setTypeBias(new ForestTerrain.TypeBias() {
-            @Override public void apply(int x, int z, double[] weights) {
-               double[] biomes = field.sharp(x, z);
-               double prairie = biomes[WildBiome.PRAIRIE.ordinal()];
-               double wetlands = biomes[WildBiome.WETLANDS.ordinal()];
-               double oldGrowth = biomes[WildBiome.OLD_GROWTH.ordinal()];
-               double deciduous = biomes[WildBiome.DECIDUOUS.ordinal()];
-               double influence = Math.min(1.0, prairie + wetlands + oldGrowth + deciduous);
-               if (influence <= 0.001) return;
-               for (int i = 0; i < weights.length; i++) weights[i] *= 1.0 - influence;
-               weights[ForestType.MEADOW_WOODS.ordinal()] += prairie;
-               weights[ForestType.DARK_FOREST.ordinal()] += wetlands * 0.7 + oldGrowth * 0.25;
-               weights[ForestType.SPRUCE_TAIGA.ordinal()] += oldGrowth * 0.75;
-               weights[ForestType.OAK_WOODLAND.ordinal()] += deciduous * 0.6 + wetlands * 0.3;
-               weights[ForestType.BIRCH_GROVE.ordinal()] += deciduous * 0.4;
-               double sum = 0.0;
-               for (double q : weights) sum += q;
-               if (sum > 0) for (int i = 0; i < weights.length; i++) weights[i] /= sum;
-            }
-         });
+         configureWildTerrain(f,terrainFor(generator));
       }
       return f;
    }
@@ -1602,7 +1606,7 @@ public final class ForestGenerator {
     * as WildField.mesaOrDesert) they stay exactly as they are, plateaus and all, and from there into the desert they ease out
     * into dunes, so sand never carries plateau steps.
     */
-   private static double wildReliefAt(WildField wild, int x, int z, double[] n, double forestRelief,
+   static double wildReliefAt(WildField wild, int x, int z, double[] n, double forestRelief,
                                         boolean allowKarstBridge) {
       double ordinary = WildBiome.weight(n, WildBiome.FOREST)
               - n[WildBiome.PRAIRIE.ordinal()] - n[WildBiome.WETLANDS.ordinal()]
