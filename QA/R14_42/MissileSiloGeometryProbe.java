@@ -85,12 +85,15 @@ public final class MissileSiloGeometryProbe {
         check("98:0".equals(state(c, 91, H, 57)),
                 v + ": flush hatch support tile is missing");
         check(countId(c, 96) == 1, v + ": surface access must be a single discreet hatch");
-        for (int dx = 33; dx <= 44; dx++)
-            for (int dz = 3; dz <= 15; dz++)
-                for (int y = H + 1; y <= H + 6; y++)
+        for (int dx = 33; dx <= 44; dx++) {
+            for (int dz = 3; dz <= 15; dz++) {
+                for (int y = H + 1; y <= H + 6; y++) {
                     String aboveGrade = state(c, 48 + dx, y, 48 + dz);
                     check(aboveGrade == null || "0:0".equals(aboveGrade),
                             v + ": above-ground guard structure remains at " + dx + "," + y + "," + dz);
+                }
+            }
+        }
         check(state(c, 81, H + 1, 57) == null,
                 v + ": old guardhouse entry door remains");
         check(state(c, 81, H + 2, 57) == null,
