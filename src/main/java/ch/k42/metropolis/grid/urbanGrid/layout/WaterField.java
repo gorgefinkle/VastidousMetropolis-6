@@ -47,6 +47,8 @@ public final class WaterField implements WorldLayout.Mask {
       default boolean protectedDryParkAt(int chunkX, int chunkZ) { return false; }
       /** Distance from a world-block point to the nearest accepted creek bank, or NaN when none is within the requested radius. */
       default double nearestBankDistanceBlocks(double blockX, double blockZ, double maxDistanceBlocks) { return Double.NaN; }
+      /** Carrier from the already-prepared city-aware creek plan. */
+      default ch.k42.metropolis.grid.urbanGrid.river.RiverProvider carrierAt(int chunkX,int chunkZ) { return null; }
       default void prepareForConvergenceArea(int minX,int minZ,int maxX,int maxZ) { }
       default List<HydrologyConvergenceKey> convergenceEndpoints(int minX,int minZ,int maxX,int maxZ) {
          return java.util.Collections.emptyList();
@@ -54,42 +56,30 @@ public final class WaterField implements WorldLayout.Mask {
    }
    private volatile CreekSource creeks;
 
-   /** Named wilderness lakes are independent of the river/creek channel field. */
-   public interface LakeSource {
-      boolean lakeOrBankAt(int chunkX, int chunkZ);
-   }
-   private volatile LakeSource lakes;
+   /** A single accepted wilderness hydrology layer owns lakes and connected outlet streams. */
+   public interface HydrologyLayer extends LakeSource,StreamSource {}
+   private volatile HydrologyLayer hydrology;
 
-   /** Small named-lake outlets routed through wilderness and permitted to cross highways. */
-   public interface StreamSource {
-      boolean streamOrBankAt(int chunkX, int chunkZ);
-      ch.k42.metropolis.grid.urbanGrid.river.RiverProvider carrierAt(int chunkX, int chunkZ);
-   }
-   private volatile StreamSource streams;
-
-   public synchronized void setLakes(LakeSource source) {
-      this.lakes = source;
+   public synchronized void setHydrologyLayer(HydrologyLayer source) {
+      this.hydrology=source;
       this.zoneCache.clear();
    }
 
-   public synchronized void setStreams(StreamSource source) {
-      this.streams = source;
-      this.zoneCache.clear();
+   public HydrologyLayer hydrologyLayer(){return this.hydrology;}
+
+   public ch.k42.metropolis.grid.urbanGrid.river.RiverProvider streamCarrierAt(int x,int z) {
+      HydrologyLayer source=hydrology;
+      return source==null?null:source.carrierAt(x,z);
    }
 
-   public ch.k42.metropolis.grid.urbanGrid.river.RiverProvider streamCarrierAt(int x, int z) {
-      StreamSource src = streams;
-      return src == null ? null : src.carrierAt(x, z);
+   public boolean isLake(int x,int z) {
+      HydrologyLayer source=hydrology;
+      return source!=null&&source.lakeOrBankAt(x,z);
    }
 
-   public boolean isLake(int x, int z) {
-      LakeSource src = lakes;
-      return src != null && src.lakeOrBankAt(x, z);
-   }
-
-   public boolean isStream(int x, int z) {
-      StreamSource src = streams;
-      return src != null && src.streamOrBankAt(x, z);
+   public boolean isStream(int x,int z) {
+      HydrologyLayer source=hydrology;
+      return source!=null&&source.streamOrBankAt(x,z);
    }
 
    /** Exact open receiving water (not its bank): the outlet a wilderness stream must reach. */
@@ -240,10 +230,9 @@ public final class WaterField implements WorldLayout.Mask {
       if (base != Kind.NONE) return base;
       CreekSource src = creeks;
       if (src != null && src.waterOrBank(x, z)) return Kind.CREEK;
-      LakeSource lake = lakes;
-      if (lake != null && lake.lakeOrBankAt(x, z)) return Kind.LAKE;
-      StreamSource stream = streams;
-      return stream != null && stream.streamOrBankAt(x, z) ? Kind.STREAM : Kind.NONE;
+      HydrologyLayer source=hydrology;
+      if(source!=null&&source.lakeOrBankAt(x,z))return Kind.LAKE;
+      return source!=null&&source.streamOrBankAt(x,z)?Kind.STREAM:Kind.NONE;
    }
 
    public Kind baseKindAt(int x, int z) {
@@ -369,9 +358,8 @@ public final class WaterField implements WorldLayout.Mask {
          if (src.useRiverPlanningLattice() && hasCreekInLattice(x, z, src)
                  && !src.protectedDryParkAt(x, z)) return Kind.CREEK;
       }
-      LakeSource lake = lakes;
-      if (lake != null && lake.lakeOrBankAt(x, z)) return Kind.LAKE;
-      StreamSource stream = streams;
-      return stream != null && stream.streamOrBankAt(x, z) ? Kind.STREAM : Kind.NONE;
+      HydrologyLayer source=hydrology;
+      if(source!=null&&source.lakeOrBankAt(x,z))return Kind.LAKE;
+      return source!=null&&source.streamOrBankAt(x,z)?Kind.STREAM:Kind.NONE;
    }
 }
