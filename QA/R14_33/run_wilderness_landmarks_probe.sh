@@ -44,7 +44,9 @@ grep -Fq 'natural river/ocean bank is part of the receiving-water' "$FEATURES"
 grep -Fq 'LAKE, STREAM' "$WATER"
 grep -Fq 'setLakes(features)' "$FEATURES"
 grep -Fq 'setStreams(features)' "$FEATURES"
-grep -Fq 'WildernessFeatures.install(seed)' "$WATER_FIELDS"
+grep -Fq 'installCreeks(generator);' "$GRID"
+grep -Fq 'WildernessFeatures.install(seed)' "$GRID"
+grep -Fq 'WildernessFeatures.prepareForTile(seed, this.root.X, this.root.Y);' "$GRID"
 
 # Lakes paint a real basin; stream outlets reuse RiverParcel and preserve the river/creek highway handoff.
 grep -Fq 'Material.WATER' "$LAKE"
