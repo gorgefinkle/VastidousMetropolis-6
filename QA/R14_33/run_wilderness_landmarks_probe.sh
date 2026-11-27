@@ -76,7 +76,7 @@ grep -Fq 'sample.feature()!=HydrologySample.Feature.STREAM' "$ROOT/src/main/java
 grep -Fq 'return new WildernessStreamCourse' "$FEATURES"
 grep -Fq 'terrainProfile.findBasin' "$FEATURES"
 grep -Fq 'this.waterY-terrainY' "$FEATURES"
-grep -Fq 'terrainProfile.surfaceHeight' "$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/WildernessTerrainProfile.java"
+grep -Fq 'this.terrainProfile.surfaceHeight' "$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java"
 grep -Fq 'convergenceKey()' "$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/HydrologySample.java"
 grep -Fq 'WildernessStreamCourse carrier = lake.stream' "$FEATURES"
 grep -Fq 'forChunk(chunkX, chunkZ)' "$GRID"
