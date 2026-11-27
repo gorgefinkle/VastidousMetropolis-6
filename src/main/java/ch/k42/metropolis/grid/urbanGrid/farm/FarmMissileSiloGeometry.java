@@ -142,6 +142,9 @@ final class FarmMissileSiloGeometry {
             put(43, y, 9, STONE_BRICKS, 0);
             put(42, y, 9, LADDER, 4);
         }
+        // A single steel grate is the proper bottom landing; the shaft above
+        // it remains open and the ladder continues to the upper levels.
+        put(42, low, 9, IRON_BARS, 0);
         // Open the landing side to the room/corridor without removing the
         // continuous cage on its other three sides.
         clearBox(39, 39, this.h + 1, this.h + 3, 9, 9);

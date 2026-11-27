@@ -152,7 +152,9 @@ public final class MissileSiloGeometryProbe {
         for (int y = bottom + 18; y <= H + 4; y++) {
             for (int dx = 40; dx <= 42; dx++) for (int dz = 8; dz <= 10; dz++) {
                 String actual = state(c, 48 + dx, y, 48 + dz);
-                if (dx == 42 && dz == 9 && y > bottom + 18 && y <= H + 1)
+                if (dx == 42 && dz == 9 && y == bottom + 18)
+                    check("101:0".equals(actual), v + ": bottom lift landing grate is missing");
+                else if (dx == 42 && dz == 9 && y > bottom + 18 && y <= H + 1)
                     check("65:4".equals(actual), v + ": lift ladder is discontinuous at y=" + y);
                 else
                     check("0:0".equals(actual), v + ": lift well is blocked at " + dx + "," + y + "," + dz);
