@@ -56,8 +56,11 @@ public final class WaterField implements WorldLayout.Mask {
    }
    private volatile CreekSource creeks;
 
-   /** A single accepted wilderness hydrology layer owns lakes and connected outlet streams. */
-   public interface HydrologyLayer extends LakeSource,StreamSource {
+   /** One accepted wilderness hydrology layer owns lake and tributary-stream geography. */
+   public interface HydrologyLayer {
+      boolean lakeOrBankAt(int chunkX,int chunkZ);
+      boolean streamOrBankAt(int chunkX,int chunkZ);
+      ch.k42.metropolis.grid.urbanGrid.river.RiverProvider carrierAt(int chunkX,int chunkZ);
       HydrologySample sampleAt(WaterField water,int blockX,int blockZ);
    }
    private volatile HydrologyLayer hydrology;
