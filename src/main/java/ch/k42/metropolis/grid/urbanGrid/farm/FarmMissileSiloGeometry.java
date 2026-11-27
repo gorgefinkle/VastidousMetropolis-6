@@ -64,7 +64,9 @@ final class FarmMissileSiloGeometry {
             }
             case VAULT -> {
                 this.floorId = STONE_BRICKS; this.floorData = 0;
-                this.wallId = STONE_BRICKS; this.wallData = 0;
+                // A vault uses a visibly heavier steel-lined control envelope,
+                // rather than a unique set of arbitrary interior props.
+                this.wallId = IRON_BLOCK; this.wallData = 0;
                 this.accentId = WOOL; this.accentData = 11;
                 this.warningData = 4;
             }
