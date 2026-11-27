@@ -14,6 +14,7 @@ public final class MotherWillowBlockPainterProbe {
         };
         MotherWillowGeometry.GrowthStats stats=MotherWillowGeometry.growWithStats(sink,terrain,0,0,0x26_03_2026L);
         int wood=0,barkWood=0,logs=0,leaves=0,misclassified=0,innerLeaves=0,outerLeaves=0;
+        int[] azimuthBins=new int[12];
         for(Map.Entry<String,String> entry:blocks.entrySet()) {
             String[] xyz=entry.getKey().split(",");
             double radius=Math.hypot(Integer.parseInt(xyz[0]),Integer.parseInt(xyz[2]));
@@ -29,7 +30,13 @@ public final class MotherWillowBlockPainterProbe {
                 if(MotherWillowBlockState.isBarkWood(state))barkWood++;
                 else logs++;
             }
-            if(mappedLeaves) { leaves++; if(radius<30.0)innerLeaves++; else outerLeaves++; }
+            if(mappedLeaves) {
+                leaves++;
+                if(radius<30.0)innerLeaves++; else outerLeaves++;
+                double angle=Math.atan2(Integer.parseInt(xyz[2]),Integer.parseInt(xyz[0]));
+                int bin=(int)Math.floor((angle+Math.PI)/(Math.PI*2.0)*azimuthBins.length);
+                azimuthBins[Math.max(0,Math.min(azimuthBins.length-1,bin))]++;
+            }
         }
         if(misclassified!=0)throw new AssertionError("Wood/leaf adapter misclassified "+misclassified+" geometry blocks");
         if(wood<1500)throw new AssertionError("Live painter would lose its wooden scaffold: "+wood);
@@ -41,7 +48,12 @@ public final class MotherWillowBlockPainterProbe {
             throw new AssertionError("Foliage has crowded the inner crown: inner="+innerLeaves+", total="+leaves);
         if(outerLeaves<=innerLeaves)
             throw new AssertionError("Leaves are not concentrated on the hanging outer crown.");
+        if(stats.primaryForks<8)throw new AssertionError("Primary scaffold tips still taper: "+stats.primaryForks);
+        if(stats.secondaryForks<12)throw new AssertionError("Secondary scaffold tips still taper: "+stats.secondaryForks);
         if(stats.terminalForks<20)throw new AssertionError("Terminal willow limbs still taper without splitting: forks="+stats.terminalForks);
+        int populatedAzimuths=0;
+        for(int count:azimuthBins)if(count>0)populatedAzimuths++;
+        if(populatedAzimuths<8)throw new AssertionError("Weeping foliage is not distributed around the crown: "+populatedAzimuths+" azimuth sectors");
         if(stats.terminalBranchlets<stats.terminalForks*3)
             throw new AssertionError("Terminal forks are missing their three- or four-way hanging branchlets.");
         System.out.println("MotherWillowBlockPainterProbe PASS: wood="+wood+", barkWood="+barkWood

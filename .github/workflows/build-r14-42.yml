@@ -1,4 +1,4 @@
-name: R14.42 Missile Silo Complex
+name: R14.43 Unified Worldgen
 
 on:
   push:
@@ -42,6 +42,14 @@ jobs:
           grep -F 'this.summitHeight = 80 +' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
           grep -F 'falloffStart = 0.16 + 0.62 * steepSide' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
           grep -F 'outerCliff = 0.15 * smoothStep(0.77 + cliffWarp, 0.81 + cliffWarp, r)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'double summitCore = 1.0 - smoothStep(0.025, 0.18, r)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'LAKE_THRESHOLD = 38' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'return new FeatureCell(null, lake)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'nearestLake(originX, originZ)' src/main/java/ch/k42/metropolis/commands/CommandMetropolisLake.java
+          grep -F 'nearestMountain(originX, originZ)' src/main/java/ch/k42/metropolis/commands/CommandMetropolisMassif.java
+          grep -F 'WildernessFeatures.install(seed)' src/main/java/ch/k42/metropolis/grid/urbanGrid/layout/WaterFields.java
+          ! grep -R -nE 'MountainKind\.VOLCANO|case VOLCANO|VOLCANO[[:space:]]*\(' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild src/main/java/ch/k42/metropolis/plugin/PluginConfig.java
+          ! grep -Eq '^[[:space:]]+volcano:[[:space:]]*[1-9]' src/main/resources/config.yml
       - name: Verify Bloomlands rarity migration and cross-city creek berth wiring
         run: |
           grep -F 'bloomlands: 1' src/main/resources/config.yml
@@ -50,6 +58,17 @@ jobs:
           grep -F 'setCreekOriginSpacingChunks' src/main/java/ch/k42/metropolis/plugin/PluginConfig.java
           grep -F 'isSpacingWinner(x, z, choice)' src/main/java/ch/k42/metropolis/grid/urbanGrid/river/BoundedRiverSites.java
           grep -F 'candidate(otherTileX, otherTileZ)' src/main/java/ch/k42/metropolis/grid/urbanGrid/river/BoundedRiverSites.java
+      - name: Run Mother Willow geometry/painter audit and export exact Minecraft block preview
+        run: |
+          mkdir -p qa-out QA/R14_43/previews
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/MotherWillowGeometry.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/MotherWillowBlockState.java \
+            QA/R14_40/MotherWillowBlockPainterProbe.java \
+            QA/R14_43/MotherWillowVoxelPreview.java
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.forest.MotherWillowBlockPainterProbe
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.forest.MotherWillowVoxelPreview qa-out/mother-willow-preview.csv
+          python3 QA/R14_43/export_mother_willow_schematic.py qa-out/mother-willow-preview.csv QA/R14_43/previews/MotherWillow_R14_43_Preview.schem
       - name: Run deterministic creek-origin spacing policy audits
         run: |
           mkdir -p qa-out
@@ -68,6 +87,20 @@ jobs:
           java -cp qa-out ch.k42.metropolis.grid.urbanGrid.farm.MissileSiloGeometryProbe
       - name: Build plugin JAR
         run: mvn --batch-mode --no-transfer-progress clean package
+      - name: Verify named massif, lake and continuous stream plan/ownership
+        run: |
+          QA/R14_33/run_wilderness_landmarks_probe.sh
+          mkdir -p qa-out
+          mvn -B -ntp -q dependency:build-classpath -DincludeScope=compile -Dmdep.outputFile=qa-out/classpath
+          CP="target/classes:$(cat qa-out/classpath)"
+          javac -cp "$CP" -d qa-out QA/R14_43/LakeStreamCoverageProbe.java
+          java -Xmx1536m -cp "qa-out:$CP" ch.k42.metropolis.grid.urbanGrid.wild.LakeStreamCoverageProbe
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/Noise2D.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/MountainKind.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildRelief.java \
+            QA/R14_43/MountainKindNoVolcanoProbe.java
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.wild.MountainKindNoVolcanoProbe
       - name: Verify live legacy block conversion paths
         run: |
           grep -F 'Bukkit.getUnsafe().fromLegacy' src/main/java/ch/k42/metropolis/minions/LegacyBlocks.java
@@ -75,21 +108,21 @@ jobs:
           grep -F 'result.getMaterial().isAir()' src/main/java/ch/k42/metropolis/minions/LegacyBlocks.java
       - name: Verify embedded plugin version
         run: |
-          expected='0.1.18-R14.42-Missile-Silo-Complex-DEV'
-          actual="$(unzip -p target/Metropolis_R14_42_Missile_Silo_Complex_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          expected='0.1.19-R14.43-Unified-Worldgen-DEV'
+          actual="$(unzip -p target/Metropolis_R14_43_Unified_Worldgen_DEV.jar plugin.yml | sed -n 's/^version: //p')"
           test "$actual" = "$expected"
           echo "Embedded plugin version: $actual"
       - name: Assemble test delivery
         run: |
           mkdir -p delivery
-          cp target/Metropolis_R14_42_Missile_Silo_Complex_DEV.jar delivery/
-          zip -qr delivery/Metropolis_R14_42_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
+          cp target/Metropolis_R14_43_Unified_Worldgen_DEV.jar delivery/
+          zip -qr delivery/Metropolis_R14_43_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
           (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
           ls -lh delivery
       - name: Upload JAR and full source
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_42_Missile_Silo_Complex
+          name: Metropolis_R14_43_Unified_Worldgen
           path: delivery/*
           if-no-files-found: error
           retention-days: 14

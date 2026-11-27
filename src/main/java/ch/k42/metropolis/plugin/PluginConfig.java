@@ -912,7 +912,7 @@ public class PluginConfig {
    public static int getWildLootMax() { return wildLootMax; }
 
    /** Target percent of the land for each biome in the order forest, mountains, desert, mesa (normalised if they do not add up to 100). Mountains count 0 when forest.mountains.enabled is false. */
-   /** Restore independently tuneable MASSIF/PEAKS/RANGE/PLATEAU/VOLCANO shares. */
+   /** Restore independently tuneable MASSIF/PEAKS/RANGE/PLATEAU shares. */
    public static double[] getMountainKindShares() {
       double[] shares = new double[mountainKindShares.length];
       for (int i=0; i<shares.length; i++) shares[i] = mountainKindShares[i];
@@ -1983,9 +1983,9 @@ public class PluginConfig {
       wildChestOdds = Math.max(0, Math.min(100, cfg.getInt(pathWildChestOdds, wildChestOdds)));
       wildLootMin = Math.max(1, Math.min(5, cfg.getInt(pathWildLootMin, wildLootMin)));
       wildLootMax = Math.max(wildLootMin, Math.min(5, cfg.getInt(pathWildLootMax, wildLootMax)));
-      // Load the per-kind mountain shares. The old shipped distribution
-      // favoured non-massif forms; migrate those exact defaults but preserve
-      // explicit zeroes and operator-tuned values.
+      // Load only supported mountain forms. Legacy "volcano" keys are ignored
+      // so saved configs cannot reactivate cones. Preserve explicit zeroes and
+      // operator-tuned values for the remaining four kinds.
       for (MountainKind kind : MountainKind.ALL) {
          int configured = Math.max(0, Math.min(100,
                  cfg.getInt(pathMountainKindPrefix + kind.key(), kind.defaultShare())));
@@ -1994,7 +1994,6 @@ public class PluginConfig {
             case PEAKS -> 35;
             case RANGE -> 25;
             case PLATEAU -> 12;
-            case VOLCANO -> 8;
          };
          if (configured == oldDefault) configured = kind.defaultShare();
          mountainKindShares[kind.ordinal()] = configured;

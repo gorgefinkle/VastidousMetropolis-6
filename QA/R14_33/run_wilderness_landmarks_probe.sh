@@ -13,13 +13,14 @@ java -Xmx768m -cp "$TMP:$CP" ch.k42.metropolis.grid.urbanGrid.wild.WildernessLan
 FEATURES="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java"
 WATER="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/layout/WaterField.java"
 GRID="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/UrbanGrid.java"
+WATER_FIELDS="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/layout/WaterFields.java"
 LAKE="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/parcel/LakeParcel.java"
 FOREST="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/ForestGenerator.java"
 
 # Placement is deterministic and accepts only the feature's actual footprint.
 grep -Fq 'private static final int MOUNTAIN_CLEARANCE = 18' "$FEATURES"
 grep -Fq 'private static final int MOUNTAIN_THRESHOLD = 2' "$FEATURES"
-grep -Fq 'private static final int LAKE_THRESHOLD = 10' "$FEATURES"
+grep -Fq 'private static final int LAKE_THRESHOLD = 38' "$FEATURES"
 grep -Fq 'this.inOuterCity(x, z)' "$FEATURES"
 grep -Fq 'CityRingField.withinOuterCity' "$FEATURES" || grep -Fq 'this.cities.withinOuterCity' "$FEATURES"
 grep -Fq 'r > 1.0' "$FEATURES"
@@ -39,7 +40,7 @@ grep -Fq 'this.water.isReceivingWaterAt(node.x, node.z)' "$FEATURES"
 grep -Fq 'LAKE, STREAM' "$WATER"
 grep -Fq 'setLakes(features)' "$FEATURES"
 grep -Fq 'setStreams(features)' "$FEATURES"
-grep -Fq 'WildernessFeatures.install(seed)' "$GRID"
+grep -Fq 'WildernessFeatures.install(seed)' "$WATER_FIELDS"
 
 # Lakes paint a real basin; stream outlets reuse RiverParcel and preserve the river/creek highway handoff.
 grep -Fq 'Material.WATER' "$LAKE"

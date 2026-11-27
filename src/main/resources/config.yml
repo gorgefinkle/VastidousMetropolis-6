@@ -97,7 +97,6 @@ generator:
         peaks: 25        # sharp isolated peaks
         range: 20        # connected mountain chains and high shoulders
         plateau: 8       # flat tablelands with gullied escarpments
-        volcano: 7       # stratovolcanoes and cratered cones
       enabled: true                    # true = a forest region big enough to sit between cities becomes a mountain range instead of rolling hills. smaller regions stay ordinary forest. the edge of every region still meets the build height exactly. a range stays inside one tile (it ends at the street along the tile edge, or at a highway, where the ground meets the build height)
       minCells: 300                        # a region needs at least this many chunks of area...
       minDepth: 8                          # ...and its deepest point at least this many chunks from every edge, so a long thin strip of forest never becomes a range

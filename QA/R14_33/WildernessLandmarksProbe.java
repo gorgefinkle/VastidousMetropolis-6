@@ -12,15 +12,33 @@ public final class WildernessLandmarksProbe {
         int baseY = 64, maxHeight = 320;
         int summitA = mountainA.heightAt(3200, -6400, baseY, maxHeight);
         int summitB = mountainB.heightAt(3200, -6400, baseY, maxHeight);
-        if (summitA != maxHeight - mountainA.peakClearance || summitA != summitB) {
-            throw new AssertionError("named massif does not reach a deterministic near-build-height summit: " + summitA);
+        int summitRise=summitA-baseY;
+        if (summitRise<80 || summitRise>89 || summitA>maxHeight-mountainA.peakClearance || summitA!=summitB) {
+            throw new AssertionError("named massif must attain a deterministic 80-89 block summit with clearance: "+summitA);
         }
         if (mountainA.heightAt(3200 + 720, -6400, baseY, maxHeight) != baseY) {
             throw new AssertionError("named massif footprint does not fade to the surrounding ground at its edge");
         }
-        if (mountainA.heightAt(3200, -6400, baseY, maxHeight) - baseY < 200) {
-            throw new AssertionError("named massif is not tall enough to dominate the landscape");
+        double c=Math.cos(0.37),s=Math.sin(0.37);
+        int steepMid=mountainA.heightAt((int)Math.round(3200+c*360),(int)Math.round(-6400-s*320),baseY,maxHeight);
+        int smoothMid=mountainA.heightAt((int)Math.round(3200-c*360),(int)Math.round(-6400+s*320),baseY,maxHeight);
+        if(steepMid<=smoothMid+8)
+            throw new AssertionError("massif does not have a high shoulder on one side and a longer descent on the other");
+        int steepShoulder=mountainA.heightAt((int)Math.round(3200+c*540),(int)Math.round(-6400-s*480),baseY,maxHeight);
+        int steepFoot=mountainA.heightAt((int)Math.round(3200+c*648),(int)Math.round(-6400-s*576),baseY,maxHeight);
+        int smoothShoulder=mountainA.heightAt((int)Math.round(3200-c*540),(int)Math.round(-6400+s*480),baseY,maxHeight);
+        int smoothFoot=mountainA.heightAt((int)Math.round(3200-c*648),(int)Math.round(-6400+s*576),baseY,maxHeight);
+        if(steepShoulder-steepFoot<=smoothShoulder-smoothFoot)
+            throw new AssertionError("massif escarpment flank is not steeper than the opposite side");
+        int rimMin=Integer.MAX_VALUE,rimMax=Integer.MIN_VALUE;
+        for(int i=-5;i<=5;i++) {
+            double a=0.37+i*0.036;
+            int y=mountainA.heightAt((int)Math.round(3200+Math.cos(a)*720*.84),
+                    (int)Math.round(-6400-Math.sin(a)*640*.84),baseY,maxHeight);
+            rimMin=Math.min(rimMin,y);rimMax=Math.max(rimMax,y);
         }
+        if(rimMax-rimMin<3)
+            throw new AssertionError("massif rim lacks irregular relief and gullies");
         if (!mountainA.snowy(summitA, baseY, maxHeight)
                 || !mountainA.treeless(summitA, baseY, maxHeight)) {
             throw new AssertionError("summit should be alpine, snowy and above the treeline");
@@ -81,7 +99,6 @@ public final class WildernessLandmarksProbe {
             throw new AssertionError("lake name is not stable for the same world seed and site");
         }
 
-        System.out.println("WildernessLandmarksProbe PASS: deterministic named massif reaches "
-                + summitA + "/" + maxHeight + ", alpine treeline/snowline, bounded lake basin and stable names");
+        System.out.println("WildernessLandmarksProbe PASS: summit rise="+summitRise+" blocks; asymmetric escarpment and irregular rim; alpine treeline/snowline; bounded lake basin and stable names");
     }
 }

@@ -31,11 +31,13 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class WildernessFeatures implements WaterField.LakeSource, WaterField.StreamSource {
    private static final int MOUNTAIN_CLEARANCE = 18;
-   private static final int MAX_STREAM_RANGE = 220;
-   private static final int MAX_ROUTE_EXPANSIONS = 40000;
+   private static final int MAX_STREAM_RANGE = 300;
+   private static final int MAX_ROUTE_EXPANSIONS = 100000;
    private static final int MAX_HIGHWAY_CROSSING_CHUNKS = 2;
    private static final int MOUNTAIN_THRESHOLD = 2;
-   private static final int LAKE_THRESHOLD = 10;
+   // The earlier 8% lake share over very large feature cells made ordinary
+   // player test areas overwhelmingly likely to contain no visible basin.
+   private static final int LAKE_THRESHOLD = 38;
 
    private static final Map<String, WildernessFeatures> CACHE = new HashMap<>();
    private static final Set<String> ANNOUNCED = ConcurrentHashMap.newKeySet();
@@ -102,9 +104,10 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private WildernessFeatures(long seed, int spacing, WaterField water, HighwayNetwork highways) {
       this.seed = seed;
       this.spacing = Math.max(16, spacing);
-      // Keep one route's full 220-chunk search radius inside the neighbouring
-      // feature-cell halo, even when city spacing is configured unusually low.
-      this.cellSize = Math.max(this.spacing * 2, MAX_STREAM_RANGE + 64);
+      // Landmark spacing is independent of city-to-city spacing. This keeps
+      // basins discoverable during ordinary exploration while the neighbouring
+      // feature-cell halo still contains the complete outlet search.
+      this.cellSize = Math.max(320, MAX_STREAM_RANGE + 96);
       this.water = water;
       this.highways = highways;
       this.cities = new CityRingField(seed);
@@ -145,13 +148,16 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
 
       int idealX = gx * this.cellSize + this.cellSize / 2;
       int idealZ = gz * this.cellSize + this.cellSize / 2;
-      int attempts = 4;
+      int mountainAttempts = 4;
+      int lakeAttempts = 16;
+      int lakeReach = Math.max(20, this.cellSize / 2 - 20);
+      int maskReach = lakeReach + 24;
       HighwayNetwork.Snapshot highwayMask = this.highways.snapshot(
-              idealX - 72, idealZ - 72, idealX + 72, idealZ + 72);
+              idealX - maskReach, idealZ - maskReach, idealX + maskReach, idealZ + maskReach);
 
       if (kind < MOUNTAIN_THRESHOLD) {
          int radius = 34 + (int)(mix(h ^ 0x4D4F554E5441494EL) >>> 60);
-         for (int attempt = 0; attempt < attempts; attempt++) {
+         for (int attempt = 0; attempt < mountainAttempts; attempt++) {
             int[] offset = candidateOffset(h, attempt, 22);
             int x = idealX + offset[0], z = idealZ + offset[1];
             if (!footprintClear(x, z, radius, radius, highwayMask, 3)) continue;
@@ -165,29 +171,25 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          return FeatureCell.EMPTY;
       }
 
-      // BoundedRiverSegment deliberately follows the server's river enable
-      // switch; without a receiving river system there can be no connected lake outlet.
-      if (!RiverConfig.isRiverEnabled()) return FeatureCell.EMPTY;
       int radius = 14 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
       double ratio = 0.76 + unit(mix(h ^ 0x454C4C49505345L)) * 0.20;
       double angle = unit(mix(h ^ 0x4C414B45414E474CL)) * Math.PI;
-      for (int attempt = 0; attempt < attempts; attempt++) {
-         int[] offset = candidateOffset(h, attempt, 20);
+      for (int attempt = 0; attempt < lakeAttempts; attempt++) {
+         int[] offset = candidateOffset(h, attempt, lakeReach);
          int x = idealX + offset[0], z = idealZ + offset[1];
          if (!footprintClear(x, z, radius, (int)Math.ceil(radius * ratio), highwayMask, 3)) continue;
          if (!footprintClear(x, z, radius, (int)Math.ceil(radius * ratio), highwayMask, 1)) continue;
          LakeSite lake = new LakeSite(this.seed, gx, gz, x * 16.0 + 8.0, z * 16.0 + 8.0,
                  radius * 16.0, radius * ratio * 16.0, angle,
                  RiverConfig.getRiverBuildHeight());
-         // Search from the final accepted lake position, not the feature-cell
-         // centre, so the A* bounds and its receiving-water heuristic agree.
-         List<WaterTarget> targets = findTargets(x, z);
-         if (targets.isEmpty()) continue;
-         WildernessStreamCourse stream = this.buildOutlet(lake, h, targets);
-         if (stream != null) {
-            lake.stream = stream;
-            return new FeatureCell(null, lake);
+         // A basin remains a lake even when no legal outlet route is available.
+         // Where river/ocean receiving water is reachable, attach a continuous
+         // polyline stream; otherwise preserve this as a genuine closed basin.
+         if (RiverConfig.isRiverEnabled()) {
+            List<WaterTarget> targets = findTargets(x, z);
+            if (!targets.isEmpty()) lake.stream = this.buildOutlet(lake, h, targets);
          }
+         return new FeatureCell(null, lake);
       }
       return FeatureCell.EMPTY;
    }
@@ -217,6 +219,12 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       }
       return true;
    }
+
+   /** Package-visible deterministic seam for lake/stream coverage QA. */
+   int featureCellSizeForProbe() { return this.cellSize; }
+
+   /** Package-visible deterministic seam for lake/stream coverage QA. */
+   LakeSite lakeForCellProbe(int gx, int gz) { return cell(gx, gz).lake; }
 
    private boolean inOuterCity(int chunkX, int chunkZ) {
       CityRingField.Site nearest = this.cities.nearestSite(chunkX, chunkZ);
@@ -553,6 +561,9 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          // as perfect concentric rings. Gullies cut irregularly into their face.
          double cliffWarp = this.ridge.fbm(x / 145.0, z / 145.0, 2, 0.5) * 0.045;
          double crown = 0.90 + broadNoise * 0.08 + (ridged - 0.5) * 0.08;
+         // The declared summit cap must be attained, not merely used as a
+         // ceiling. A rounded core blends into the asymmetric shoulder.
+         double summitCore = 1.0 - smoothStep(0.025, 0.18, r);
          double innerCliff = 0.12 * smoothStep(0.59 + cliffWarp, 0.64 + cliffWarp, r);
          double outerCliff = 0.15 * smoothStep(0.77 + cliffWarp, 0.81 + cliffWarp, r);
          double cliffDrop = steepSide * (innerCliff + outerCliff);
@@ -561,7 +572,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
 
          int top = Math.min(baseY + this.summitHeight, maxHeight - this.peakClearance);
          double available = Math.max(0.0, top - baseY);
-         double relief = available * Math.max(0.0, fade * crown - cliffDrop - gullies) + rough;
+         double body = Math.max(0.0, fade * crown - cliffDrop - gullies);
+         double relief = available * Math.max(body, summitCore) + rough * (1.0 - summitCore);
          return (int)Math.max(baseY, Math.min(top, Math.round(baseY + relief)));
       }
 

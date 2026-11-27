@@ -7,11 +7,10 @@ package ch.k42.metropolis.grid.urbanGrid.wild;
 public final class WildRelief {
    private final Noise2D mountain, mountainBase, dune, swell, mesa, mesaTop;
    // mountain kinds (see MountainKind)
-   private final Noise2D kindNoise, rangeCrest, rangeWarpA, rangeWarpB, rangeShoulder, domeNoise, domeBump, plateauNoise, plateauUndulation, plateauGully, coneFlank;
+   private final Noise2D kindNoise, rangeCrest, rangeWarpA, rangeWarpB, rangeShoulder, domeNoise, domeBump, plateauNoise, plateauUndulation, plateauGully;
    private final double[] kindEdges;
    private final double[] kindSample;
    private final double rangeCos, rangeSin;
-   private final long coneSeed;
    /** The highest any mountain may rise above the baseline: the world is 256 high and the baseline is about 63. */
    private static final double HARD_CAP = 165.0;
    private final double mountainHeight;
@@ -42,8 +41,6 @@ public final class WildRelief {
       this.plateauNoise = new Noise2D(s ^ 0x7EL);
       this.plateauUndulation = new Noise2D(s ^ 0x7FL);
       this.plateauGully = new Noise2D(s ^ 0x80L);
-      this.coneFlank = new Noise2D(s ^ 0x81L);
-      this.coneSeed = s ^ 0x434F4E45L;
       double angle = (Noise2D.mix(s ^ 0x82L) >>> 11) * (1.0 / (1L << 53)) * Math.PI;
       this.rangeCos = Math.cos(angle);
       this.rangeSin = Math.sin(angle);
@@ -109,15 +106,9 @@ public final class WildRelief {
       return Math.min(HARD_CAP, sum > 0.0 ? h / sum : 0.0);
    }
 
-   /** Where an actual volcanic landform has influence (0..1); uses the SAME mountain-kind noise and volcano profile as mountains(). */
+   /** Compatibility hook for older biome painters; volcanic cones are disabled. */
    public double volcanicInfluence(int x, int z) {
-      int k = MountainKind.VOLCANO.ordinal();
-      double u = this.rank(this.kindNoise.fbm(x / KIND_SCALE, z / KIND_SCALE, 2, 0.5));
-      double lower = k == 0 ? 1.0 : smooth01((u - this.kindEdges[k - 1]) / KIND_BLEND);
-      double upper = k == this.kindEdges.length - 1 ? 0.0 : smooth01((u - this.kindEdges[k]) / KIND_BLEND);
-      double kind = Math.max(0.0, lower - upper);
-      double cone = Math.max(0.0, this.profile(MountainKind.VOLCANO, x, z));
-      return kind * smooth01(cone / Math.max(10.0, this.mountainHeight * 0.35));
+      return 0.0;
    }
 
    /** Open prairie has broad rolling ground, not dense woodland's broken short hills. */
@@ -165,37 +156,6 @@ public final class WildRelief {
             double gully = Math.pow(this.plateauGully.ridged(x / 150.0, z / 150.0, 2), 3.0);
             double top = 4.0 * this.plateauUndulation.fbm(x / 130.0, z / 130.0, 3, 0.5) - 8.0 * gully;
             return Math.max(0.0, mh * 0.62 * lift + lift * top + mh * 0.08 * n);
-         }
-         case VOLCANO: {
-            // cones on a jittered grid: concave flanks, a crater, ridged lava flows down the sides
-            final double cell = 1150.0;
-            int ci = (int) Math.floor(x / cell);
-            int cj = (int) Math.floor(z / cell);
-            double best = 0.0;
-            for (int di = -1; di <= 1; di++) {
-               for (int dj = -1; dj <= 1; dj++) {
-                  long h = Noise2D.mix(this.coneSeed + (ci + di) * 0x9E3779B97F4A7C15L + (cj + dj) * 0xC2B2AE3D27D4EB4FL);
-                  if (unit(h) >= 0.75) {
-                     continue;
-                  }
-                  long h2 = Noise2D.mix(h);
-                  long h3 = Noise2D.mix(h2);
-                  long h4 = Noise2D.mix(h3);
-                  double cx = (ci + di + 0.2 + 0.6 * unit(h2)) * cell;
-                  double cz = (cj + dj + 0.2 + 0.6 * unit(h3)) * cell;
-                  double radius = cell * (0.34 + 0.2 * unit(h4));
-                  double t = Math.hypot(x - cx, z - cz) / radius;
-                  if (t >= 1.0) {
-                     continue;
-                  }
-                  double height = Math.min(150.0, mh * (0.8 + 0.45 * unit(Noise2D.mix(h4))));
-                  double cone = height * Math.pow(1.0 - t, 1.55);
-                  double crater = 1.0 - step(0.03, 0.13, t);
-                  double flow = 1.0 + 0.10 * (this.coneFlank.ridged(x / 55.0, z / 55.0, 2) - 0.4);
-                  best = Math.max(best, Math.max(0.0, cone * flow - 0.34 * height * crater));
-               }
-            }
-            return best;
          }
          case PEAKS:
          default: {

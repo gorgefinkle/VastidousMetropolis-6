@@ -14,8 +14,7 @@ public enum MountainKind {
    MASSIF  ("massif",   40),   // common weathered massifs with asymmetric slopes and cliff faces
    PEAKS   ("peaks",    25),   // less frequent sharp summits
    RANGE   ("range",    20),   // long chains with broad shoulders
-   PLATEAU ("plateau",   8),   // tableland with gullies and escarpments
-   VOLCANO ("volcano",   7);   // rare isolated cones with a crater
+   PLATEAU ("plateau",   8);   // tableland with gullies and escarpments
 
    public static final MountainKind[] ALL = values();
 

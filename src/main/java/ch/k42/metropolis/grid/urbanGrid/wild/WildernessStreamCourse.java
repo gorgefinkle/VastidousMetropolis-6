@@ -76,6 +76,12 @@ public final class WildernessStreamCourse extends RiverProvider {
       return this.xs.length;
    }
 
+   /** World-block centreline point, exposed read-only for deterministic ownership audits. */
+   public double pointXBlock(int point) { return this.xs[point]; }
+
+   /** World-block centreline point, exposed read-only for deterministic ownership audits. */
+   public double pointZBlock(int point) { return this.zs[point]; }
+
    public WildernessStreamCourse forChunk(int chunkX, int chunkZ) {
       boolean zAxis = isZBoundAt(chunkX * 16.0 + 8.0, chunkZ * 16.0 + 8.0);
       return new WildernessStreamCourse(this.courseSeed, this.xs, this.zs,

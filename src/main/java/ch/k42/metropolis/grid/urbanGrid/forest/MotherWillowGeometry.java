@@ -79,6 +79,8 @@ public final class MotherWillowGeometry {
   }
   private static double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
   static final class GrowthStats {
+    int primaryForks;
+    int secondaryForks;
     int terminalForks;
     int terminalBranchlets;
   }
@@ -116,18 +118,6 @@ public final class MotherWillowGeometry {
     }
     void segment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,false,false);}
     void branchSegment(P a,P b,double radA,double radB){segmentInternal(a,b,radA,radB,false,true);}
-    void trailSegment(P a,P b) {
-      int ax=(int)Math.round(a.x),ay=(int)Math.round(a.y),az=(int)Math.round(a.z);
-      int bx=(int)Math.round(b.x),by=(int)Math.round(b.y),bz=(int)Math.round(b.z);
-      int steps=Math.max(1,(int)Math.ceil(Math.hypot(Math.hypot(b.x-a.x,b.z-a.z),b.y-a.y)*2.2));
-      for(int i=0;i<=steps;i++){
-        double t=i/(double)steps;
-        int x=(int)Math.round(a.x+(b.x-a.x)*t);
-        int y=(int)Math.round(a.y+(b.y-a.y)*t);
-        int z=(int)Math.round(a.z+(b.z-a.z)*t);
-        putState(x,y,z,"minecraft:oak_fence[north=true,east=true,south=true,west=true,waterlogged=false]",true,false);
-      }
-    }
     void smoothLeaderJunction(P a,P b,P trunkBefore,P trunkAfter,double radA,double radB){
       // Start the leader at the bole's outer wood, not its hidden centreline.
       // The root radius overlaps the parent trunk so the two volumes fuse.
@@ -230,6 +220,8 @@ public final class MotherWillowGeometry {
           if(k>=steps-2 && rand(hash(tag,k+305))<.92)
             foliage(tip,hash(tag,k+1),.76+rand(hash(tag,k+306))*.42);
         }
+        // Ensure each outer terminal twig ends in its own leaf-bearing pendant shoot.
+        foliage(pts[steps],hash(tag,999001),.82+rand(hash(tag,999002))*.30);
         return;
       }
 
@@ -271,6 +263,29 @@ public final class MotherWillowGeometry {
         double len=length*(order==0?.48:.56)*(.82+rand(hash(child,7))*.30);
         double lift=order==0?.22:-.04;
         branch(pts[attach],ang,lift,len,Math.max(.46,r),order+1,child);
+      }
+
+      // The parent limb itself must split at its distal tip, rather than
+      // reading as a single tapered spike with only lateral offshoots.
+      if(order<2) {
+        P fork=pts[steps];
+        int branchlets=2+(rand(hash(tag,901+order))>(order==0?.62:.76)?1:0);
+        if(stats!=null) {
+          if(order==0) stats.primaryForks++;
+          else stats.secondaryForks++;
+        }
+        double fan=order==0?.34:.48;
+        for(int j=0;j<branchlets;j++) {
+          long child=hash(tag,9301+j);
+          double centred=j-(branchlets-1)*.5;
+          double angle=azimuth+centred*fan+(rand(hash(child,4))-.5)*.14;
+          double childLength=length*(order==0?.42:.38)*(.92+rand(hash(child,5))*.16);
+          double childRadius=Math.max(.44,radius*(order==0?.43:.38)
+                  +(rand(hash(child,6))-.5)*radius*.05);
+          double drop=order==0?-.06-rand(hash(child,7))*.14
+                  :-.22-rand(hash(child,7))*.18;
+          branch(fork,angle,drop,childLength,childRadius,order+1,child);
+        }
       }
     }
     void flush(){

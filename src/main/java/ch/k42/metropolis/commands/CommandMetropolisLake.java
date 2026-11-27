@@ -1,7 +1,6 @@
 package ch.k42.metropolis.commands;
 
 import ch.k42.metropolis.generator.MetropolisGenerator;
-import ch.k42.metropolis.grid.urbanGrid.river.RiverConfig;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildernessFeatures;
 import ch.k42.metropolis.minions.Minions;
 import ch.k42.metropolis.plugin.MetropolisPlugin;
@@ -42,10 +41,9 @@ public final class CommandMetropolisLake implements CommandExecutor, TabComplete
          player.sendMessage("This is not a Metropolis-generated world.");
          return true;
       }
-      if (!PluginConfig.isCityRingsEnabled() || !PluginConfig.isForestGenerationEnabled()
-              || !RiverConfig.isRiverEnabled()) {
-         player.sendMessage("Named lakes require generator.cityRings.enabled, generator.forest.generate, "
-                 + "and generator.river.enabled. Their defaults are all true.");
+      if (!PluginConfig.isCityRingsEnabled() || !PluginConfig.isForestGenerationEnabled()) {
+         player.sendMessage("Named lakes require generator.cityRings.enabled and generator.forest.generate. "
+                 + "Their defaults are both true.");
          return true;
       }
 
@@ -61,7 +59,7 @@ public final class CommandMetropolisLake implements CommandExecutor, TabComplete
          plugin.getServer().getScheduler().runTask(plugin, () -> {
             if (!player.isOnline() || player.getWorld() != world || !plugin.isEnabled()) return;
             if (lake == null) {
-               player.sendMessage("No eligible lake could be planned. Check the lake prerequisites and river receiving-water configuration.");
+               player.sendMessage("No eligible lake could be planned. Check the city-ring and forest-generation settings.");
                return;
             }
             int centerX = (int)Math.round(lake.centerX), centerZ = (int)Math.round(lake.centerZ);
@@ -69,6 +67,9 @@ public final class CommandMetropolisLake implements CommandExecutor, TabComplete
             long distance = Math.round(Math.sqrt((double)dx * dx + (double)dz * dz));
             player.sendMessage(lake.name + " is centered at x=" + centerX + " z=" + centerZ
                     + " (" + distance + " blocks away); waterline y=" + lake.waterY + ".");
+            if (lake.stream == null) {
+               player.sendMessage("This is a closed lake basin; no legal outlet stream was available in the current river layout.");
+            }
             if (!teleport) {
                player.sendMessage("Use /lake tp to go to its nearest safe shoreline.");
                return;
