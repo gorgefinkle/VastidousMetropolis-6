@@ -361,6 +361,27 @@ public final class BoundedRiverSites {
         return ax<=dx&&cx<=bx&&az<=dz&&cz<=bz;
     }
     private int reachTiles(){return Math.max(1,(int)Math.ceil((RiverConfig.getBoundedMaxLengthChunks()+12)/64.0));}
+
+    /**
+     * Resolve every bounded-creek host-site list that can be read while the
+     * layout solves this chunk area. A sitesCovering() miss otherwise performs
+     * candidate arbitration from inside WaterField.zoneKind(), making creek
+     * discovery depend on which water cell the layout happens to ask first.
+     *
+     * Each list is built here, in the explicit hydrology preparation phase.
+     * Its reachTiles() halo also fills acceptedSite() for the centre tile, so
+     * protectedDryParkAt() and parksIn() are reads of the same resolved set.
+     */
+    public synchronized void prepareForChunkArea(int minChunkX,int minChunkZ,int maxChunkX,int maxChunkZ) {
+        if(minChunkX>maxChunkX || minChunkZ>maxChunkZ)
+            throw new IllegalArgumentException("Invalid bounded-creek preparation area");
+        int minTileX=Math.floorDiv(minChunkX,TILE), maxTileX=Math.floorDiv(maxChunkX,TILE);
+        int minTileZ=Math.floorDiv(minChunkZ,TILE), maxTileZ=Math.floorDiv(maxChunkZ,TILE);
+        for(int tx=minTileX;tx<=maxTileX;tx++)
+            for(int tz=minTileZ;tz<=maxTileZ;tz++)
+                sitesCovering(tx,tz);
+    }
+
     public synchronized List<Site> sitesCovering(int tx,int tz){
         long k=key(tx,tz);if(tiles.containsKey(k))return tiles.get(k);
         List<Site> list=new ArrayList<>();int reach=reachTiles();

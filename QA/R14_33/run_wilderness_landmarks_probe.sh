@@ -47,6 +47,8 @@ grep -Fq 'setStreams(features)' "$FEATURES"
 grep -Fq 'installCreeks(generator);' "$GRID"
 grep -Fq 'WildernessFeatures.install(seed)' "$GRID"
 grep -Fq 'WildernessFeatures.prepareForTile(seed, this.root.X, this.root.Y);' "$GRID"
+grep -Fq 'sites.prepareForChunkArea(this.root.X-halo' "$GRID"
+grep -Fq 'public synchronized void prepareForChunkArea' "$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/river/BoundedRiverSites.java"
 
 # Lakes paint a real basin; stream outlets reuse RiverParcel and preserve the river/creek highway handoff.
 grep -Fq 'Material.WATER' "$LAKE"

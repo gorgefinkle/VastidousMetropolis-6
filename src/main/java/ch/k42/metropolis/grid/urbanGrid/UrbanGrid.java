@@ -3871,7 +3871,16 @@ public class UrbanGrid extends Grid implements DistrictHost {
    private void registerCreeks() {
       if (this.creekPhaseDone) return;
       this.creekPhaseDone = true;
-      if (RiverConfig.isRiverEnabled()) this.registerBoundedRivers();
+      if (RiverConfig.isRiverEnabled()) {
+         // Resolve the bounded origin parks and their creek carriers throughout
+         // the layout halo before any WaterField zoning or WorldLayout domain
+         // solve. Later wet/bank lookups read these completed tile lists.
+         BoundedRiverSites sites=boundedSitesFor(this.generator);
+         int halo=128;
+         sites.prepareForChunkArea(this.root.X-halo,this.root.Y-halo,
+                 this.root.X+63+halo,this.root.Y+63+halo);
+         this.registerBoundedRivers();
+      }
    }
 
    private RiverProvider activeCreekCarrierAt(int x,int z) {
