@@ -1,4 +1,4 @@
-name: R14.47 Inland Seas
+name: R14.48 Hydrology Networks
 
 on:
   push:
@@ -117,6 +117,14 @@ jobs:
           assert "enforceNeighbourRules ? this.lowerSites" in source
           print("LandmarkNonRecursiveProbe PASS: accepted plans use memoized, one-hop raw neighbor proposals; no recursive siteOf edge")
           PY
+      - name: Probe convergence-key identity and conflict rejection
+        run: |
+          mkdir -p qa-out
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/HydrologyConvergenceKey.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/HydrologyConvergenceRegistry.java \
+            QA/R14_48/HydrologyConvergenceRegistryProbe.java
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.wild.HydrologyConvergenceRegistryProbe
       - name: Build plugin JAR
         run: mvn --batch-mode --no-transfer-progress clean package
       - name: Verify named massif, lake and continuous stream plan/ownership
@@ -133,6 +141,14 @@ jobs:
             src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildRelief.java \
             QA/R14_43/MountainKindNoVolcanoProbe.java
           java -cp qa-out ch.k42.metropolis.grid.urbanGrid.wild.MountainKindNoVolcanoProbe
+      - name: Verify keyed city-aware hydrology convergence
+        run: |
+          grep -F 'HydrologyConvergenceKey.Receiver.OCEAN' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'HydrologyConvergenceKey.Receiver.RIVER' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'HydrologyConvergenceKey.Receiver.CREEK' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'convergenceEndpointsIn' src/main/java/ch/k42/metropolis/grid/urbanGrid/river/BoundedRiverSites.java
+          grep -F 'prepareForConvergenceArea' src/main/java/ch/k42/metropolis/grid/urbanGrid/UrbanGrid.java
+          grep -F 'this.convergenceKey=convergenceKey' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessStreamCourse.java
       - name: Verify live legacy block conversion paths
         run: |
           grep -F 'Bukkit.getUnsafe().fromLegacy' src/main/java/ch/k42/metropolis/minions/LegacyBlocks.java
@@ -147,15 +163,15 @@ jobs:
           ! grep -Fq 'getDeclaredField("coneSeed")' src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/BiomeEcology.java
       - name: Verify embedded plugin version
         run: |
-          expected='0.1.23-R14.47-Inland-Seas-DEV'
-          actual="$(unzip -p target/Metropolis_R14_47_Inland_Seas_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          expected='0.1.24-R14.48-Hydrology-Networks-DEV'
+          actual="$(unzip -p target/Metropolis_R14_48_Hydrology_Networks_DEV.jar plugin.yml | sed -n 's/^version: //p')"
           test "$actual" = "$expected"
           echo "Embedded plugin version: $actual"
       - name: Assemble test delivery
         run: |
           mkdir -p delivery
-          cp target/Metropolis_R14_47_Inland_Seas_DEV.jar delivery/
-          zip -qr delivery/Metropolis_R14_47_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
+          cp target/Metropolis_R14_48_Hydrology_Networks_DEV.jar delivery/
+          zip -qr delivery/Metropolis_R14_48_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
           (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
           ls -lh delivery
       - name: Upload JAR and full source
