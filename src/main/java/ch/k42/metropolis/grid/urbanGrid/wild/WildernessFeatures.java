@@ -72,6 +72,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
     * -> WaterField creek lookup edge. */
    private volatile WaterField.CreekSource routeCreeks;
    private final CityRingField cities;
+   private final HydrologyConvergenceRegistry convergenceRegistry=new HydrologyConvergenceRegistry();
    private final Map<Long, FeatureCell> featureCells =
            new LinkedHashMap<Long, FeatureCell>(96, 0.75f, true) {
               @Override protected boolean removeEldestEntry(Map.Entry<Long, FeatureCell> eldest) {
@@ -125,6 +126,12 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    }
 
    private synchronized void prepareForTile(int tileMinChunkX, int tileMinChunkZ) {
+      WaterField.CreekSource creekSource=this.routeCreeks;
+      if(creekSource!=null) {
+         int creekReach=Math.min(this.streamRange,192);
+         creekSource.prepareForConvergenceArea(tileMinChunkX-creekReach-64,tileMinChunkZ-creekReach-64,
+                 tileMinChunkX+63+creekReach+64,tileMinChunkZ+63+creekReach+64);
+      }
       int reach = Math.max(1, (int)Math.ceil((this.streamRange + this.cellSize / 2.0) / this.cellSize));
       int minGX = Math.floorDiv(tileMinChunkX - 128, this.cellSize) - reach;
       int maxGX = Math.floorDiv(tileMinChunkX + 63 + 128, this.cellSize) + reach;
@@ -199,6 +206,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    int resolvedFeatureCellCountForProbe() {
       synchronized (this) { return this.featureCells.size(); }
    }
+   int registeredConvergenceEndpointCountForProbe(){return this.convergenceRegistry.size();}
 
    private FeatureCell buildCell(int gx, int gz) {
       long h = cellHash(gx, gz);
@@ -295,24 +303,17 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
     * the deterministic regression and does not mutate the plan.
     */
    int[] outletDiagnosticsForProbe(LakeSite lake) {
-      int cx = (int)Math.floor(lake.centerX / 16.0);
-      int cz = (int)Math.floor(lake.centerZ / 16.0);
-      int raw = countReceivingRiverChunksForProbe(cx, cz);
-      List<WaterTarget> targets = findTargets(cx, cz);
-      if (targets.isEmpty()) return new int[]{raw, 0, 0};
-      WaterTarget nearest = targets.get(0);
-      double dx = nearest.x - lake.centerX / 16.0;
-      double dz = nearest.z - lake.centerZ / 16.0;
-      double distance = Math.max(1.0, Math.hypot(dx, dz));
-      double inset = Math.min(lake.radiusX, lake.radiusZ) / 16.0 * 0.62;
-      int routeX = (int)Math.round(lake.centerX / 16.0 + dx / distance * inset);
-      int routeZ = (int)Math.round(lake.centerZ / 16.0 + dz / distance * inset);
-      List<int[]> path = route(routeX, routeZ, targets);
-      return new int[]{raw, targets.size(), path == null ? 0 : path.size(),
-              this.lastRouteExpansionsForProbe, this.lastRouteFrontierForProbe,
-              this.lastRouteCityBlocksForProbe, this.lastRouteWaterBlocksForProbe,
-              this.lastRouteCreekBlocksForProbe, this.lastRouteHighwayParallelBlocksForProbe,
-              this.lastRouteHighwayWidthBlocksForProbe, this.lastRouteHighwayTurnBlocksForProbe};
+      int cx=(int)Math.floor(lake.centerX/16.0),cz=(int)Math.floor(lake.centerZ/16.0);
+      List<WaterTarget> targets=findTargets(cx,cz);
+      if(targets.isEmpty())return new int[]{0,0,0};
+      double dx=targets.get(0).x-cx,dz=targets.get(0).z-cz;
+      RouteResult result=route((int)Math.round(cx+dx*.62),(int)Math.round(cz+dz*.62),targets);
+      return new int[]{targets.size(),result==null?0:result.path.size(),
+              result==null?-1:result.target.key.receiver().ordinal(),
+              this.lastRouteExpansionsForProbe,this.lastRouteFrontierForProbe,
+              this.lastRouteCityBlocksForProbe,this.lastRouteWaterBlocksForProbe,
+              this.lastRouteCreekBlocksForProbe,this.lastRouteHighwayParallelBlocksForProbe,
+              this.lastRouteHighwayWidthBlocksForProbe,this.lastRouteHighwayTurnBlocksForProbe};
    }
 
    private int countReceivingRiverChunksForProbe(int startX, int startZ) {
@@ -476,91 +477,106 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       return best;
    }
 
-   private WildernessStreamCourse buildOutlet(LakeSite lake, long featureHash, List<WaterTarget> targets) {
-      if (targets.isEmpty()) return null;
-      WaterTarget nearest = targets.get(0);
-      double dx = nearest.x - lake.centerX / 16.0, dz = nearest.z - lake.centerZ / 16.0;
-      double length = Math.max(1.0, Math.hypot(dx, dz));
-      double inset = Math.min(lake.radiusX, lake.radiusZ) / 16.0 * 0.62;
-      int startX = (int)Math.floor(lake.centerX / 16.0 + dx / length * inset);
-      int startZ = (int)Math.floor(lake.centerZ / 16.0 + dz / length * inset);
-      // Bays/headlands may bend the coast away from an ellipse. Start the outlet
-      // only after verifying the point is inside genuine open water.
-      if (lake.distanceInsideShoreBlock(startX * 16.0 + 8.0, startZ * 16.0 + 8.0) < 12.0) {
-         for (double factor : new double[] {0.52,0.42,0.32,0.22}) {
+   private WildernessStreamCourse buildOutlet(LakeSite lake,long featureHash,List<WaterTarget> targets) {
+      if(targets.isEmpty())return null;
+      WaterTarget nearest=targets.get(0);
+      double dx=nearest.x-lake.centerX/16.0,dz=nearest.z-lake.centerZ/16.0;
+      double length=Math.max(1.0,Math.hypot(dx,dz)),inset=Math.min(lake.radiusX,lake.radiusZ)/16.0*.62;
+      int startX=(int)Math.floor(lake.centerX/16.0+dx/length*inset);
+      int startZ=(int)Math.floor(lake.centerZ/16.0+dz/length*inset);
+      if(lake.distanceInsideShoreBlock(startX*16.0+8.0,startZ*16.0+8.0)<12.0) {
+         for(double factor:new double[]{.52,.42,.32,.22}) {
             int sx=(int)Math.floor(lake.centerX/16.0+dx/length*Math.min(lake.radiusX,lake.radiusZ)/16.0*factor);
             int sz=(int)Math.floor(lake.centerZ/16.0+dz/length*Math.min(lake.radiusX,lake.radiusZ)/16.0*factor);
             if(lake.distanceInsideShoreBlock(sx*16.0+8.0,sz*16.0+8.0)>=12.0){startX=sx;startZ=sz;break;}
          }
       }
-      List<int[]> path=route(startX,startZ,targets);
-      if(path==null||path.size()<2)return null;
-      double[] blockX=new double[path.size()], blockZ=new double[path.size()];
-      for(int i=0;i<path.size();i++){blockX[i]=path.get(i)[0]*16.0+8.0;blockZ[i]=path.get(i)[1]*16.0+8.0;}
-      long streamSeed=mix(featureHash ^ 0x53545245414D4C4BL);
-      double width=10.0+unit(mix(streamSeed))*2.0;
-      double bank=7.0+unit(mix(streamSeed ^ 0x42414E4BL))*3.0;
-      return new WildernessStreamCourse(streamSeed,blockX,blockZ,width,bank);
+      RouteResult routed=route(startX,startZ,targets);
+      if(routed==null||routed.path.size()<2)return null;
+      double[] blockX=new double[routed.path.size()],blockZ=new double[routed.path.size()];
+      for(int i=0;i<routed.path.size();i++){blockX[i]=routed.path.get(i)[0]*16.0+8.0;blockZ[i]=routed.path.get(i)[1]*16.0+8.0;}
+      int last=blockX.length-1;
+      blockX[last]=routed.target.key.blockX();blockZ[last]=routed.target.key.blockZ();
+      long streamSeed=mix(featureHash^0x53545245414D4C4BL);
+      double width=10.0+unit(mix(streamSeed))*2.0,bank=7.0+unit(mix(streamSeed^0x42414E4BL))*3.0;
+      return new WildernessStreamCourse(streamSeed,blockX,blockZ,width,bank,routed.target.key);
    }
 
-   private List<WaterTarget> findTargets(int startX, int startZ) {
-      int radius = this.streamRange;
-      int minX = startX - radius, maxX = startX + radius;
-      int minZ = startZ - radius, maxZ = startZ + radius;
-      List<WaterTarget> targets = new ArrayList<>();
-      addRiverTargets(this.water.mainRiver(), false, startX, startZ, minX, maxX, minZ, maxZ, targets);
-      addRiverTargets(this.water.zBoundRiver(), true, startX, startZ, minX, maxX, minZ, maxZ, targets);
-
-      // If the main river is switched off but ocean generation remains on,
-      // locate coast cells by the shared water lattice as a receiving outlet.
-      if (targets.isEmpty() && this.water.ocean() != null) {
-         int lattice = Math.max(1, this.water.lattice());
-         int firstCellX = Math.floorDiv(minX, lattice), lastCellX = Math.floorDiv(maxX, lattice);
-         int firstCellZ = Math.floorDiv(minZ, lattice), lastCellZ = Math.floorDiv(maxZ, lattice);
-         for (int cellX = firstCellX; cellX <= lastCellX; cellX++) {
-            int x0 = cellX * lattice;
-            for (int cellZ = firstCellZ; cellZ <= lastCellZ; cellZ++) {
-               int z0 = cellZ * lattice;
-               if (this.water.baseZoneKind(x0, z0) != WaterField.Kind.OCEAN) continue;
-               for (int dx = 0; dx < lattice; dx++) {
-                  int x = x0 + dx;
-                  if (x < minX || x > maxX) continue;
-                  for (int dz = 0; dz < lattice; dz++) {
-                     int z = z0 + dz;
-                     if (z < minZ || z > maxZ) continue;
-                     if (this.water.isReceivingWaterAt(x, z) && !this.inOuterCity(x, z))
-                        targets.add(new WaterTarget(x, z, Math.abs(x - startX) + Math.abs(z - startZ)));
-                  }
-               }
-            }
+   private List<WaterTarget> findTargets(int startX,int startZ) {
+      int radius=this.streamRange;
+      int minX=startX-radius,maxX=startX+radius,minZ=startZ-radius,maxZ=startZ+radius;
+      Map<HydrologyConvergenceKey,WaterTarget> unique=new LinkedHashMap<>();
+      addRiverTargets(this.water.mainRiver(),false,startX,startZ,minX,maxX,minZ,maxZ,unique);
+      addRiverTargets(this.water.zBoundRiver(),true,startX,startZ,minX,maxX,minZ,maxZ,unique);
+      addOceanTargets(startX,startZ,Math.max(minX,startX-256),Math.max(minZ,startZ-256),
+              Math.min(maxX,startX+256),Math.min(maxZ,startZ+256),unique);
+      WaterField.CreekSource source=this.routeCreeks;
+      if(source!=null) {
+         int creekRadius=Math.min(radius,192);
+         List<HydrologyConvergenceKey> endpoints=source.convergenceEndpoints(
+                 Math.max(minX,startX-creekRadius),Math.max(minZ,startZ-creekRadius),
+                 Math.min(maxX,startX+creekRadius),Math.min(maxZ,startZ+creekRadius));
+         for(HydrologyConvergenceKey raw:endpoints) {
+            HydrologyConvergenceKey key=this.convergenceRegistry.register(raw);
+            int x=key.chunkX(),z=key.chunkZ();
+            if(!this.inOuterCity(x,z))unique.putIfAbsent(key,new WaterTarget(key,startX,startZ));
          }
       }
-      targets.sort(Comparator.comparingInt(t -> t.distance));
-      if (targets.size() > 24) targets.subList(24, targets.size()).clear();
-      return targets;
+      List<WaterTarget> all=new ArrayList<>(unique.values());
+      all.sort(Comparator.comparingInt((WaterTarget t)->t.distance).thenComparing(t->t.key));
+      List<WaterTarget> result=new ArrayList<>();
+      for(HydrologyConvergenceKey.Receiver receiver:HydrologyConvergenceKey.Receiver.values()) {
+         int count=0;
+         for(WaterTarget t:all)if(t.key.receiver()==receiver&&count++<24)result.add(t);
+      }
+      result.sort(Comparator.comparingInt((WaterTarget t)->t.distance).thenComparing(t->t.key));
+      if(result.size()>64)result.subList(64,result.size()).clear();
+      return result;
    }
 
-   /** Collect actual open-water chunks along a main-river spine; the cross-axis
-    * envelope comes from the same RiverProvider used by RiverParcel. */
-   private void addRiverTargets(RiverProvider river, boolean zBound, int startX, int startZ,
-                                int minX, int maxX, int minZ, int maxZ,
-                                List<WaterTarget> targets) {
-      if (river == null || !river.isEnabled()) return;
-      int alongMin = zBound ? minZ : minX;
-      int alongMax = zBound ? maxZ : maxX;
-      int acrossReach = (int)Math.ceil(river.getEnvelopeHalfWidth()) + 2;
-      for (int along = alongMin; along <= alongMax; along++) {
-         double alongBlock = along * 16.0 + 8.0;
-         double acrossBlock = zBound ? river.spineXBlock(alongBlock) : river.spineZBlock(alongBlock);
-         if (!Double.isFinite(acrossBlock)) continue;
-         int acrossCenter = (int)Math.floor(acrossBlock / 16.0);
-         for (int offset = -acrossReach; offset <= acrossReach; offset++) {
-            int x = zBound ? acrossCenter + offset : along;
-            int z = zBound ? along : acrossCenter + offset;
-            if (x < minX || x > maxX || z < minZ || z > maxZ) continue;
-            if (!this.water.isReceivingWaterAt(x, z) || this.inOuterCity(x, z)) continue;
-            targets.add(new WaterTarget(x, z, Math.abs(x - startX) + Math.abs(z - startZ)));
+   private void addOceanTargets(int startX,int startZ,int minX,int minZ,int maxX,int maxZ,
+                                Map<HydrologyConvergenceKey,WaterTarget> targets) {
+      if(this.water.ocean()==null||minX>maxX||minZ>maxZ)return;
+      int lattice=Math.max(1,this.water.lattice()),stride=Math.max(1,lattice/3);
+      int firstX=Math.floorDiv(minX,lattice),lastX=Math.floorDiv(maxX,lattice);
+      int firstZ=Math.floorDiv(minZ,lattice),lastZ=Math.floorDiv(maxZ,lattice);
+      long network=HydrologyConvergenceKey.stableId("ocean:"+this.seed);
+      for(int gx=firstX;gx<=lastX;gx++)for(int gz=firstZ;gz<=lastZ;gz++) {
+         int x0=gx*lattice,z0=gz*lattice;
+         if(this.water.baseZoneKind(x0,z0)!=WaterField.Kind.OCEAN)continue;
+         for(int dx=stride/2;dx<lattice;dx+=stride)for(int dz=stride/2;dz<lattice;dz+=stride) {
+            int x=x0+dx,z=z0+dz;
+            if(x<minX||x>maxX||z<minZ||z>maxZ||this.inOuterCity(x,z))continue;
+            double bx=x*16.0+8.0,bz=z*16.0+8.0;
+            double inside=this.water.ocean().distanceInsideShoreBlock(bx,bz);
+            if(!Double.isFinite(inside)||inside<=0.0)continue;
+            HydrologyConvergenceKey key=this.convergenceRegistry.register(
+                    new HydrologyConvergenceKey(HydrologyConvergenceKey.Receiver.OCEAN,network,
+                            HydrologyConvergenceKey.chunkEndpointId(x,z),bx,bz));
+            targets.putIfAbsent(key,new WaterTarget(key,startX,startZ));
          }
+      }
+   }
+
+   private void addRiverTargets(RiverProvider river,boolean zBound,int startX,int startZ,
+                                int minX,int maxX,int minZ,int maxZ,
+                                Map<HydrologyConvergenceKey,WaterTarget> targets) {
+      if(river==null||!river.isEnabled())return;
+      int alongMin=zBound?minZ:minX,alongMax=zBound?maxZ:maxX;
+      long network=HydrologyConvergenceKey.stableId("river:"+this.seed+":"+(zBound?"z":"x"));
+      for(int along=alongMin;along<=alongMax;along++) {
+         double alongBlock=along*16.0+8.0;
+         double across=zBound?river.spineXBlock(alongBlock):river.spineZBlock(alongBlock);
+         if(!Double.isFinite(across))continue;
+         double bx=zBound?across:alongBlock,bz=zBound?alongBlock:across;
+         int cx=(int)Math.floor(bx/16.0),cz=(int)Math.floor(bz/16.0);
+         if(cx<minX||cx>maxX||cz<minZ||cz>maxZ||this.inOuterCity(cx,cz))continue;
+         if(!river.isRiver(cx,cz)||this.water.baseKindAt(cx,cz)==WaterField.Kind.OCEAN)continue;
+         double distance=river.distanceFromCenterBlock(bx,bz),width=river.widthAtBlock(zBound?bz:bx);
+         if(!Double.isFinite(distance)||!Double.isFinite(width)||Math.abs(distance)>width*.5)continue;
+         HydrologyConvergenceKey key=this.convergenceRegistry.register(
+                 new HydrologyConvergenceKey(HydrologyConvergenceKey.Receiver.RIVER,network,along,bx,bz));
+         targets.putIfAbsent(key,new WaterTarget(key,startX,startZ));
       }
    }
 
@@ -569,89 +585,57 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       return source != null && source.waterOrBank(chunkX, chunkZ);
    }
 
-   private List<int[]> route(int startX, int startZ, List<WaterTarget> targets) {
-      int radius = this.streamRange;
-      int minX = startX - radius, maxX = startX + radius;
-      int minZ = startZ - radius, maxZ = startZ + radius;
-      Map<Long, Byte> highwayAxes = highwayAxes(minX, minZ, maxX, maxZ);
-      PriorityQueue<RouteNode> open = new PriorityQueue<>(Comparator
-              .comparingInt((RouteNode n) -> n.score)
-              .thenComparingInt(n -> n.cost)
-              .thenComparingLong(n -> n.key));
-      Map<Long, Integer> best = new HashMap<>();
-      Map<Long, Long> previous = new HashMap<>();
-      long startKey = routeKey(startX, startZ, 4, 0);
-      int startH = heuristic(startX, startZ, targets);
-      open.add(new RouteNode(startKey, startX, startZ, 4, 0, 0, startH));
-      best.put(startKey, 0);
-      long goalKey = Long.MIN_VALUE;
-      int expansions = 0;
-      int cityBlocks = 0, waterBlocks = 0, creekBlocks = 0;
-      int highwayParallelBlocks = 0, highwayWidthBlocks = 0, highwayTurnBlocks = 0;
-      final int[] dx = {1, -1, 0, 0};
-      final int[] dz = {0, 0, 1, -1};
-      while (!open.isEmpty() && expansions++ < MAX_ROUTE_EXPANSIONS) {
-         RouteNode node = open.poll();
-         Integer currentBest = best.get(node.key);
-         if (currentBest == null || currentBest != node.cost) continue;
-         if (this.water.isReceivingWaterAt(node.x, node.z)) {
-            goalKey = node.key;
-            break;
-         }
-         for (int direction = 0; direction < 4; direction++) {
-            int nx = node.x + dx[direction], nz = node.z + dz[direction];
-            if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue;
-            if (this.inOuterCity(nx, nz)) { cityBlocks++; continue; }
-            WaterField.Kind base = this.water.baseKindAt(nx, nz);
-            // The natural river/ocean bank is part of the receiving-water
-            // approach corridor. Only the open-water channel is a route goal,
-            // but its bank must remain traversable or A* can never reach it.
-            if (base != WaterField.Kind.NONE
-                    && base != WaterField.Kind.RIVER
-                    && base != WaterField.Kind.OCEAN
-                    && !this.water.isReceivingWaterAt(nx, nz)) { waterBlocks++; continue; }
-            if (this.plannedCreekAt(nx, nz)) { creekBlocks++; continue; }
-
-            byte axes = highwayAxes.getOrDefault(cellKey(nx, nz), (byte)0);
-            int moveAxis = dx[direction] != 0 ? 1 : 2;
-            if (axes != 0 && (axes & moveAxis) != 0) { highwayParallelBlocks++; continue; }
-            // Keep the crossing straight until the stream has cleared the highway width.
-            if (node.highwayRun > 0 && direction != node.direction) { highwayTurnBlocks++; continue; }
-            int run = axes == 0 ? 0 : node.highwayRun + 1;
-            if (run > MAX_HIGHWAY_CROSSING_CHUNKS) { highwayWidthBlocks++; continue; }
-
-            int cost = node.cost + 10 + (axes == 0 ? 0 : 9)
-                    + (node.direction != 4 && node.direction != direction ? 2 : 0);
-            long nextKey = routeKey(nx, nz, direction, run);
-            Integer old = best.get(nextKey);
-            if (old != null && old <= cost) continue;
-            best.put(nextKey, cost);
-            previous.put(nextKey, node.key);
-            int score = cost + heuristic(nx, nz, targets) * 10;
-            open.add(new RouteNode(nextKey, nx, nz, direction, run, cost, score));
+   private RouteResult route(int startX,int startZ,List<WaterTarget> targets) {
+      int radius=this.streamRange,minX=startX-radius,maxX=startX+radius,minZ=startZ-radius,maxZ=startZ+radius;
+      Map<Long,WaterTarget> goals=new HashMap<>();
+      for(WaterTarget t:targets)goals.putIfAbsent(cellKey(t.x,t.z),t);
+      if(goals.isEmpty())return null;
+      Map<Long,Byte> highwayAxes=highwayAxes(minX,minZ,maxX,maxZ);
+      PriorityQueue<RouteNode> open=new PriorityQueue<>(Comparator.comparingInt((RouteNode n)->n.score)
+              .thenComparingInt(n->n.cost).thenComparingLong(n->n.key));
+      Map<Long,Integer> best=new HashMap<>();Map<Long,Long> previous=new HashMap<>();
+      long startKey=routeKey(startX,startZ,4,0);
+      open.add(new RouteNode(startKey,startX,startZ,4,0,0,heuristic(startX,startZ,targets)));
+      best.put(startKey,0);
+      long goalKey=Long.MIN_VALUE;WaterTarget reached=null;
+      int expansions=0,cityBlocks=0,waterBlocks=0,creekBlocks=0;
+      int highwayParallelBlocks=0,highwayWidthBlocks=0,highwayTurnBlocks=0;
+      final int[] dx={1,-1,0,0},dz={0,0,1,-1};
+      while(!open.isEmpty()&&expansions++<MAX_ROUTE_EXPANSIONS) {
+         RouteNode node=open.poll();Integer currentBest=best.get(node.key);
+         if(currentBest==null||currentBest!=node.cost)continue;
+         WaterTarget endpoint=goals.get(cellKey(node.x,node.z));
+         if(endpoint!=null){goalKey=node.key;reached=endpoint;break;}
+         for(int direction=0;direction<4;direction++) {
+            int nx=node.x+dx[direction],nz=node.z+dz[direction];
+            if(nx<minX||nx>maxX||nz<minZ||nz>maxZ)continue;
+            if(this.inOuterCity(nx,nz)){cityBlocks++;continue;}
+            WaterTarget proposed=goals.get(cellKey(nx,nz));
+            boolean exactCreekGoal=proposed!=null&&proposed.key.receiver()==HydrologyConvergenceKey.Receiver.CREEK;
+            WaterField.Kind base=this.water.baseKindAt(nx,nz);
+            if(base!=WaterField.Kind.NONE&&base!=WaterField.Kind.RIVER&&base!=WaterField.Kind.OCEAN
+                    &&!this.water.isReceivingWaterAt(nx,nz)){waterBlocks++;continue;}
+            if(this.plannedCreekAt(nx,nz)&&!exactCreekGoal){creekBlocks++;continue;}
+            byte axes=highwayAxes.getOrDefault(cellKey(nx,nz),(byte)0);
+            int moveAxis=dx[direction]!=0?1:2;
+            if(axes!=0&&(axes&moveAxis)!=0){highwayParallelBlocks++;continue;}
+            if(node.highwayRun>0&&direction!=node.direction){highwayTurnBlocks++;continue;}
+            int run=axes==0?0:node.highwayRun+1;if(run>MAX_HIGHWAY_CROSSING_CHUNKS){highwayWidthBlocks++;continue;}
+            int cost=node.cost+10+(axes==0?0:9)+(node.direction!=4&&node.direction!=direction?2:0);
+            long next=routeKey(nx,nz,direction,run);Integer old=best.get(next);if(old!=null&&old<=cost)continue;
+            best.put(next,cost);previous.put(next,node.key);
+            open.add(new RouteNode(next,nx,nz,direction,run,cost,cost+heuristic(nx,nz,targets)*10));
          }
       }
-      this.lastRouteExpansionsForProbe = expansions;
-      this.lastRouteFrontierForProbe = open.size();
-      this.lastRouteCityBlocksForProbe = cityBlocks;
-      this.lastRouteWaterBlocksForProbe = waterBlocks;
-      this.lastRouteCreekBlocksForProbe = creekBlocks;
-      this.lastRouteHighwayParallelBlocksForProbe = highwayParallelBlocks;
-      this.lastRouteHighwayWidthBlocksForProbe = highwayWidthBlocks;
-      this.lastRouteHighwayTurnBlocksForProbe = highwayTurnBlocks;
-      if (goalKey == Long.MIN_VALUE) return null;
-      List<int[]> reversed = new ArrayList<>();
-      long key = goalKey;
-      while (key != startKey) {
-         int[] point = decodeCell(key);
-         reversed.add(point);
-         Long parent = previous.get(key);
-         if (parent == null) return null;
-         key = parent;
-      }
-      reversed.add(new int[]{startX, startZ});
-      java.util.Collections.reverse(reversed);
-      return reversed;
+      this.lastRouteExpansionsForProbe=expansions;this.lastRouteFrontierForProbe=open.size();
+      this.lastRouteCityBlocksForProbe=cityBlocks;this.lastRouteWaterBlocksForProbe=waterBlocks;
+      this.lastRouteCreekBlocksForProbe=creekBlocks;this.lastRouteHighwayParallelBlocksForProbe=highwayParallelBlocks;
+      this.lastRouteHighwayWidthBlocksForProbe=highwayWidthBlocks;this.lastRouteHighwayTurnBlocksForProbe=highwayTurnBlocks;
+      if(goalKey==Long.MIN_VALUE||reached==null)return null;
+      List<int[]> reversed=new ArrayList<>();long cursor=goalKey;
+      while(cursor!=startKey){reversed.add(decodeCell(cursor));Long parent=previous.get(cursor);if(parent==null)return null;cursor=parent;}
+      reversed.add(new int[]{startX,startZ});java.util.Collections.reverse(reversed);
+      return new RouteResult(reversed,reached);
    }
 
    private static int heuristic(int x, int z, List<WaterTarget> targets) {
@@ -895,8 +879,14 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    }
 
    private static final class WaterTarget {
-      final int x, z, distance;
-      WaterTarget(int x, int z, int distance) { this.x=x; this.z=z; this.distance=distance; }
+      final HydrologyConvergenceKey key;final int x,z,distance;
+      WaterTarget(HydrologyConvergenceKey key,int sx,int sz) {
+         this.key=key;this.x=key.chunkX();this.z=key.chunkZ();this.distance=Math.abs(x-sx)+Math.abs(z-sz);
+      }
+   }
+   private static final class RouteResult {
+      final List<int[]> path;final WaterTarget target;
+      RouteResult(List<int[]> path,WaterTarget target){this.path=path;this.target=target;}
    }
 
    private static final class RouteNode {
