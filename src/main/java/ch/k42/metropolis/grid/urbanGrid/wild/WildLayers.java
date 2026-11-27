@@ -46,8 +46,7 @@ final class WildLayers {
    private final ConcurrentHashMap<Long, Byte> regionMemo = new ConcurrentHashMap<Long, Byte>();
    private int puts;
    private final double[] realised;
-   /** Target-normalized shares for region-scale rare-biome seeding. */
-   private final double bloomlandsCellShare;
+   /** Target-normalized share for the region-scale Karstlands habitat field. */
    private final double karstCellShare;
    /** Rare-province macro tile; a 16,384-block sector at the default scale. */
    private final int rareGroupsPerSide;
@@ -81,8 +80,6 @@ final class WildLayers {
       this.realised = new double[this.n];
       double targetTotal = 0.0;
       for (double share : target) targetTotal += Math.max(0.0, share);
-      this.bloomlandsCellShare = targetTotal > 0.0
-              ? Math.max(0.0, target[WildBiome.BLOOMLANDS.ordinal()]) / targetTotal : 0.0;
       this.karstCellShare = targetTotal > 0.0
               ? Math.max(0.0, target[WildBiome.VOLCANIC_BARRENS.ordinal()]) / targetTotal : 0.0;
       this.rareGroupsPerSide = Math.max(6, Math.min(32,
@@ -129,12 +126,10 @@ final class WildLayers {
       for (int b = 0; b < this.n; ++b) {
          if (counts[b] > counts[best]) best = b;
       }
-      // The two deliberately rare special habitats have broad, coherent
-      // source cells but can be outvoted by ordinary forest around their
-      // narrow/irregular margins. Never let the final 3x3 majority pass erase
-      // every surviving karst or Bloomlands core cell.
-      boolean preserveRareCore = center == WildBiome.VOLCANIC_BARRENS.ordinal()
-              || center == WildBiome.BLOOMLANDS.ordinal();
+      // Karstlands retains its dedicated broad habitat cells. Bloomlands now
+      // participates in the ordinary wilderness zoom/smoothing grid like every
+      // other biome, so its boundaries inherit the same natural transitions.
+      boolean preserveRareCore = center == WildBiome.VOLCANIC_BARRENS.ordinal();
       int label = preserveRareCore || counts[center] >= 4 || counts[best] < 3 ? center : best;
       if (regionMemo.size() > 250000) regionMemo.clear();
       regionMemo.put(key, (byte) label);
@@ -186,12 +181,8 @@ final class WildLayers {
       int slots = side * side;
       boolean[] occupied = new boolean[labels.length];
       long seedHash = this.hash(0x52415245, tileX, tileZ);
-      int bloomCount = stochasticQuota(this.bloomlandsCellShare * groups * groups,
-              seedHash ^ 0x424c4f4f4dL, slots);
       int karstCount = stochasticQuota(this.karstCellShare * groups * groups,
-              seedHash ^ 0x4b41525354L, Math.max(0, slots - bloomCount));
-      placeRareGroups(labels, occupied, WildBiome.BLOOMLANDS.ordinal(),
-              bloomCount, tileX, tileZ, side, margin, 0x424c4f4f);
+              seedHash ^ 0x4b41525354L, slots);
       placeRareGroups(labels, occupied, WildBiome.VOLCANIC_BARRENS.ordinal(),
               karstCount, tileX, tileZ, side, margin, 0x4b415253);
       return labels;
@@ -345,14 +336,11 @@ final class WildLayers {
 
    /** Level 0: a random biome per coarse cell, by the (calibrated) priors. */
    private int start(int x, int z) {
-      // Bloomlands and Karstlands are deliberately omitted from the coarse
-      // source grid; rareRegionLabel() places them at the final region scale.
-      // Renormalize common priors so rare shares are not redistributed to the
-      // last ordinary biome when the coarse map is sampled.
+      // Karstlands remains on its dedicated fractured-limestone habitat field.
+      // Bloomlands is intentionally part of this ordinary weighted source grid.
       double commonTotal = 0.0;
       for (int k = 0; k < this.n; k++) {
-         if (k != WildBiome.BLOOMLANDS.ordinal()
-                 && k != WildBiome.VOLCANIC_BARRENS.ordinal()) {
+         if (k != WildBiome.VOLCANIC_BARRENS.ordinal()) {
             commonTotal += Math.max(0.0, this.prior[k]);
          }
       }
@@ -361,8 +349,7 @@ final class WildLayers {
       double acc = 0.0;
       int last = WildBiome.FOREST.ordinal();
       for (int k = 0; k < this.n; k++) {
-         if (k == WildBiome.BLOOMLANDS.ordinal()
-                 || k == WildBiome.VOLCANIC_BARRENS.ordinal()) continue;
+         if (k == WildBiome.VOLCANIC_BARRENS.ordinal()) continue;
          if (this.prior[k] > 0.0) {
             last = k;
             acc += this.prior[k];
@@ -418,11 +405,9 @@ final class WildLayers {
 
    /** Vanilla's smoothing: a cell whose opposite neighbours agree with each other and not with it takes their value. */
    private int smooth(int level, int x, int z, int cur) {
-      // A rare biome cell is a coherent output of the zoom stack. Do not let
-      // the later cellular majority smoother erase its core; narrow margins
-      // still transition naturally in adjacent common-biome cells.
-      if (cur == WildBiome.VOLCANIC_BARRENS.ordinal()
-              || cur == WildBiome.BLOOMLANDS.ordinal()) return cur;
+      // Karstlands' fractured-limestone habitat cells retain their coherent core.
+      // Bloomlands receives the same smoothing as ordinary wilderness biomes.
+      if (cur == WildBiome.VOLCANIC_BARRENS.ordinal()) return cur;
       int l = this.stage(level, 0, x - 1, z);
       int r = this.stage(level, 0, x + 1, z);
       int u = this.stage(level, 0, x, z - 1);
