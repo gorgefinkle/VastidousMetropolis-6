@@ -385,14 +385,28 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private List<WaterTarget> findTargets(int startX, int startZ) {
       int radius = Math.min(MAX_STREAM_RANGE, Math.max(128, this.spacing));
       int lattice = Math.max(1, this.water.lattice());
+      int minX = startX - radius, maxX = startX + radius;
+      int minZ = startZ - radius, maxZ = startZ + radius;
+      // baseZoneKind() answers for the complete globally anchored lattice cell.
+      // Scan that same aligned cell, not a window beginning at the arbitrary
+      // search-bound coordinate; otherwise most of a receiving-water cell can
+      // be skipped when the radius edge falls partway through the lattice.
+      int firstCellX = Math.floorDiv(minX, lattice);
+      int lastCellX = Math.floorDiv(maxX, lattice);
+      int firstCellZ = Math.floorDiv(minZ, lattice);
+      int lastCellZ = Math.floorDiv(maxZ, lattice);
       List<WaterTarget> targets = new ArrayList<>();
-      for (int x = startX - radius; x <= startX + radius; x += lattice) {
-         for (int z = startZ - radius; z <= startZ + radius; z += lattice) {
-            WaterField.Kind zone = this.water.baseZoneKind(x, z);
-            if (zone == WaterField.Kind.NONE) continue;
+      for (int cellX = firstCellX; cellX <= lastCellX; cellX++) {
+         int x0 = cellX * lattice;
+         for (int cellZ = firstCellZ; cellZ <= lastCellZ; cellZ++) {
+            int z0 = cellZ * lattice;
+            if (this.water.baseZoneKind(x0, z0) == WaterField.Kind.NONE) continue;
             for (int dx = 0; dx < lattice; dx++) {
+               int tx = x0 + dx;
+               if (tx < minX || tx > maxX) continue;
                for (int dz = 0; dz < lattice; dz++) {
-                  int tx = x + dx, tz = z + dz;
+                  int tz = z0 + dz;
+                  if (tz < minZ || tz > maxZ) continue;
                   if (!this.water.isReceivingWaterAt(tx, tz) || this.inOuterCity(tx, tz)) continue;
                   targets.add(new WaterTarget(tx, tz, Math.abs(tx - startX) + Math.abs(tz - startZ)));
                }
