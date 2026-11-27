@@ -7,6 +7,8 @@ import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+import ch.k42.metropolis.grid.urbanGrid.wild.HydrologyConvergenceKey;
 
 /**
  * Where the water is, from the seed alone: the river(s) and the ocean, each a pure function of position. No tile is
@@ -45,6 +47,10 @@ public final class WaterField implements WorldLayout.Mask {
       default boolean protectedDryParkAt(int chunkX, int chunkZ) { return false; }
       /** Distance from a world-block point to the nearest accepted creek bank, or NaN when none is within the requested radius. */
       default double nearestBankDistanceBlocks(double blockX, double blockZ, double maxDistanceBlocks) { return Double.NaN; }
+      default void prepareForConvergenceArea(int minX,int minZ,int maxX,int maxZ) { }
+      default List<HydrologyConvergenceKey> convergenceEndpoints(int minX,int minZ,int maxX,int maxZ) {
+         return java.util.Collections.emptyList();
+      }
    }
    private volatile CreekSource creeks;
 
