@@ -548,7 +548,13 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
             if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue;
             if (this.inOuterCity(nx, nz)) { cityBlocks++; continue; }
             WaterField.Kind base = this.water.baseKindAt(nx, nz);
-            if (base != WaterField.Kind.NONE && !this.water.isReceivingWaterAt(nx, nz)) { waterBlocks++; continue; }
+            // The natural river/ocean bank is part of the receiving-water
+            // approach corridor. Only the open-water channel is a route goal,
+            // but its bank must remain traversable or A* can never reach it.
+            if (base != WaterField.Kind.NONE
+                    && base != WaterField.Kind.RIVER
+                    && base != WaterField.Kind.OCEAN
+                    && !this.water.isReceivingWaterAt(nx, nz)) { waterBlocks++; continue; }
             if (this.water.isCreek(nx, nz)) { creekBlocks++; continue; }
 
             byte axes = highwayAxes.getOrDefault(cellKey(nx, nz), (byte)0);
