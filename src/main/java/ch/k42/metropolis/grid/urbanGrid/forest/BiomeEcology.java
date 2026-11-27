@@ -117,7 +117,9 @@ public final class BiomeEcology {
         if(karstW==0 && bloomW==0)return original;
         long seed=reliefSeed(prior);
         if (karstW>0) {
-            double old=.55*prior.mountains(x,z)+.45*prior.profile(ch.k42.metropolis.grid.urbanGrid.wild.MountainKind.VOLCANO,x,z);
+            // Match ForestGenerator's non-volcanic Karstlands baseline. The
+            // feature's own limestone relief is added below by KarstLandforms.
+            double old=prior.mountains(x,z);
             boolean bridge = allowKarstBridge && karstW >= 0.96;
             // A bridge top and its undercut must use the SAME absolute surface.
             // Blending the full arch height by a partial biome weight made the

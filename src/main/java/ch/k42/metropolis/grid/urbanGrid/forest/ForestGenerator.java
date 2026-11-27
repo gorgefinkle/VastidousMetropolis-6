@@ -1612,7 +1612,10 @@ public final class ForestGenerator {
       r += n[WildBiome.PRAIRIE.ordinal()] * wild.relief.prairie(x,z);
       r += n[WildBiome.WETLANDS.ordinal()] * wild.relief.wetlands(x,z);
       r += n[WildBiome.COASTAL_DUNES.ordinal()] * wild.relief.coastalDunes(x,z);
-      r += n[WildBiome.VOLCANIC_BARRENS.ordinal()] * (0.55*wild.relief.mountains(x,z) + 0.45*wild.relief.profile(ch.k42.metropolis.grid.urbanGrid.wild.MountainKind.VOLCANO,x,z));
+      // Karstlands starts from ordinary mountain relief; its limestone-specific
+      // uplift, sinkholes, arches and ravines are supplied by KarstLandforms,
+      // not by a volcanic cone profile.
+      r += n[WildBiome.VOLCANIC_BARRENS.ordinal()] * wild.relief.mountains(x,z);
       if (WildBiome.weight(n, WildBiome.MOUNTAINS) > 0.0) {
          r += WildBiome.weight(n, WildBiome.MOUNTAINS) * wild.relief.mountains(x, z);
       }
