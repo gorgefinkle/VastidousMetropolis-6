@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class WildernessFeatures implements WaterField.LakeSource, WaterField.StreamSource {
    private static final int MOUNTAIN_CLEARANCE = 18;
    private static final int MAX_STREAM_RANGE = 300;
-   private static final int MAX_ROUTE_EXPANSIONS = 100000;
+   private static final int MAX_ROUTE_EXPANSIONS = 500000;
    private static final int MAX_HIGHWAY_CROSSING_CHUNKS = 2;
    private static final int MOUNTAIN_THRESHOLD = 2;
    // The earlier 8% lake share over very large feature cells made ordinary
