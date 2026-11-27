@@ -93,11 +93,11 @@ generator:
     surfaceOffset: -2                       # added to buildHeight for the forest surface, if your streets/lots sit above or below it
     mountains:
       kinds:
-        massif: 20       # rounded, weathered mountain country
-        peaks: 35        # sharp isolated peaks
-        range: 25        # connected mountain chains and high shoulders
-        plateau: 12      # flat tablelands with gullied escarpments
-        volcano: 8      # stratovolcanoes and cratered cones
+        massif: 40       # rounded, weathered mountain country; favored over the more dramatic forms
+        peaks: 25        # sharp isolated peaks
+        range: 20        # connected mountain chains and high shoulders
+        plateau: 8       # flat tablelands with gullied escarpments
+        volcano: 7       # stratovolcanoes and cratered cones
       enabled: true                    # true = a forest region big enough to sit between cities becomes a mountain range instead of rolling hills. smaller regions stay ordinary forest. the edge of every region still meets the build height exactly. a range stays inside one tile (it ends at the street along the tile edge, or at a highway, where the ground meets the build height)
       minCells: 300                        # a region needs at least this many chunks of area...
       minDepth: 8                          # ...and its deepest point at least this many chunks from every edge, so a long thin strip of forest never becomes a range
@@ -115,7 +115,7 @@ generator:
     blend: 30                              # 0..100 how softly one biome grades into the next. 15 = a gentle gradient, 50 = very soft
     mesaDesertMerge: 48                    # blocks the border between mesa and desert waves in and out by (0..512). the two meet along a smooth wave this far either side of the line, with no scattered columns of one in the other. 0 = a clean straight-ish line. larger = bigger, slower waves
     mesaFoot: 60                           # 0..100: how far a mesa height carries on into the desert past its border as an eroded slope, so it does not end in a sandy cliff. 0 = off (the old behaviour), 100 = the longest, gentlest apron. only the relief changes, not where the sand starts
-    smoothBlocks: 192                      # blocks the common-biome weights are averaged over. Bloomlands and karst keep their core selection through this smoothing step while broad borders remain field-driven. 0 = off.
+    smoothBlocks: 192                      # blocks the common-biome weights are averaged over. Karst keeps its dedicated core selection; Bloomlands uses the ordinary wilderness grid and its natural smoothing. 0 = off.
     decorations: 100                       # percent of the default amount of set pieces left in the wilderness: crashed passenger jets and military helicopters, abandoned camps, open-cast mine pits in the low mesa, dead wind turbines, radio masts, and mesa rock spires. they gather in "forgotten places" with bare land between. 0 = none, 200 = twice as many
     spacing:
       all: 100            # percent of the default distance between wilderness pieces, applied to every kind. 100 = default, 200 = twice as far apart (a quarter as many), 50 = half the distance
