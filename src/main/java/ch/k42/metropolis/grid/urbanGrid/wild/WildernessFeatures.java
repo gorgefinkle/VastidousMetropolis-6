@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * This is a plan, not a chunk-population pass. Every answer is a pure
  * world-coordinate lookup and is shared by all UrbanGrid tiles.
  */
-public final class WildernessFeatures implements WaterField.LakeSource, WaterField.StreamSource {
+public final class WildernessFeatures implements WaterField.HydrologyLayer {
    private static final int MOUNTAIN_CLEARANCE = 18;
    private static final int MAX_STREAM_RANGE = 300;
    private static final int MAX_ROUTE_EXPANSIONS = 500000;
@@ -115,8 +115,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       // Outlet routing is allowed to consult this base reservation directly,
       // but never to call back through WaterField.isCreek()/kindAt().
       features.routeCreeks = features.water.creekSource();
-      features.water.setLakes(features);
-      features.water.setStreams(features);
+      features.water.setHydrologyLayer(features);
    }
 
    /** Resolve the hydrology cells relevant to a 64x64-chunk tile, plus a
