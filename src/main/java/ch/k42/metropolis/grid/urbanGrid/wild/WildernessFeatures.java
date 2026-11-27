@@ -509,6 +509,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       public final double centerX, centerZ, radiusX, radiusZ, angle;
       public final int peakClearance;
       private final Noise2D broad, ridge;
+      private final int summitHeight;
 
       MountainSite(long seed, int gx, int gz, double centerX, double centerZ,
                    double radiusX, double radiusZ, double angle, int peakClearance) {
@@ -522,38 +523,61 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          this.peakClearance = peakClearance;
          this.broad = new Noise2D(h ^ 0x42524F41444E4F49L);
          this.ridge = new Noise2D(h ^ 0x52494447454E4F49L);
+         // Cap the massif itself, rather than treating the dimension ceiling
+         // as its target summit.
+         this.summitHeight = 80 + (int)(mix(h ^ 0x5045414B48454947L) >>> 62) * 3;
       }
 
       public boolean contains(int x, int z) {
          return normalizedRadius(x, z) < 1.0;
       }
 
-      public int heightAt(int x, int z, int baseY, int maxHeight) {
+        public int heightAt(int x, int z, int baseY, int maxHeight) {
          double r = normalizedRadius(x, z);
          if (r >= 1.0) return baseY;
-         double fade = Math.pow(Math.max(0.0, 1.0 - r), 1.28);
-         double nx = x / 420.0, nz = z / 420.0;
-         double broadNoise = this.broad.fbm(nx, nz, 4, 0.52);
-         double ridged = this.ridge.ridged(x / 300.0, z / 300.0, 4);
-         double relief = Math.max(0.0, maxHeight - this.peakClearance - baseY);
-         double rough = (broadNoise * 12.0 + (ridged - 0.42) * 17.0) * fade;
-         // One dominant summit with broken shoulders, rather than a smooth cone or a flat plateau.
-         // The dominant crown must reach the intended near-build-height
-         // summit even when the local ridge noise is strongly negative.
-         double summit = 32.0 * Math.pow(Math.max(0.0, 1.0 - r * 1.45), 2.0);
-         double value = baseY + relief * fade + rough + summit;
-         return (int)Math.max(baseY, Math.min(maxHeight - this.peakClearance, Math.round(value)));
+
+         double dx = (x - this.centerX) / this.radiusX;
+         double dz = (z - this.centerZ) / this.radiusZ;
+         double c = Math.cos(this.angle), s = Math.sin(this.angle);
+         double flank = dx * c - dz * s;
+         // Positive flank carries a high, steep escarpment; the opposite
+         // flank loses height over a longer, still irregular slope.
+         double steepSide = smoothStep(-0.20, 0.55, flank);
+         double falloffStart = 0.18 + 0.36 * steepSide;
+         double t = Math.max(0.0, Math.min(1.0, (r - falloffStart) / (1.0 - falloffStart)));
+         double fade = 1.0 - smoothStep(0.0, 1.0, t);
+
+         double broadNoise = this.broad.fbm(x / 470.0, z / 470.0, 3, 0.52);
+         double ridged = this.ridge.ridged(x / 165.0, z / 165.0, 4);
+         double jitter = this.ridge.fbm(x / 240.0, z / 240.0, 2, 0.5) * 0.035;
+         double crown = 0.91 + broadNoise * 0.07 + (ridged - 0.5) * 0.08;
+         // A noisy escarpment and ridge gullies break up the steep face.
+         double cliffDrop = steepSide * 0.10 * smoothStep(0.58 + jitter, 0.68 + jitter, r);
+         double gullies = steepSide * 0.045 * ridged * ridged * Math.max(0.0, 1.0 - r);
+         double rough = (broadNoise * 5.0 + (ridged - 0.48) * 8.0) * Math.max(0.0, 1.0 - r);
+
+         int top = Math.min(baseY + this.summitHeight, maxHeight - this.peakClearance);
+         double available = Math.max(0.0, top - baseY);
+         double relief = available * Math.max(0.0, fade * crown - cliffDrop - gullies) + rough;
+         return (int)Math.max(baseY, Math.min(top, Math.round(baseY + relief)));
       }
 
-      public boolean snowy(int y, int baseY, int maxHeight) {
-         int top = maxHeight - this.peakClearance;
-         return y >= baseY + (top - baseY) * 0.73;
+      private static double smoothStep(double a, double b, double value) {
+         double t = Math.max(0.0, Math.min(1.0, (value - a) / (b - a)));
+         return t * t * (3.0 - 2.0 * t);
       }
 
-      public boolean treeless(int y, int baseY, int maxHeight) {
-         int top = maxHeight - this.peakClearance;
-         int treeLine = baseY + Math.max(48, (int)Math.round((top - baseY) * 0.30));
-         return y >= treeLine;
+        public boolean snowy(int y, int baseY, int maxHeight) {
+         int top = Math.min(baseY + this.summitHeight, maxHeight - this.peakClearance);
+         int span = Math.max(0, top - baseY);
+         return y >= baseY + Math.round(span * 0.78);
+      }
+
+        public boolean treeless(int y, int baseY, int maxHeight) {
+         int top = Math.min(baseY + this.summitHeight, maxHeight - this.peakClearance);
+         int span = Math.max(0, top - baseY);
+         int treeLine = baseY + Math.max(34, (int)Math.round(span * 0.44));
+         return y >= Math.min(top, treeLine);
       }
 
       private double normalizedRadius(double x, double z) {

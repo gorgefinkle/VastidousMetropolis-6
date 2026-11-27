@@ -1983,6 +1983,22 @@ public class PluginConfig {
       wildChestOdds = Math.max(0, Math.min(100, cfg.getInt(pathWildChestOdds, wildChestOdds)));
       wildLootMin = Math.max(1, Math.min(5, cfg.getInt(pathWildLootMin, wildLootMin)));
       wildLootMax = Math.max(wildLootMin, Math.min(5, cfg.getInt(pathWildLootMax, wildLootMax)));
+      // Load the per-kind mountain shares. The old shipped distribution
+      // favoured non-massif forms; migrate those exact defaults but preserve
+      // explicit zeroes and operator-tuned values.
+      for (MountainKind kind : MountainKind.ALL) {
+         int configured = Math.max(0, Math.min(100,
+                 cfg.getInt(pathMountainKindPrefix + kind.key(), kind.defaultShare())));
+         int oldDefault = switch (kind) {
+            case MASSIF -> 20;
+            case PEAKS -> 35;
+            case RANGE -> 25;
+            case PLATEAU -> 12;
+            case VOLCANO -> 8;
+         };
+         if (configured == oldDefault) configured = kind.defaultShare();
+         mountainKindShares[kind.ordinal()] = configured;
+      }
       for (WildBiome biome : WildBiome.ALL) {
          int configuredShare = Math.max(0, cfg.getInt(pathWildSharePrefix + biome.key(), biome.defaultShare()));
          // Keep the limestone province above its historical minimum. Bloomlands

@@ -30,7 +30,12 @@ jobs:
           grep -F 'final int footprint = 6;' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmLayout.java
           grep -F 'new FarmMissileSilo(cx, cz, gy[a][c], this.seed, variant)' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmLayout.java
           grep -F 'FarmMissileSiloGeometry.paint' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSilo.java
-          ! grep -nE '167|IRON_TRAPDOOR' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
+          ! grep -nE '167|IRON_TRAPDOOR|GLOWSTONE' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
+          grep -F 'clearReservedInteriorVolumes();' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
+          grep -F 'reopenElevatorShaft();' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
+          grep -F 'paintConnectedGalleryRail(level + 1);' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
+          grep -F 'cfg.getInt(pathMountainKindPrefix + kind.key(), kind.defaultShare())' src/main/java/ch/k42/metropolis/plugin/PluginConfig.java
+          grep -F 'this.summitHeight = 80 +' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
       - name: Verify Bloomlands rarity migration and cross-city creek berth wiring
         run: |
           grep -F 'bloomlands: 1' src/main/resources/config.yml

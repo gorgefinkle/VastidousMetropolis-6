@@ -136,12 +136,49 @@ public final class MissileSiloGeometryProbe {
         check("42:0".equals(state(c, 65, lockY, 46)), v + ": first blast-lock bulkhead frame is missing");
         check("42:0".equals(state(c, 71, lockY, 50)), v + ": second blast-lock bulkhead frame is missing");
 
-        if (v == FarmMissileSiloGeometry.Variant.MILITARY)
-            check(countId(c, 26) >= 8, "military variant is missing furnished crew bunks");
-        if (v == FarmMissileSiloGeometry.Variant.TEST_FACILITY)
-            check(countId(c, 117) >= 4, "test facility is missing laboratory apparatus");
-        if (v == FarmMissileSiloGeometry.Variant.VAULT)
-            check(countId(c, 59) >= 8, "vault variant is missing its hydroponics/food-growing room");
+        check(countId(c, 61) == 0, v + ": token furnaces remain in the silo interior");
+        check(countId(c, 26) == 0, v + ": decorative bunks remain in the stripped interior");
+        check(countId(c, 117) == 0, v + ": unused brewing stands remain in the stripped interior");
+        check(c.chests.isEmpty(), v + ": token storage chests remain in the stripped interior");
+
+        // Every control room must be a carved, traversable air volume.
+        for (int floor : controlFloors)
+            for (int y = floor + 1; y <= floor + 6; y++)
+                check("0:0".equals(state(c, 78, y, 48)),
+                        v + ": control-centre interior is filled at y=" + y);
+
+        // The lift well stays empty from the lowest landing through the
+        // blockhouse floor and into its overhead clearance.
+        for (int y = bottom + 18; y <= H + 4; y++) {
+            for (int dx = 40; dx <= 42; dx++) for (int dz = 8; dz <= 10; dz++) {
+                String actual = state(c, 48 + dx, y, 48 + dz);
+                if (dx == 42 && dz == 9 && y > bottom + 18 && y <= H + 1)
+                    check("65:4".equals(actual), v + ": lift ladder is discontinuous at y=" + y);
+                else
+                    check("0:0".equals(actual), v + ": lift well is blocked at " + dx + "," + y + "," + dz);
+            }
+        }
+
+        // No iron bars may be a floating singleton: each has an orthogonal
+        // bar neighbour or a real solid attachment.
+        for (Map.Entry<String,String> e : c.blocks.entrySet()) {
+            if (!e.getValue().startsWith("101:")) continue;
+            String[] p = e.getKey().split(",");
+            int bx = Integer.parseInt(p[0]), by = Integer.parseInt(p[1]), bz = Integer.parseInt(p[2]);
+            boolean joined = false;
+            int[][] dirs = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+            for (int[] d : dirs) {
+                String neighbour = state(c, bx + d[0], by + d[1], bz + d[2]);
+                if (neighbour == null) continue;
+                if (neighbour.startsWith("101:") || neighbour.startsWith("42:")
+                        || neighbour.startsWith("98:") || neighbour.startsWith("1:")
+                        || neighbour.startsWith("4:") || neighbour.startsWith("44:")) {
+                    joined = true;
+                    break;
+                }
+            }
+            check(joined, v + ": disconnected iron bar at " + e.getKey());
+        }
 
         // The rocket clearance cylinder must remain free of gallery deck blocks.
         for (int i = 0; i < 8; i++) {

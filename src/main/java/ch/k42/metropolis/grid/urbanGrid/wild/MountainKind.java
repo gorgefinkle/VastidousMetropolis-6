@@ -11,11 +11,11 @@ package ch.k42.metropolis.grid.urbanGrid.wild;
  */
 public enum MountainKind {
    //        key        share
-   MASSIF  ("massif",   20),   // rounded old mountains, forested to the top
-   PEAKS   ("peaks",    35),   // small sharp peaks: the original mountains
-   RANGE   ("range",    25),   // long high chains with broad shoulders, the biggest of them
-   PLATEAU ("plateau",  12),   // high tableland: flat-topped, gullied, ending in escarpments
-   VOLCANO ("volcano",   8);   // isolated cones with a crater
+   MASSIF  ("massif",   40),   // common weathered massifs with asymmetric slopes and cliff faces
+   PEAKS   ("peaks",    25),   // less frequent sharp summits
+   RANGE   ("range",    20),   // long chains with broad shoulders
+   PLATEAU ("plateau",   8),   // tableland with gullies and escarpments
+   VOLCANO ("volcano",   7);   // rare isolated cones with a crater
 
    public static final MountainKind[] ALL = values();
 

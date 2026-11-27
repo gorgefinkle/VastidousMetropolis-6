@@ -85,8 +85,9 @@ final class FarmMissileSiloGeometry {
     }
 
     private void paint() {
-        // The structural shell is established first. Later operations only
-        // open the intentionally designed corridor/doorway connections.
+        // Start by establishing the air volumes that make the rooms and access
+        // shafts real spaces, not facades built around untouched terrain.
+        clearReservedInteriorVolumes();
         paintShaftShell();
         paintLaunchTable();
         paintRocket();
@@ -98,8 +99,8 @@ final class FarmMissileSiloGeometry {
         paintPortalBlockhouseAndLockedLadder();
         paintSurfaceApronAndGrating();
         paintPerimeterFence();
-        paintSurfaceEquipment();
-        paintVariantSignature();
+        // Keep the interior functional and intentionally uncluttered.
+        reopenElevatorShaft();
     }
 
     private int x(int dx) { return this.cx + dx; }
@@ -115,6 +116,36 @@ final class FarmMissileSiloGeometry {
         for (int dx = Math.min(x0, x1); dx <= Math.max(x0, x1); dx++)
             for (int dz = Math.min(z0, z1); dz <= Math.max(z0, z1); dz++)
                 put(dx, y, dz, id, data);
+    }
+
+    private void clearBox(int x0, int x1, int y0, int y1, int z0, int z1) {
+        for (int dx = Math.min(x0, x1); dx <= Math.max(x0, x1); dx++)
+            for (int y = Math.min(y0, y1); y <= Math.max(y0, y1); y++)
+                for (int dz = Math.min(z0, z1); dz <= Math.max(z0, z1); dz++)
+                    put(dx, y, dz, AIR, 0);
+    }
+
+    private void clearReservedInteriorVolumes() {
+        // Carve every intended occupied interior before walls and floors are laid.
+        for (int floor : lccLevels())
+            clearBox(21, 44, floor + 1, floor + 6, -14, 14);
+        clearBox(34, 43, this.h + 1, this.h + 4, 4, 14);
+        clearBox(34, 39, this.h + 1, this.h + 3, 9, 9);
+        clearBox(40, 42, this.bottom + 18, this.h + 4, 8, 10);
+    }
+
+    private void reopenElevatorShaft() {
+        int low = this.bottom + 18;
+        // The shaft is a protected void; later structure can never cap it.
+        clearBox(40, 42, low, this.h + 4, 8, 10);
+        for (int y = low + 1; y <= this.h + 1; y++) {
+            put(43, y, 9, STONE_BRICKS, 0);
+            put(42, y, 9, LADDER, 4);
+        }
+        // Open the landing side to the room/corridor without removing the
+        // continuous cage on its other three sides.
+        clearBox(39, 39, this.h + 1, this.h + 3, 9, 9);
+        clearBox(34, 38, this.h + 1, this.h + 3, 9, 9);
     }
 
     private void wallX(int dx, int z0, int z1, int y0, int y1, int id, int data) {
@@ -281,71 +312,70 @@ final class FarmMissileSiloGeometry {
 
     private void paintEightGalleryLevels() {
         int[] levels = galleryLevels();
-        for (int i = 0; i < levels.length; i++) {
-            int level = levels[i];
+        for (int level : levels) {
             for (int dx = -16; dx <= 16; dx++) {
                 for (int dz = -16; dz <= 16; dz++) {
                     double d = Math.hypot(dx, dz);
                     if (d >= 10.8 && d <= 16.1) put(dx, level, dz, STONE_SLAB, 5);
-                    if (d >= 15.0 && d <= 16.0) put(dx, level + 1, dz, IRON_BARS, 0);
                 }
             }
-            // Four radial gangways connect the annular gallery to the launch
-            // gantry. Their floors meet the annular walkway without a gap.
+            // Four radial gangways connect the annular walkway to the gantry.
             for (int r = 8; r <= 12; r++) {
                 put(r, level, 0, STONE_SLAB, 5);
                 put(-r, level, 0, STONE_SLAB, 5);
                 put(0, level, r, STONE_SLAB, 5);
                 put(0, level, -r, STONE_SLAB, 5);
             }
-
-            // Each level has a different service cluster. Equipment remains
-            // outside the central rocket-clearance radius.
-            int side = (i % 2 == 0) ? 1 : -1;
-            int eqX = side * 13;
-            put(eqX, level + 1, 0, FURNACE, 2);
-            put(eqX, level + 1, 1, IRON_BLOCK, 0);
-            put(eqX, level + 2, 1, REDSTONE_LAMP, 0);
-            put(eqX, level + 1, -2, IRON_BARS, 0);
-            put(eqX, level + 2, -2, IRON_BARS, 0);
-            if (i == 1 || i == 4 || i == 6)
-                this.out.chest(x(side * 12), level + 1, z(4), 2, 610 + i, 1);
-            put(-side * 13, level + 1, 0, FURNACE, 2);
-            put(-side * 13, level + 2, 0, TORCH, 5);
-            if (this.variant == Variant.TEST_FACILITY && i % 2 == 0) {
-                put(0, level + 1, 15, QUARTZ, 0);
-                put(0, level + 2, 15, GLASS, 0);
-            } else if (this.variant == Variant.VAULT && i % 2 == 1) {
-                put(0, level + 1, -15, WOOL, 11);
-                put(0, level + 2, -15, WOOL, 4);
-            }
+            paintConnectedGalleryRail(level + 1);
         }
+        // Piers live in the outer shell band, transferring gallery loads to
+        // the foundation without standing in the walking path.
+        for (int[] point : new int[][]{{-17,0},{17,0},{0,-17},{0,17}})
+            supportColumn(point[0], point[1], this.bottom + 1, this.bottom + 64, STONE_BRICKS, 0);
+    }
 
-        // Four continuous catwalk support columns transfer the repeated
-        // service-gallery loads to the launch foundation.
-        for (int[] point : new int[][]{{-15,0},{15,0},{0,-15},{0,15}})
-            supportColumn(point[0], point[1], this.bottom + 1, this.bottom + 64, IRON_BARS, 0);
+    private void paintConnectedGalleryRail(int y) {
+        final double radius = 15.35;
+        int previous = -1;
+        // Rasterise each arc with short orthogonal joins. Diagonal-only
+        // adjacency is not accepted for visible iron-bar railings.
+        for (int dx = -15; dx <= 15; dx++) {
+            int edge = (int)Math.round(Math.sqrt(radius * radius - dx * dx));
+            if (previous >= 0) {
+                for (int dz = Math.min(previous, edge); dz <= Math.max(previous, edge); dz++) {
+                    put(dx, y, dz, IRON_BARS, 0);
+                    put(dx, y, -dz, IRON_BARS, 0);
+                }
+            } else {
+                put(dx, y, edge, IRON_BARS, 0);
+                put(dx, y, -edge, IRON_BARS, 0);
+            }
+            previous = edge;
+        }
+        previous = -1;
+        for (int dz = -15; dz <= 15; dz++) {
+            int edge = (int)Math.round(Math.sqrt(radius * radius - dz * dz));
+            if (previous >= 0) {
+                for (int dx = Math.min(previous, edge); dx <= Math.max(previous, edge); dx++) {
+                    put(dx, y, dz, IRON_BARS, 0);
+                    put(-dx, y, dz, IRON_BARS, 0);
+                }
+            } else {
+                put(edge, y, dz, IRON_BARS, 0);
+                put(-edge, y, dz, IRON_BARS, 0);
+            }
+            previous = edge;
+        }
     }
 
     private void paintShaftLadderAndEscapeCage() {
-        // The principal shaft ladder connects all eight equipment levels.
+        // Continuous wall-mounted access ladders. The previous intermittent
+        // iron-bar stubs were disconnected and served no structural purpose.
         for (int y = this.bottom + 2; y <= this.h - 2; y++) {
             put(-15, y, 0, LADDER, 5);
             put(-16, y, 0, STONE_BRICKS, 0);
-            if ((y - this.bottom) % 8 == 0) {
-                put(-14, y, 0, IRON_BARS, 0);
-                put(-14, y + 1, 0, IRON_BARS, 0);
-            }
-        }
-        // Emergency escape ladder at the opposite side of the shaft. It is
-        // caged and terminates at a secured surface hatch, not in solid rock.
-        for (int y = this.bottom + 2; y <= this.h - 2; y++) {
             put(15, y, 0, LADDER, 4);
             put(16, y, 0, STONE_BRICKS, 0);
-            if ((y - this.bottom) % 7 == 0) {
-                put(14, y, -1, IRON_BARS, 0);
-                put(14, y, 1, IRON_BARS, 0);
-            }
         }
     }
 
@@ -364,9 +394,10 @@ final class FarmMissileSiloGeometry {
         for (int i = 0; i < levels.length; i++) {
             int floor = levels[i];
             int roof = floor + 7;
+            // This clearance is the room's actual interior, not an assumption
+            // that the original landscape happens to be air.
+            clearBox(21, 44, floor + 1, roof - 1, -14, 14);
 
-            // Reinforced floors and ceilings. The ladderwell remains open as
-            // a 3x3 void, with a steel perimeter on every level.
             for (int dx = 20; dx <= 45; dx++) {
                 for (int dz = -15; dz <= 15; dz++) {
                     if (!inPortalShaft(dx, dz)) {
@@ -388,39 +419,24 @@ final class FarmMissileSiloGeometry {
                 }
             }
 
-            // The separate ladderwell is caged, with a short doorway to each
-            // control-centre level. The ladder is never sealed by a floor.
-            for (int y = floor + 1; y <= floor + 3; y++) {
+            for (int y = floor + 1; y <= floor + 3; y++)
                 put(39, y, 9, AIR, 0);
-                put(39, y, 10, AIR, 0);
-                put(39, y, 8, AIR, 0);
-            }
-            for (int dz = 8; dz <= 10; dz++) {
-                put(39, floor + 1, dz, AIR, 0);
-                put(39, floor + 2, dz, AIR, 0);
-            }
 
-            // Exterior observation slots are narrow and protected by glass.
-            for (int dz : new int[]{-10,-5,5,10}) {
+            for (int dz : new int[]{-10,-5,5,10})
                 put(45, floor + 3, dz, GLASS_PANE, 0);
-            }
 
-            // Structural piers at the outer corners and wall midpoints tie
-            // each floor/roof into the surrounding reinforced shell.
             for (int[] p : new int[][]{{21,-14},{21,14},{44,-14},{44,14},
-                                       {33,-14},{33,14},{21,0},{44,0}}) {
+                                       {33,-14},{33,14},{21,0},{44,0}})
                 supportColumn(p[0], p[1], floor, roof, STONE_BRICKS, 0);
-            }
         }
-
-        paintControlRoomFurniture(levels);
+        // Empty levels are deliberate; their structure, access and clear
+        // circulation are the design, not prop accumulation.
         paintPortalShaft();
     }
 
     private void paintPortalShaft() {
-        // Five-block-wide enclosed ladder cage. The ladder attaches to its
-        // eastern wall; the western side opens at each room landing.
         int low = this.bottom + 18;
+        // Five-by-five continuous cage perimeter surrounding a clear 3x3 well.
         for (int y = low + 1; y <= this.h + 3; y++) {
             for (int dz = 7; dz <= 11; dz++) {
                 put(39, y, dz, IRON_BARS, 0);
@@ -430,28 +446,25 @@ final class FarmMissileSiloGeometry {
                 put(dx, y, 7, IRON_BARS, 0);
                 put(dx, y, 11, IRON_BARS, 0);
             }
-            // Remove the cage panel at the landings and the secured entrance.
-            for (int[] level : new int[][]{{this.bottom+18,this.bottom+21},
-                                           {this.bottom+28,this.bottom+31},
-                                           {this.bottom+38,this.bottom+41},
-                                           {this.bottom+48,this.bottom+51}}) {
-                if (y >= level[0] + 1 && y <= level[1])
-                    put(39, y, 9, AIR, 0);
-            }
         }
         for (int y = low + 1; y <= this.h + 1; y++) {
             put(42, y, 9, LADDER, 4);
             put(43, y, 9, STONE_BRICKS, 0);
         }
-        // Steel landing grates and short guard rails stop players stepping
-        // straight into the shaft while preserving the ladder opening.
+
         for (int floor : lccLevels()) {
+            // The ring is the landing grate; the central 3x3 is never floored.
             for (int dx = 39; dx <= 43; dx++) {
                 for (int dz = 7; dz <= 11; dz++) {
                     if (!inPortalShaft(dx, dz)) put(dx, floor, dz, IRON_BARS, 0);
                 }
             }
-            for (int dz = 7; dz <= 11; dz++) put(38, floor + 1, dz, IRON_BARS, 0);
+            // Reopen the side gate on every level and retain side guard rails
+            // on either side of the doorway.
+            for (int y = floor + 1; y <= floor + 3; y++)
+                put(39, y, 9, AIR, 0);
+            for (int dz : new int[]{7,8,10,11})
+                put(38, floor + 1, dz, IRON_BARS, 0);
         }
     }
 
@@ -810,56 +823,58 @@ final class FarmMissileSiloGeometry {
     }
 
     private void paintPortalBlockhouseAndLockedLadder() {
-        // Low-profile access blockhouse. The locked entrance is on the west
-        // face, aligned with the approach spur and a clear internal corridor.
+        // Clear the entire room and its entry before building the shell.
+        clearBox(34, 43, this.h + 1, this.h + 4, 4, 14);
+        clearBox(34, 39, this.h + 1, this.h + 3, 9, 9);
+
         for (int dx = 33; dx <= 44; dx++) {
             for (int dz = 3; dz <= 15; dz++) {
                 put(dx, this.h, dz, STONE_BRICKS, 0);
                 boolean edge = dx == 33 || dx == 44 || dz == 3 || dz == 15;
-                for (int y = this.h + 1; y <= this.h + 4; y++) {
-                    if (!edge) continue;
-                    boolean window = y == this.h + 2 &&
-                            ((dx == 33 || dx == 44) && (dz == 6 || dz == 12));
-                    put(dx, y, dz, window ? GLASS_PANE : STONE_BRICKS, 0);
+                if (edge) {
+                    for (int y = this.h + 1; y <= this.h + 4; y++) {
+                        boolean observationWindow =
+                                dx == 33 && y >= this.h + 2
+                                && (dz == 5 || dz == 6 || dz == 7 || dz == 11 || dz == 12 || dz == 13);
+                        boolean sideWindow =
+                                dx == 44 && y == this.h + 2
+                                && (dz == 6 || dz == 7 || dz == 11 || dz == 12);
+                        put(dx, y, dz, observationWindow || sideWindow ? GLASS_PANE : STONE_BRICKS, 0);
+                    }
                 }
                 put(dx, this.h + 5, dz, STONE_BRICKS, 0);
             }
         }
 
-        // Exterior has only a closed iron door: no button, lever, plate or
-        // redstone source. This opens into a short vestibule, not directly
-        // into the ladder void.
+        // Reinforced corners, a low parapet and a sheltered vehicle-side door
+        // give the annex real architectural hierarchy without overbuilding it.
+        for (int[] p : new int[][]{{34,4},{43,4},{34,14},{43,14}})
+            supportColumn(p[0], p[1], this.h + 1, this.h + 5, IRON_BLOCK, 0);
+        for (int dx = 33; dx <= 44; dx++) {
+            put(dx, this.h + 6, 3, STONE_SLAB, 5);
+            put(dx, this.h + 6, 15, STONE_SLAB, 5);
+        }
+        for (int dz = 3; dz <= 15; dz++) {
+            put(33, this.h + 6, dz, STONE_SLAB, 5);
+            put(44, this.h + 6, dz, STONE_SLAB, 5);
+        }
+
         door(33, this.h + 1, 9, 2);
-        for (int y = this.h + 1; y <= this.h + 2; y++) {
-            for (int dx = 34; dx <= 38; dx++) put(dx, y, 9, AIR, 0);
-            // Open the west face of the cage at the secured surface landing.
-            put(39, y, 9, AIR, 0);
+        for (int dz = 7; dz <= 11; dz++) {
+            put(32, this.h + 4, dz, STONE_SLAB, 5);
+            put(33, this.h + 4, dz, STONE_SLAB, 5);
         }
+        supportColumn(32, 7, this.h + 1, this.h + 3, STONE_BRICKS, 0);
+        supportColumn(32, 11, this.h + 1, this.h + 3, STONE_BRICKS, 0);
 
-        // Vertical ladder to the control-centre access well. It stays caged
-        // outside the vestibule and is continuously supported by the east
-        // wall. Players enter the cage from its west landing and reach the
-        // ladder from the clear x=40..41 approach strip.
-        int low = this.bottom + 18;
-        for (int y = low + 1; y <= this.h; y++) {
-            put(42, y, 9, LADDER, 4);
-            put(43, y, 9, STONE_BRICKS, 0);
-            put(41, y, 8, IRON_BARS, 0);
-            put(41, y, 10, IRON_BARS, 0);
-            put(40, y, 8, IRON_BARS, 0);
-            put(40, y, 10, IRON_BARS, 0);
-        }
+        // Two linked guard consoles face the long observation window. This is
+        // a single purposeful security workstation, not random room dressing.
+        console(36, this.h, 5, 4);
+        console(38, this.h, 5, 4);
+        put(37, this.h + 1, 6, IRON_BLOCK, 0);
+        put(37, this.h + 2, 6, STONE_SLAB, 5);
 
-        // Each control-centre level has a guarded steel landing. Keep the
-        // ladder cell open on all intermediate floors, but cap the bottom
-        // at a real landing rather than leaving a fall-through shaft.
-        int[] levels = lccLevels();
-        for (int floor : levels) {
-            fill(40, 43, floor, 8, 10, IRON_BARS, 0);
-            put(42, floor, 9, AIR, 0);
-            put(42, floor + 1, 9, LADDER, 4);
-        }
-        put(42, levels[0], 9, IRON_BARS, 0);
+        clearBox(34, 39, this.h + 1, this.h + 3, 9, 9);
     }
 
     private void paintSurfaceApronAndGrating() {
@@ -932,8 +947,7 @@ final class FarmMissileSiloGeometry {
                 put(dx, this.h + 3, dz, IRON_BARS, 0);
                 if (Math.floorMod(i, 6) == 0) {
                     put(dx, this.h + 4, dz, TRIPWIRE_HOOK, 0);
-                    put(dx, this.h + 4, dz + (dz == -45 ? 1 : 0), COBWEB, 0);
-                }
+                    }
             }
         }
 
