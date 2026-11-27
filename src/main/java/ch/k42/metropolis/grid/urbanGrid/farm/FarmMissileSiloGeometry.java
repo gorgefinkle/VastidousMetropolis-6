@@ -28,7 +28,7 @@ final class FarmMissileSiloGeometry {
     private static final int AIR = 0, STONE = 1, DIRT = 3, COBBLE = 4, PLANKS = 5;
     private static final int WATER = 9, GLASS = 20, BED = 26, COBWEB = 30, WOOL = 35;
     private static final int IRON_BLOCK = 42, STONE_SLAB = 44;
-    private static final int IRON_BARS = 101, GLASS_PANE = 102, FENCE_GATE = 107;
+    private static final int IRON_BARS = 101, GLASS_PANE = 102, WOOD_TRAPDOOR = 96;
     private static final int LADDER = 65, IRON_DOOR = 71, FENCE = 85;
     private static final int TORCH = 50, CHEST = 54, FURNACE = 61, CAULDRON = 118;
     private static final int STONE_BRICKS = 98, REDSTONE_LAMP = 123, REDSTONE_LAMP_ON = 124, QUARTZ = 155;
@@ -98,11 +98,11 @@ final class FarmMissileSiloGeometry {
         paintShaftLadderAndEscapeCage();
         paintControlCentre();
         paintSiloCablewaysAndBlastLock();
-        paintPortalBlockhouseAndLockedLadder();
         paintSurfaceApronAndGrating();
         paintPerimeterFence();
         // Keep the interior functional and intentionally uncluttered.
         reopenElevatorShaft();
+        paintConcealedSurfaceAccess();
     }
 
     private int x(int dx) { return this.cx + dx; }
@@ -131,8 +131,6 @@ final class FarmMissileSiloGeometry {
         // Carve every intended occupied interior before walls and floors are laid.
         for (int floor : lccLevels())
             clearBox(21, 44, floor + 1, floor + 6, -14, 14);
-        clearBox(34, 43, this.h + 1, this.h + 4, 4, 14);
-        clearBox(34, 39, this.h + 1, this.h + 3, 9, 9);
         clearBox(40, 42, this.bottom + 18, this.h + 4, 8, 10);
     }
 
@@ -140,7 +138,7 @@ final class FarmMissileSiloGeometry {
         int low = this.bottom + 18;
         // The shaft is a protected void; later structure can never cap it.
         clearBox(40, 42, low, this.h + 4, 8, 10);
-        for (int y = low + 1; y <= this.h + 1; y++) {
+        for (int y = low + 1; y <= this.h - 1; y++) {
             put(43, y, 9, STONE_BRICKS, 0);
             put(42, y, 9, LADDER, 4);
         }
@@ -442,7 +440,7 @@ final class FarmMissileSiloGeometry {
     private void paintPortalShaft() {
         int low = this.bottom + 18;
         // Five-by-five continuous cage perimeter surrounding a clear 3x3 well.
-        for (int y = low + 1; y <= this.h + 3; y++) {
+        for (int y = low + 1; y <= this.h - 1; y++) {
             for (int dz = 7; dz <= 11; dz++) {
                 put(39, y, dz, IRON_BARS, 0);
                 put(43, y, dz, IRON_BARS, 0);
@@ -827,88 +825,13 @@ final class FarmMissileSiloGeometry {
         put(37, floor + 3, 10, REDSTONE_LAMP, 0);
     }
 
-    private void paintPortalBlockhouseAndLockedLadder() {
-        // Clear the whole guardhouse volume and the protected approach before
-        // building the occupied shell. This is a real room, not a facade.
-        clearBox(34, 43, this.h + 1, this.h + 4, 4, 14);
-        clearBox(34, 39, this.h + 1, this.h + 3, 9, 9);
-
-        for (int dx = 33; dx <= 44; dx++) {
-            for (int dz = 3; dz <= 15; dz++) {
-                put(dx, this.h, dz, STONE_BRICKS, 0);
-                boolean edge = dx == 33 || dx == 44 || dz == 3 || dz == 15;
-                if (edge) {
-                    for (int y = this.h + 1; y <= this.h + 4; y++) {
-                        boolean westObservationBand =
-                                dx == 33 && y >= this.h + 2 && y <= this.h + 3
-                                && ((dz >= 5 && dz <= 8) || (dz >= 10 && dz <= 13));
-                        boolean northWrapWindow =
-                                dz == 3 && y == this.h + 2 && dx >= 36 && dx <= 41
-                                && dx != 38 && dx != 39;
-                        boolean southWrapWindow =
-                                dz == 15 && y == this.h + 2 && dx >= 36 && dx <= 41
-                                && dx != 38 && dx != 39;
-                        boolean eastServiceWindow =
-                                dx == 44 && y == this.h + 2
-                                && (dz == 6 || dz == 7 || dz == 11 || dz == 12);
-                        put(dx, y, dz, westObservationBand || northWrapWindow
-                                || southWrapWindow || eastServiceWindow ? GLASS_PANE : STONE_BRICKS, 0);
-                    }
-                }
-                put(dx, this.h + 5, dz, STONE_BRICKS, 0);
-            }
-        }
-
-        // Corner piers, a heavy base course and a low parapet make the room
-        // read as a hardened checkpoint rather than a decorative garden hut.
-        for (int[] p : new int[][]{{34,4},{43,4},{34,14},{43,14}})
-            supportColumn(p[0], p[1], this.h + 1, this.h + 5, IRON_BLOCK, 0);
-        for (int dx = 33; dx <= 44; dx++) {
-            put(dx, this.h + 6, 3, STONE_SLAB, 5);
-            put(dx, this.h + 6, 15, STONE_SLAB, 5);
-        }
-        for (int dz = 3; dz <= 15; dz++) {
-            put(33, this.h + 6, dz, STONE_SLAB, 5);
-            put(44, this.h + 6, dz, STONE_SLAB, 5);
-        }
-
-        // A short, structurally supported canopy shelters the west personnel
-        // entry. Its supports stand outside the clear approach lane.
-        for (int dx = 30; dx <= 33; dx++)
-            for (int dz = 7; dz <= 11; dz++)
-                put(dx, this.h + 4, dz, STONE_SLAB, 5);
-        supportColumn(30, 7, this.h + 1, this.h + 3, STONE_BRICKS, 0);
-        supportColumn(30, 11, this.h + 1, this.h + 3, STONE_BRICKS, 0);
-        put(31, this.h + 3, 9, REDSTONE_LAMP_ON, 0);
-        // The threshold remains flush with the approach; no curb or post is
-        // allowed in the centreline in front of the door.
-        for (int dx = 30; dx <= 33; dx++)
-            for (int dz = 8; dz <= 10; dz++)
-                put(dx, this.h, dz, STONE_BRICKS, 0);
-
-        door(33, this.h + 1, 9, 2);
-
-        // One continuous built-in operator counter, facing the broad
-        // observation band. Displays and controls are attached to the same
-        // work surface instead of being isolated furnace-like props.
-        for (int dx = 35; dx <= 41; dx++) {
-            put(dx, this.h + 1, 5, IRON_BLOCK, 0);
-            put(dx, this.h + 2, 5, STONE_SLAB, 5);
-        }
-        for (int dx : new int[]{36, 38, 40}) {
-            put(dx, this.h + 2, 4, TERRACOTTA, 4);
-            put(dx, this.h + 3, 4, REDSTONE_LAMP, 0);
-            put(dx, this.h + 1, 6, STONE_BUTTON, 1);
-        }
-        // A connected cable race runs behind the control bank and turns down
-        // into the east service wall; it is part of the installation.
-        for (int dx = 35; dx <= 41; dx++)
-            put(dx, this.h + 4, 4, IRON_BLOCK, 0);
-        supportColumn(42, 4, this.h + 1, this.h + 4, IRON_BLOCK, 0);
-
-        // Keep the entry-to-lift route open after the furnishings and canopy
-        // have been placed.
-        clearBox(34, 39, this.h + 1, this.h + 3, 9, 9);
+    private void paintConcealedSurfaceAccess() {
+        // One flush, openable service hatch replaces the entire guard station.
+        // No room, windows, light, canopy, facade, signage or raised structure.
+        // The adjoining surface block anchors the hatch; the ladder meets its underside.
+        put(43, this.h, 9, STONE_BRICKS, 0);
+        put(42, this.h, 9, WOOD_TRAPDOOR, 4);
+        put(42, this.h + 1, 9, AIR, 0);
     }
 
     private void paintSurfaceApronAndGrating() {

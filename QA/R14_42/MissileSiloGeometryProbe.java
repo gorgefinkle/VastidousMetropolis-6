@@ -80,29 +80,20 @@ public final class MissileSiloGeometryProbe {
                 v + ": ventilation riser intrudes into the launch-duct viewing aperture");
         check("98:0".equals(state(c, 75, H + 1, 62)),
                 v + ": outer apron ventilation riser is missing");
-        check("71:2".equals(state(c, 81, H + 1, 57)), v + ": locked west-facing portal door lower half missing");
-        check("71:8".equals(state(c, 81, H + 2, 57)), v + ": locked portal door upper half missing");
-        check("102:0".equals(state(c, 81, H + 2, 53)),
-                v + ": broad west-facing observation window is missing");
-        check("102:0".equals(state(c, 81, H + 3, 54)),
-                v + ": upper observation band is missing");
-        check("44:5".equals(state(c, 78, H + 4, 57)),
-                v + ": sheltered guardhouse entry canopy is missing");
-        check("98:0".equals(state(c, 78, H + 1, 55)),
-                v + ": canopy support column is missing");
-        for (int dx = 83; dx <= 89; dx++) {
-            check("42:0".equals(state(c, dx, H + 1, 53)),
-                    v + ": built-in operator counter is disconnected at x=" + dx);
-            check("44:5".equals(state(c, dx, H + 2, 53)),
-                    v + ": continuous counter surface is incomplete at x=" + dx);
-        }
-        check("124:0".equals(state(c, 79, H + 3, 57)),
-                v + ": sheltered entry light is missing");
-        for (int dx = 34; dx <= 39; dx++) for (int y = H + 1; y <= H + 2; y++)
-            check("0:0".equals(state(c, 48 + dx, y, 57)),
-                    v + ": portal vestibule/cage passage is blocked at x-offset " + dx);
-        check("44:5".equals(state(c, 80, H, 57)),
-                v + ": portal access spur does not reach the entry threshold");
+        check("96:4".equals(state(c, 90, H, 57)),
+                v + ": discreet flush surface access hatch is missing");
+        check("98:0".equals(state(c, 91, H, 57)),
+                v + ": flush hatch support tile is missing");
+        check(countId(c, 96) == 1, v + ": surface access must be a single discreet hatch");
+        for (int dx = 33; dx <= 44; dx++)
+            for (int dz = 3; dz <= 15; dz++)
+                for (int y = H + 1; y <= H + 6; y++)
+                    check(state(c, 48 + dx, y, 48 + dz) == null,
+                            v + ": above-ground guard structure remains at " + dx + "," + y + "," + dz);
+        check(state(c, 81, H + 1, 57) == null,
+                v + ": old guardhouse entry door remains");
+        check(state(c, 81, H + 2, 57) == null,
+                v + ": old guardhouse upper door remains");
         check("101:0".equals(state(c, 75, H + 1, 93)),
                 v + ": closed vehicle gate is not aligned with the gravel spur");
         check("98:0".equals(state(c, 48, H + 1, 93)),
@@ -125,7 +116,7 @@ public final class MissileSiloGeometryProbe {
             int floor = controlFloors[i];
             check(countAtY(c, floor, v == FarmMissileSiloGeometry.Variant.TEST_FACILITY ? 155 : 98) > 500,
                     v + ": control-centre floor " + i + " is incomplete");
-            for (int y = bottom + 19 + i * 10; y <= H; y++) {
+            for (int y = bottom + 19 + i * 10; y <= H - 1; y++) {
                 if (y > floor + 7 && i < 3) break;
                 check("65:4".equals(state(c, 90, y, 57)),
                         v + ": continuous access ladder missing at y=" + y);
@@ -165,12 +156,12 @@ public final class MissileSiloGeometryProbe {
 
         // The lift well stays empty from the lowest landing through the
         // blockhouse floor and into its overhead clearance.
-        for (int y = bottom + 18; y <= H + 4; y++) {
+        for (int y = bottom + 18; y <= H + 1; y++) {
             for (int dx = 40; dx <= 42; dx++) for (int dz = 8; dz <= 10; dz++) {
                 String actual = state(c, 48 + dx, y, 48 + dz);
                 if (dx == 42 && dz == 9 && y == bottom + 18)
                     check("101:0".equals(actual), v + ": bottom lift landing grate is missing");
-                else if (dx == 42 && dz == 9 && y > bottom + 18 && y <= H + 1)
+                else if (dx == 42 && dz == 9 && y > bottom + 18 && y <= H - 1)
                     check("65:4".equals(actual), v + ": lift ladder is discontinuous at y=" + y);
                 else
                     check("0:0".equals(actual), v + ": lift well is blocked at " + dx + "," + y + "," + dz);
