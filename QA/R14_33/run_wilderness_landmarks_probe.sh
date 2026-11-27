@@ -38,11 +38,11 @@ grep -Fq 'highwayMask.at(x, z)' "$FEATURES"
 
 # Streams avoid the outer city/farm belt, avoid other rivers and creeks,
 # and cross only perpendicular to a highway for at most two lane chunks.
-grep -Fq 'if (this.inOuterCity(nx, nz)) { cityBlocks++; continue; }' "$FEATURES"
-grep -Fq 'if (axes != 0 && (axes & moveAxis) != 0) { highwayParallelBlocks++; continue; }' "$FEATURES"
+grep -Fq 'if(this.inOuterCity(nx,nz)){cityBlocks++;continue;}' "$FEATURES"
+grep -Fq 'if(axes!=0&&(axes&moveAxis)!=0){highwayParallelBlocks++;continue;}' "$FEATURES"
 grep -Fq 'private static final int MAX_HIGHWAY_CROSSING_CHUNKS = 2' "$FEATURES"
-grep -Fq 'if (run > MAX_HIGHWAY_CROSSING_CHUNKS) { highwayWidthBlocks++; continue; }' "$FEATURES"
-grep -Fq 'if (node.highwayRun > 0 && direction != node.direction) { highwayTurnBlocks++; continue; }' "$FEATURES"
+grep -Fq 'if(run>MAX_HIGHWAY_CROSSING_CHUNKS){highwayWidthBlocks++;continue;}' "$FEATURES"
+grep -Fq 'if(node.highwayRun>0&&direction!=node.direction){highwayTurnBlocks++;continue;}' "$FEATURES"
 grep -Fq 'WaterTarget endpoint=goals.get(cellKey(node.x,node.z))' "$FEATURES"
 grep -Fq 'this.plannedCreekAt(nx,nz)&&!exactCreekGoal' "$FEATURES"
 grep -Fq 'blockX[last]=routed.target.key.blockX()' "$FEATURES"
