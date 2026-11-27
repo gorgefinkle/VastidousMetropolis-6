@@ -540,21 +540,24 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          double dz = (z - this.centerZ) / this.radiusZ;
          double c = Math.cos(this.angle), s = Math.sin(this.angle);
          double flank = dx * c - dz * s;
-         // Positive flank carries a high, steep escarpment; the opposite
-         // flank loses height over a longer, still irregular slope.
+         // The opposite flank starts eroding near the foot of the mountain;
+         // the steep flank holds a high shoulder before breaking into cliffs.
          double steepSide = smoothStep(-0.20, 0.55, flank);
-         double falloffStart = 0.18 + 0.36 * steepSide;
+         double falloffStart = 0.16 + 0.62 * steepSide;
          double t = Math.max(0.0, Math.min(1.0, (r - falloffStart) / (1.0 - falloffStart)));
          double fade = 1.0 - smoothStep(0.0, 1.0, t);
 
          double broadNoise = this.broad.fbm(x / 470.0, z / 470.0, 3, 0.52);
          double ridged = this.ridge.ridged(x / 165.0, z / 165.0, 4);
-         double jitter = this.ridge.fbm(x / 240.0, z / 240.0, 2, 0.5) * 0.035;
-         double crown = 0.91 + broadNoise * 0.07 + (ridged - 0.5) * 0.08;
-         // A noisy escarpment and ridge gullies break up the steep face.
-         double cliffDrop = steepSide * 0.10 * smoothStep(0.58 + jitter, 0.68 + jitter, r);
-         double gullies = steepSide * 0.045 * ridged * ridged * Math.max(0.0, 1.0 - r);
-         double rough = (broadNoise * 5.0 + (ridged - 0.48) * 8.0) * Math.max(0.0, 1.0 - r);
+         // A broader, low-frequency offset keeps the escarpments from reading
+         // as perfect concentric rings. Gullies cut irregularly into their face.
+         double cliffWarp = this.ridge.fbm(x / 145.0, z / 145.0, 2, 0.5) * 0.045;
+         double crown = 0.90 + broadNoise * 0.08 + (ridged - 0.5) * 0.08;
+         double innerCliff = 0.12 * smoothStep(0.59 + cliffWarp, 0.64 + cliffWarp, r);
+         double outerCliff = 0.15 * smoothStep(0.77 + cliffWarp, 0.81 + cliffWarp, r);
+         double cliffDrop = steepSide * (innerCliff + outerCliff);
+         double gullies = steepSide * 0.055 * ridged * ridged * Math.max(0.0, 1.0 - r);
+         double rough = (broadNoise * 7.0 + (ridged - 0.48) * 10.0) * Math.max(0.0, 1.0 - r);
 
          int top = Math.min(baseY + this.summitHeight, maxHeight - this.peakClearance);
          double available = Math.max(0.0, top - baseY);

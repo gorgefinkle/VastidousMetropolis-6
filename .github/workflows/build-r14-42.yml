@@ -36,6 +36,8 @@ jobs:
           grep -F 'paintConnectedGalleryRail(level + 1);' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
           grep -F 'cfg.getInt(pathMountainKindPrefix + kind.key(), kind.defaultShare())' src/main/java/ch/k42/metropolis/plugin/PluginConfig.java
           grep -F 'this.summitHeight = 80 +' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'falloffStart = 0.16 + 0.62 * steepSide' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'outerCliff = 0.15 * smoothStep(0.77 + cliffWarp, 0.81 + cliffWarp, r)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
       - name: Verify Bloomlands rarity migration and cross-city creek berth wiring
         run: |
           grep -F 'bloomlands: 1' src/main/resources/config.yml
