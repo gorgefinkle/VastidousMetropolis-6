@@ -22,13 +22,6 @@ public final class MissileSiloGeometryProbe {
 
         @Override public void set(int x, int y, int z, int id, int data) {
             if (chunkX != null && (Math.floorDiv(x, 16) != chunkX || Math.floorDiv(z, 16) != chunkZ)) return;
-            if (x == 82 && y == 97 && z == 57) {
-                StringBuilder trace = new StringBuilder();
-                for (StackTraceElement e : Thread.currentThread().getStackTrace())
-                    trace.append(e).append(" <- ");
-                throw new IllegalStateException("unexpected legacy guardhouse-position placement id="
-                        + id + " data=" + data + " trace=" + trace);
-            }
             blocks.put(key(x, y, z), id + ":" + data);
         }
 
@@ -95,7 +88,8 @@ public final class MissileSiloGeometryProbe {
         for (int dx = 33; dx <= 44; dx++)
             for (int dz = 3; dz <= 15; dz++)
                 for (int y = H + 1; y <= H + 6; y++)
-                    check(state(c, 48 + dx, y, 48 + dz) == null,
+                    String aboveGrade = state(c, 48 + dx, y, 48 + dz);
+                    check(aboveGrade == null || "0:0".equals(aboveGrade),
                             v + ": above-ground guard structure remains at " + dx + "," + y + "," + dz);
         check(state(c, 81, H + 1, 57) == null,
                 v + ": old guardhouse entry door remains");

@@ -145,10 +145,8 @@ final class FarmMissileSiloGeometry {
         // A single steel grate is the proper bottom landing; the shaft above
         // it remains open and the ladder continues to the upper levels.
         put(42, low, 9, IRON_BARS, 0);
-        // Open the landing side to the room/corridor without removing the
-        // continuous cage on its other three sides.
-        clearBox(39, 39, this.h + 1, this.h + 3, 9, 9);
-        clearBox(34, 38, this.h + 1, this.h + 3, 9, 9);
+        // The top landing is now a single flush hatch; no above-grade
+        // corridor or annex volume is cleared or constructed.
     }
 
     private void wallX(int dx, int z0, int z1, int y0, int y1, int id, int data) {
