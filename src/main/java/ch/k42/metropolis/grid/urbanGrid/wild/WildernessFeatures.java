@@ -443,6 +443,62 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
    }
 
    @Override
+   public HydrologySample sampleAt(WaterField water,int blockX,int blockZ) {
+      int chunkX=Math.floorDiv(blockX,16),chunkZ=Math.floorDiv(blockZ,16);
+      WaterField.Kind base=water.baseKindAt(chunkX,chunkZ);
+      double px=blockX+0.5,pz=blockZ+0.5;
+      if(base==WaterField.Kind.OCEAN) {
+         double signed=water.ocean()==null?Double.NaN:
+                 water.ocean().oceanDistanceInsideShoreBlock(px,pz);
+         HydrologyConvergenceKey key=this.convergenceRegistry.findAt(
+                 HydrologyConvergenceKey.Receiver.OCEAN,chunkX,chunkZ);
+         return new HydrologySample(blockX,blockZ,base,HydrologySample.Feature.OCEAN,
+                 Double.isFinite(signed)&&signed>0.0,signed,OceanConfig.getOceanBuildHeight(),0,null,key);
+      }
+      if(base==WaterField.Kind.RIVER) {
+         RiverProvider carrier=water.riverAt(chunkX,chunkZ);
+         double signed=carrier==null?Double.NaN:carrier.distanceFromCenterBlock(px,pz);
+         double width=carrier==null?Double.NaN:
+                 carrier.widthAtBlock(carrier.isZBound()?pz:px);
+         HydrologyConvergenceKey.Receiver receiver=HydrologyConvergenceKey.Receiver.RIVER;
+         HydrologyConvergenceKey key=this.convergenceRegistry.findAt(receiver,chunkX,chunkZ);
+         boolean open=Double.isFinite(signed)&&Double.isFinite(width)&&Math.abs(signed)<=width*.5;
+         return new HydrologySample(blockX,blockZ,base,HydrologySample.Feature.RIVER,
+                 open,signed,RiverConfig.getRiverBuildHeight(),0,carrier,key);
+      }
+      WaterField.CreekSource creekSource=water.creekSource();
+      if(creekSource!=null&&creekSource.waterOrBank(chunkX,chunkZ)) {
+         RiverProvider carrier=creekSource.carrierAt(chunkX,chunkZ);
+         double signed=carrier==null?Double.NaN:carrier.distanceFromCenterBlock(px,pz);
+         double width=carrier==null?Double.NaN:
+                 carrier.widthAtBlock(carrier.isZBound()?pz:px);
+         boolean open=Double.isFinite(signed)&&Double.isFinite(width)&&Math.abs(signed)<=width*.5;
+         HydrologyConvergenceKey key=this.convergenceRegistry.findAt(
+                 HydrologyConvergenceKey.Receiver.CREEK,chunkX,chunkZ);
+         return new HydrologySample(blockX,blockZ,WaterField.Kind.CREEK,
+                 HydrologySample.Feature.CREEK,open,signed,RiverConfig.getRiverBuildHeight(),0,carrier,key);
+      }
+      LakeSite lake=this.lakeAt(chunkX,chunkZ);
+      if(lake!=null) {
+         double signed=lake.distanceInsideShoreBlock(px,pz);
+         boolean open=signed>0.0;
+         int depth=open?lake.depthAt(blockX,blockZ):0;
+         return new HydrologySample(blockX,blockZ,WaterField.Kind.LAKE,
+                 HydrologySample.Feature.LAKE,open,signed,lake.waterY,depth,null,null);
+      }
+      RiverProvider stream=this.streamCarrierAt(chunkX,chunkZ);
+      if(stream!=null) {
+         double signed=stream.distanceFromCenterBlock(px,pz);
+         HydrologyConvergenceKey key=stream instanceof WildernessStreamCourse course
+                 ?course.convergenceKey():null;
+         boolean open=Double.isFinite(signed)&&Math.abs(signed)<=stream.getHalfWidthBlocks();
+         return new HydrologySample(blockX,blockZ,WaterField.Kind.STREAM,
+                 HydrologySample.Feature.STREAM,open,signed,RiverConfig.getRiverBuildHeight(),0,stream,key);
+      }
+      return HydrologySample.none(blockX,blockZ);
+   }
+
+   @Override
    public boolean lakeOrBankAt(int chunkX, int chunkZ) {
       return lakeAt(chunkX, chunkZ) != null;
    }
