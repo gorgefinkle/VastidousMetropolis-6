@@ -33,6 +33,11 @@ public final class LakeStreamCoverageProbe {
                         throw new AssertionError("Lake basin has no actual shared WaterField owner: seed="+seed
                                 +" chunk=("+cx+","+cz+")");
                     }
+                    HydrologySample lakeSample=water.hydrologySampleAt((int)Math.floor(lake.centerX),
+                            (int)Math.floor(lake.centerZ));
+                    if(lakeSample.feature()!=HydrologySample.Feature.LAKE||!lakeSample.openWater()
+                            ||lakeSample.depth()<1||lakeSample.waterY()!=lake.waterY)
+                        throw new AssertionError("Lake column does not resolve through the unified freshwater biome layer: "+lakeSample.feature());
                     if(lake.stream==null) {
                         if(!diagnosed) {
                             int[] diag=features.outletDiagnosticsForProbe(lake);
@@ -61,6 +66,17 @@ public final class LakeStreamCoverageProbe {
                         case CREEK -> water.isCreek(endpoint.chunkX(),endpoint.chunkZ());
                     };
                     if(!receiverOwned)throw new AssertionError("Convergence key does not match receiver ownership: "+endpoint);
+                    HydrologySample receiverSample=water.hydrologySampleAt(
+                            (int)Math.floor(endpoint.blockX()),(int)Math.floor(endpoint.blockZ()));
+                    HydrologySample.Feature expectedReceiver=switch(endpoint.receiver()) {
+                        case OCEAN -> HydrologySample.Feature.OCEAN;
+                        case RIVER -> HydrologySample.Feature.RIVER;
+                        case CREEK -> HydrologySample.Feature.CREEK;
+                    };
+                    if(receiverSample.feature()!=expectedReceiver
+                            ||!endpoint.equals(receiverSample.convergenceKey()))
+                        throw new AssertionError("Receiver biome layer does not expose the same convergence key: expected="
+                                +endpoint+" actual="+receiverSample.convergenceKey()+" feature="+receiverSample.feature());
                     int resolvedBeforeLookup=features.resolvedFeatureCellCountForProbe();
                     RiverProvider carrier=features.streamCarrierAt(sx,sz);
                     int resolvedAfterLookup=features.resolvedFeatureCellCountForProbe();
@@ -70,6 +86,18 @@ public final class LakeStreamCoverageProbe {
                         throw new AssertionError("Shared feature plan lost its continuous stream carrier");
                     if(!water.isStream(sx,sz) || water.streamCarrierAt(sx,sz)==null)
                         throw new AssertionError("Shared WaterField does not expose the outlet as STREAM");
+                    boolean hasLayerOwnedStreamSample=false;
+                    for(int p=1;p<lake.stream.pointCount()-1;p++) {
+                        int bx=(int)Math.floor(lake.stream.pointXBlock(p));
+                        int bz=(int)Math.floor(lake.stream.pointZBlock(p));
+                        HydrologySample streamSample=water.hydrologySampleAt(bx,bz);
+                        if(streamSample.feature()==HydrologySample.Feature.STREAM
+                                &&endpoint.equals(streamSample.convergenceKey())) {
+                            hasLayerOwnedStreamSample=true;break;
+                        }
+                    }
+                    if(!hasLayerOwnedStreamSample)
+                        throw new AssertionError("No outlet column is represented by the unified stream biome layer");
                     streamCount++;
                 }
             }
