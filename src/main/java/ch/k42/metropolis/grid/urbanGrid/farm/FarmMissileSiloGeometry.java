@@ -828,7 +828,8 @@ final class FarmMissileSiloGeometry {
     }
 
     private void paintPortalBlockhouseAndLockedLadder() {
-        // Clear the entire room and its entry before building the shell.
+        // Clear the whole guardhouse volume and the protected approach before
+        // building the occupied shell. This is a real room, not a facade.
         clearBox(34, 43, this.h + 1, this.h + 4, 4, 14);
         clearBox(34, 39, this.h + 1, this.h + 3, 9, 9);
 
@@ -838,21 +839,28 @@ final class FarmMissileSiloGeometry {
                 boolean edge = dx == 33 || dx == 44 || dz == 3 || dz == 15;
                 if (edge) {
                     for (int y = this.h + 1; y <= this.h + 4; y++) {
-                        boolean observationWindow =
-                                dx == 33 && y >= this.h + 2
-                                && (dz == 5 || dz == 6 || dz == 7 || dz == 11 || dz == 12 || dz == 13);
-                        boolean sideWindow =
+                        boolean westObservationBand =
+                                dx == 33 && y >= this.h + 2 && y <= this.h + 3
+                                && ((dz >= 5 && dz <= 8) || (dz >= 10 && dz <= 13));
+                        boolean northWrapWindow =
+                                dz == 3 && y == this.h + 2 && dx >= 36 && dx <= 41
+                                && dx != 38 && dx != 39;
+                        boolean southWrapWindow =
+                                dz == 15 && y == this.h + 2 && dx >= 36 && dx <= 41
+                                && dx != 38 && dx != 39;
+                        boolean eastServiceWindow =
                                 dx == 44 && y == this.h + 2
                                 && (dz == 6 || dz == 7 || dz == 11 || dz == 12);
-                        put(dx, y, dz, observationWindow || sideWindow ? GLASS_PANE : STONE_BRICKS, 0);
+                        put(dx, y, dz, westObservationBand || northWrapWindow
+                                || southWrapWindow || eastServiceWindow ? GLASS_PANE : STONE_BRICKS, 0);
                     }
                 }
                 put(dx, this.h + 5, dz, STONE_BRICKS, 0);
             }
         }
 
-        // Reinforced corners, a low parapet and a sheltered vehicle-side door
-        // give the annex real architectural hierarchy without overbuilding it.
+        // Corner piers, a heavy base course and a low parapet make the room
+        // read as a hardened checkpoint rather than a decorative garden hut.
         for (int[] p : new int[][]{{34,4},{43,4},{34,14},{43,14}})
             supportColumn(p[0], p[1], this.h + 1, this.h + 5, IRON_BLOCK, 0);
         for (int dx = 33; dx <= 44; dx++) {
@@ -864,21 +872,42 @@ final class FarmMissileSiloGeometry {
             put(44, this.h + 6, dz, STONE_SLAB, 5);
         }
 
+        // A short, structurally supported canopy shelters the west personnel
+        // entry. Its supports stand outside the clear approach lane.
+        for (int dx = 30; dx <= 33; dx++)
+            for (int dz = 7; dz <= 11; dz++)
+                put(dx, this.h + 4, dz, STONE_SLAB, 5);
+        supportColumn(30, 7, this.h + 1, this.h + 3, STONE_BRICKS, 0);
+        supportColumn(30, 11, this.h + 1, this.h + 3, STONE_BRICKS, 0);
+        put(31, this.h + 3, 9, REDSTONE_LAMP_ON, 0);
+        // The threshold remains flush with the approach; no curb or post is
+        // allowed in the centreline in front of the door.
+        for (int dx = 30; dx <= 33; dx++)
+            for (int dz = 8; dz <= 10; dz++)
+                put(dx, this.h, dz, STONE_BRICKS, 0);
+
         door(33, this.h + 1, 9, 2);
-        for (int dz = 7; dz <= 11; dz++) {
-            put(32, this.h + 4, dz, STONE_SLAB, 5);
-            put(33, this.h + 4, dz, STONE_SLAB, 5);
+
+        // One continuous built-in operator counter, facing the broad
+        // observation band. Displays and controls are attached to the same
+        // work surface instead of being isolated furnace-like props.
+        for (int dx = 35; dx <= 41; dx++) {
+            put(dx, this.h + 1, 5, IRON_BLOCK, 0);
+            put(dx, this.h + 2, 5, STONE_SLAB, 5);
         }
-        supportColumn(32, 7, this.h + 1, this.h + 3, STONE_BRICKS, 0);
-        supportColumn(32, 11, this.h + 1, this.h + 3, STONE_BRICKS, 0);
+        for (int dx : new int[]{36, 38, 40}) {
+            put(dx, this.h + 2, 4, TERRACOTTA, 4);
+            put(dx, this.h + 3, 4, REDSTONE_LAMP, 0);
+            put(dx, this.h + 1, 6, STONE_BUTTON, 1);
+        }
+        // A connected cable race runs behind the control bank and turns down
+        // into the east service wall; it is part of the installation.
+        for (int dx = 35; dx <= 41; dx++)
+            put(dx, this.h + 4, 4, IRON_BLOCK, 0);
+        supportColumn(42, 4, this.h + 1, this.h + 4, IRON_BLOCK, 0);
 
-        // Two linked guard consoles face the long observation window. This is
-        // a single purposeful security workstation, not random room dressing.
-        console(36, this.h, 5, 4);
-        console(38, this.h, 5, 4);
-        put(37, this.h + 1, 6, IRON_BLOCK, 0);
-        put(37, this.h + 2, 6, STONE_SLAB, 5);
-
+        // Keep the entry-to-lift route open after the furnishings and canopy
+        // have been placed.
         clearBox(34, 39, this.h + 1, this.h + 3, 9, 9);
     }
 

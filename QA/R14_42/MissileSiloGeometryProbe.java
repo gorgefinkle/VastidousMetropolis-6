@@ -82,6 +82,22 @@ public final class MissileSiloGeometryProbe {
                 v + ": outer apron ventilation riser is missing");
         check("71:2".equals(state(c, 81, H + 1, 57)), v + ": locked west-facing portal door lower half missing");
         check("71:8".equals(state(c, 81, H + 2, 57)), v + ": locked portal door upper half missing");
+        check("102:0".equals(state(c, 81, H + 2, 53)),
+                v + ": broad west-facing observation window is missing");
+        check("102:0".equals(state(c, 81, H + 3, 54)),
+                v + ": upper observation band is missing");
+        check("44:5".equals(state(c, 78, H + 4, 57)),
+                v + ": sheltered guardhouse entry canopy is missing");
+        check("98:0".equals(state(c, 78, H + 1, 55)),
+                v + ": canopy support column is missing");
+        for (int dx = 83; dx <= 89; dx++) {
+            check("42:0".equals(state(c, dx, H + 1, 53)),
+                    v + ": built-in operator counter is disconnected at x=" + dx);
+            check("44:5".equals(state(c, dx, H + 2, 53)),
+                    v + ": continuous counter surface is incomplete at x=" + dx);
+        }
+        check("124:0".equals(state(c, 79, H + 3, 57)),
+                v + ": sheltered entry light is missing");
         for (int dx = 34; dx <= 39; dx++) for (int y = H + 1; y <= H + 2; y++)
             check("0:0".equals(state(c, 48 + dx, y, 57)),
                     v + ": portal vestibule/cage passage is blocked at x-offset " + dx);
