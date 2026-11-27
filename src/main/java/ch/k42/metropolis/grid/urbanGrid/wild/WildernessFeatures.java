@@ -226,6 +226,34 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    /** Package-visible deterministic seam for lake/stream coverage QA. */
    LakeSite lakeForCellProbe(int gx, int gz) { return cell(gx, gz).lake; }
 
+   /**
+    * Diagnostic tuple for a planned lake: [raw receiving-water chunks,
+    * city-safe receiving-water targets, route points]. This is only used by
+    * the deterministic regression and does not mutate the plan.
+    */
+   int[] outletDiagnosticsForProbe(LakeSite lake) {
+      int cx = (int)Math.floor(lake.centerX / 16.0);
+      int cz = (int)Math.floor(lake.centerZ / 16.0);
+      int radius = Math.min(MAX_STREAM_RANGE, Math.max(128, this.spacing));
+      int raw = 0;
+      for (int x = cx - radius; x <= cx + radius; x++) {
+         for (int z = cz - radius; z <= cz + radius; z++) {
+            if (this.water.isReceivingWaterAt(x, z)) raw++;
+         }
+      }
+      List<WaterTarget> targets = findTargets(cx, cz);
+      if (targets.isEmpty()) return new int[]{raw, 0, 0};
+      WaterTarget nearest = targets.get(0);
+      double dx = nearest.x - lake.centerX / 16.0;
+      double dz = nearest.z - lake.centerZ / 16.0;
+      double distance = Math.max(1.0, Math.hypot(dx, dz));
+      double inset = Math.min(lake.radiusX, lake.radiusZ) / 16.0 * 0.68;
+      int routeX = (int)Math.round(lake.centerX / 16.0 + dx / distance * inset);
+      int routeZ = (int)Math.round(lake.centerZ / 16.0 + dz / distance * inset);
+      List<int[]> path = route(routeX, routeZ, targets);
+      return new int[]{raw, targets.size(), path == null ? 0 : path.size()};
+   }
+
    private boolean inOuterCity(int chunkX, int chunkZ) {
       CityRingField.Site nearest = this.cities.nearestSite(chunkX, chunkZ);
       return this.cities.withinOuterCity(chunkX, chunkZ, nearest);

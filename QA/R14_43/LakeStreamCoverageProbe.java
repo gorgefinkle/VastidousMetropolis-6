@@ -17,6 +17,7 @@ public final class LakeStreamCoverageProbe {
             WildernessFeatures features=WildernessFeatures.forSeed(seed);
             WaterField water=WaterFields.forSeed(seed,PluginConfig.getBlockSizeMin()+2);
             int lakeCount=0,streamCount=0;
+            boolean diagnosed=false;
             for(int gx=-2;gx<=2;gx++) {
                 for(int gz=-2;gz<=2;gz++) {
                     WildernessFeatures.LakeSite lake=features.lakeForCellProbe(gx,gz);
@@ -29,7 +30,15 @@ public final class LakeStreamCoverageProbe {
                         throw new AssertionError("Lake basin has no actual shared WaterField owner: seed="+seed
                                 +" chunk=("+cx+","+cz+")");
                     }
-                    if(lake.stream==null) continue;
+                    if(lake.stream==null) {
+                        if(!diagnosed) {
+                            int[] diag=features.outletDiagnosticsForProbe(lake);
+                            System.out.println("OUTLET-DIAG seed="+seed+" cell=("+gx+","+gz+") lakeChunk=("+cx+","+cz
+                                    +") rawReceiving="+diag[0]+" safeTargets="+diag[1]+" routePoints="+diag[2]);
+                            diagnosed=true;
+                        }
+                        continue;
+                    }
                     int point=Math.max(1,Math.min(lake.stream.pointCount()-2,lake.stream.pointCount()/2));
                     int sx=(int)Math.floor(lake.stream.pointXBlock(point)/16.0);
                     int sz=(int)Math.floor(lake.stream.pointZBlock(point)/16.0);
