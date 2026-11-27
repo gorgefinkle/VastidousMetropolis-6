@@ -33,11 +33,10 @@ public final class LakeStreamCoverageProbe {
                     if(lake.stream==null) {
                         if(!diagnosed) {
                             int[] diag=features.outletDiagnosticsForProbe(lake);
+                            // The no-target diagnostic intentionally returns a short tuple;
+                            // print it as a whole rather than assuming the routed tuple width.
                             System.out.println("OUTLET-DIAG seed="+seed+" cell=("+gx+","+gz+") lakeChunk=("+cx+","+cz
-                                    +") rawReceiving="+diag[0]+" safeTargets="+diag[1]+" routePoints="+diag[2]
-                                    +" routeExpansions="+diag[3]+" frontier="+diag[4]
-                                    +" blocked(city/water/creek)="+diag[5]+"/"+diag[6]+"/"+diag[7]
-                                    +" blocked(highwayParallel/width/turn)="+diag[8]+"/"+diag[9]+"/"+diag[10]);
+                                    +") values="+java.util.Arrays.toString(diag));
                             diagnosed=true;
                         }
                         continue;
