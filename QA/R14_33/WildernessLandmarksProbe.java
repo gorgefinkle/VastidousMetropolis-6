@@ -99,7 +99,7 @@ public final class WildernessLandmarksProbe {
         double[] depths=new double[6];
         double ux=Math.cos(0.61),uz=Math.sin(0.61);
         for(int i=0;i<depths.length;i++){
-            double fraction=0.78-i*0.14;
+            double fraction=0.78-i*0.10;
             int x=(int)Math.round(1800.0-ux*lakeA.radiusX*fraction);
             int z=(int)Math.round(2400.0-uz*lakeA.radiusX*fraction);
             depths[i]=lakeA.depthAt(x,z);
