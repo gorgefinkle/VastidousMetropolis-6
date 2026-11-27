@@ -4,6 +4,7 @@ import ch.k42.metropolis.grid.urbanGrid.context.CityRingField;
 import ch.k42.metropolis.grid.urbanGrid.highway.HighwayNetwork;
 import ch.k42.metropolis.grid.urbanGrid.layout.WaterField;
 import ch.k42.metropolis.grid.urbanGrid.layout.WaterFields;
+import ch.k42.metropolis.grid.urbanGrid.ocean.OceanConfig;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverConfig;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
 import ch.k42.metropolis.grid.urbanGrid.highway.HighwayNetworks;
@@ -54,6 +55,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private final long seed;
    private final int spacing;
    private final int cellSize;
+   private final int streamRange;
    private final WaterField water;
    private final HighwayNetwork highways;
    private final CityRingField cities;
@@ -108,6 +110,12 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       // basins discoverable during ordinary exploration while the neighbouring
       // feature-cell halo still contains the complete outlet search.
       this.cellSize = Math.max(320, MAX_STREAM_RANGE + 96);
+      // An unanchored main river's cross-axis baseline may be anywhere inside
+      // OceanConfig.maxDistanceFromSpawn. A lake can sit near the far edge of
+      // the adjacent two landmark cells, so the route window must account for
+      // both that baseline range and the actual feature-cell placement span.
+      this.streamRange = Math.max(MAX_STREAM_RANGE,
+              OceanConfig.getOceanMaxDistanceFromSpawn() + this.cellSize * 2 + 64);
       this.water = water;
       this.highways = highways;
       this.cities = new CityRingField(seed);
@@ -234,13 +242,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    int[] outletDiagnosticsForProbe(LakeSite lake) {
       int cx = (int)Math.floor(lake.centerX / 16.0);
       int cz = (int)Math.floor(lake.centerZ / 16.0);
-      int radius = Math.min(MAX_STREAM_RANGE, Math.max(128, this.spacing));
-      int raw = 0;
-      for (int x = cx - radius; x <= cx + radius; x++) {
-         for (int z = cz - radius; z <= cz + radius; z++) {
-            if (this.water.isReceivingWaterAt(x, z)) raw++;
-         }
-      }
+      int raw = countReceivingRiverChunksForProbe(cx, cz);
       List<WaterTarget> targets = findTargets(cx, cz);
       if (targets.isEmpty()) return new int[]{raw, 0, 0};
       WaterTarget nearest = targets.get(0);
@@ -252,6 +254,34 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       int routeZ = (int)Math.round(lake.centerZ / 16.0 + dz / distance * inset);
       List<int[]> path = route(routeX, routeZ, targets);
       return new int[]{raw, targets.size(), path == null ? 0 : path.size()};
+   }
+
+   private int countReceivingRiverChunksForProbe(int startX, int startZ) {
+      int radius = this.streamRange;
+      int minX = startX - radius, maxX = startX + radius;
+      int minZ = startZ - radius, maxZ = startZ + radius;
+      int count = 0;
+      RiverProvider[] rivers = {this.water.mainRiver(), this.water.zBoundRiver()};
+      for (RiverProvider river : rivers) {
+         if (river == null || !river.isEnabled()) continue;
+         boolean zBound = river.isZBound();
+         int alongMin = zBound ? minZ : minX;
+         int alongMax = zBound ? maxZ : maxX;
+         int acrossReach = (int)Math.ceil(river.getEnvelopeHalfWidth()) + 2;
+         for (int along = alongMin; along <= alongMax; along++) {
+            double alongBlock = along * 16.0 + 8.0;
+            double acrossBlock = zBound ? river.spineXBlock(alongBlock) : river.spineZBlock(alongBlock);
+            if (!Double.isFinite(acrossBlock)) continue;
+            int acrossCenter = (int)Math.floor(acrossBlock / 16.0);
+            for (int offset = -acrossReach; offset <= acrossReach; offset++) {
+               int x = zBound ? acrossCenter + offset : along;
+               int z = zBound ? along : acrossCenter + offset;
+               if (x >= minX && x <= maxX && z >= minZ && z <= maxZ
+                       && this.water.isReceivingWaterAt(x, z)) count++;
+            }
+         }
+      }
+      return count;
    }
 
    private boolean inOuterCity(int chunkX, int chunkZ) {
@@ -365,8 +395,9 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       int gz = Math.floorDiv(chunkZ, this.cellSize);
       RiverProvider best = null;
       double bestDistance = Double.POSITIVE_INFINITY;
-      for (int dx = -1; dx <= 1; dx++) {
-         for (int dz = -1; dz <= 1; dz++) {
+      int cellReach = Math.max(1, (int)Math.ceil((this.streamRange + this.cellSize / 2.0) / this.cellSize));
+      for (int dx = -cellReach; dx <= cellReach; dx++) {
+         for (int dz = -cellReach; dz <= cellReach; dz++) {
             LakeSite lake = cell(gx + dx, gz + dz).lake;
             if (lake == null || lake.stream == null) continue;
             WildernessStreamCourse carrier = lake.stream;
@@ -411,32 +442,33 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    }
 
    private List<WaterTarget> findTargets(int startX, int startZ) {
-      int radius = Math.min(MAX_STREAM_RANGE, Math.max(128, this.spacing));
-      int lattice = Math.max(1, this.water.lattice());
+      int radius = this.streamRange;
       int minX = startX - radius, maxX = startX + radius;
       int minZ = startZ - radius, maxZ = startZ + radius;
-      // baseZoneKind() answers for the complete globally anchored lattice cell.
-      // Scan that same aligned cell, not a window beginning at the arbitrary
-      // search-bound coordinate; otherwise most of a receiving-water cell can
-      // be skipped when the radius edge falls partway through the lattice.
-      int firstCellX = Math.floorDiv(minX, lattice);
-      int lastCellX = Math.floorDiv(maxX, lattice);
-      int firstCellZ = Math.floorDiv(minZ, lattice);
-      int lastCellZ = Math.floorDiv(maxZ, lattice);
       List<WaterTarget> targets = new ArrayList<>();
-      for (int cellX = firstCellX; cellX <= lastCellX; cellX++) {
-         int x0 = cellX * lattice;
-         for (int cellZ = firstCellZ; cellZ <= lastCellZ; cellZ++) {
-            int z0 = cellZ * lattice;
-            if (this.water.baseZoneKind(x0, z0) == WaterField.Kind.NONE) continue;
-            for (int dx = 0; dx < lattice; dx++) {
-               int tx = x0 + dx;
-               if (tx < minX || tx > maxX) continue;
-               for (int dz = 0; dz < lattice; dz++) {
-                  int tz = z0 + dz;
-                  if (tz < minZ || tz > maxZ) continue;
-                  if (!this.water.isReceivingWaterAt(tx, tz) || this.inOuterCity(tx, tz)) continue;
-                  targets.add(new WaterTarget(tx, tz, Math.abs(tx - startX) + Math.abs(tz - startZ)));
+      addRiverTargets(this.water.mainRiver(), false, startX, startZ, minX, maxX, minZ, maxZ, targets);
+      addRiverTargets(this.water.zBoundRiver(), true, startX, startZ, minX, maxX, minZ, maxZ, targets);
+
+      // If the main river is switched off but ocean generation remains on,
+      // locate coast cells by the shared water lattice as a receiving outlet.
+      if (targets.isEmpty() && this.water.ocean() != null) {
+         int lattice = Math.max(1, this.water.lattice());
+         int firstCellX = Math.floorDiv(minX, lattice), lastCellX = Math.floorDiv(maxX, lattice);
+         int firstCellZ = Math.floorDiv(minZ, lattice), lastCellZ = Math.floorDiv(maxZ, lattice);
+         for (int cellX = firstCellX; cellX <= lastCellX; cellX++) {
+            int x0 = cellX * lattice;
+            for (int cellZ = firstCellZ; cellZ <= lastCellZ; cellZ++) {
+               int z0 = cellZ * lattice;
+               if (this.water.baseZoneKind(x0, z0) != WaterField.Kind.OCEAN) continue;
+               for (int dx = 0; dx < lattice; dx++) {
+                  int x = x0 + dx;
+                  if (x < minX || x > maxX) continue;
+                  for (int dz = 0; dz < lattice; dz++) {
+                     int z = z0 + dz;
+                     if (z < minZ || z > maxZ) continue;
+                     if (this.water.isReceivingWaterAt(x, z) && !this.inOuterCity(x, z))
+                        targets.add(new WaterTarget(x, z, Math.abs(x - startX) + Math.abs(z - startZ)));
+                  }
                }
             }
          }
@@ -446,8 +478,32 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       return targets;
    }
 
+   /** Collect actual open-water chunks along a main-river spine; the cross-axis
+    * envelope comes from the same RiverProvider used by RiverParcel. */
+   private void addRiverTargets(RiverProvider river, boolean zBound, int startX, int startZ,
+                                int minX, int maxX, int minZ, int maxZ,
+                                List<WaterTarget> targets) {
+      if (river == null || !river.isEnabled()) return;
+      int alongMin = zBound ? minZ : minX;
+      int alongMax = zBound ? maxZ : maxX;
+      int acrossReach = (int)Math.ceil(river.getEnvelopeHalfWidth()) + 2;
+      for (int along = alongMin; along <= alongMax; along++) {
+         double alongBlock = along * 16.0 + 8.0;
+         double acrossBlock = zBound ? river.spineXBlock(alongBlock) : river.spineZBlock(alongBlock);
+         if (!Double.isFinite(acrossBlock)) continue;
+         int acrossCenter = (int)Math.floor(acrossBlock / 16.0);
+         for (int offset = -acrossReach; offset <= acrossReach; offset++) {
+            int x = zBound ? acrossCenter + offset : along;
+            int z = zBound ? along : acrossCenter + offset;
+            if (x < minX || x > maxX || z < minZ || z > maxZ) continue;
+            if (!this.water.isReceivingWaterAt(x, z) || this.inOuterCity(x, z)) continue;
+            targets.add(new WaterTarget(x, z, Math.abs(x - startX) + Math.abs(z - startZ)));
+         }
+      }
+   }
+
    private List<int[]> route(int startX, int startZ, List<WaterTarget> targets) {
-      int radius = Math.min(MAX_STREAM_RANGE, Math.max(128, this.spacing));
+      int radius = this.streamRange;
       int minX = startX - radius, maxX = startX + radius;
       int minZ = startZ - radius, maxZ = startZ + radius;
       Map<Long, Byte> highwayAxes = highwayAxes(minX, minZ, maxX, maxZ);
