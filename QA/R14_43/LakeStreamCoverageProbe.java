@@ -49,6 +49,18 @@ public final class LakeStreamCoverageProbe {
                     int sz=(int)Math.floor(lake.stream.pointZBlock(point)/16.0);
                     if(!lake.stream.isRiverOrBank(sx,sz))
                         throw new AssertionError("Outlet polyline fails to own its own route chunk");
+                    HydrologyConvergenceKey endpoint=lake.stream.convergenceKey();
+                    if(endpoint==null)throw new AssertionError("Outlet has no keyed confluence");
+                    int last=lake.stream.pointCount()-1;
+                    if(Math.abs(lake.stream.pointXBlock(last)-endpoint.blockX())>1.0e-7
+                            ||Math.abs(lake.stream.pointZBlock(last)-endpoint.blockZ())>1.0e-7)
+                        throw new AssertionError("Stream does not terminate at exact convergence-key coordinates");
+                    boolean receiverOwned=switch(endpoint.receiver()) {
+                        case OCEAN -> water.baseKindAt(endpoint.chunkX(),endpoint.chunkZ())==WaterField.Kind.OCEAN;
+                        case RIVER -> water.baseKindAt(endpoint.chunkX(),endpoint.chunkZ())==WaterField.Kind.RIVER;
+                        case CREEK -> water.isCreek(endpoint.chunkX(),endpoint.chunkZ());
+                    };
+                    if(!receiverOwned)throw new AssertionError("Convergence key does not match receiver ownership: "+endpoint);
                     int resolvedBeforeLookup=features.resolvedFeatureCellCountForProbe();
                     RiverProvider carrier=features.streamCarrierAt(sx,sz);
                     int resolvedAfterLookup=features.resolvedFeatureCellCountForProbe();
@@ -70,6 +82,7 @@ public final class LakeStreamCoverageProbe {
                 throw new AssertionError("No connected outlet stream appears in the same 5x5 window for seed "+seed);
             System.out.println("LakeStreamCoverageProbe PASS seed="+seed
                     +" visibleLakePlans="+lakeCount+" connectedStreamPlans="+streamCount
+                    +" registeredConvergenceEndpoints="+features.registeredConvergenceEndpointCountForProbe()
                     +" nearestLakeBlocks="+Math.round(nearestLakeBlocks));
         }
     }
