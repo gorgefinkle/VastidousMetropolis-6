@@ -450,7 +450,7 @@ final class FarmMissileSiloGeometry {
                 put(dx, y, 11, IRON_BARS, 0);
             }
         }
-        for (int y = low + 1; y <= this.h + 1; y++) {
+        for (int y = low + 1; y <= this.h - 1; y++) {
             put(42, y, 9, LADDER, 4);
             put(43, y, 9, STONE_BRICKS, 0);
         }

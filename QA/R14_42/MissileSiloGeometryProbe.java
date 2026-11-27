@@ -163,6 +163,8 @@ public final class MissileSiloGeometryProbe {
                     check("101:0".equals(actual), v + ": bottom lift landing grate is missing");
                 else if (dx == 42 && dz == 9 && y > bottom + 18 && y <= H - 1)
                     check("65:4".equals(actual), v + ": lift ladder is discontinuous at y=" + y);
+                else if (dx == 42 && dz == 9 && y == H)
+                    check("96:4".equals(actual), v + ": flush service hatch is missing at grade");
                 else
                     check("0:0".equals(actual), v + ": lift well is blocked at " + dx + "," + y + "," + dz);
             }

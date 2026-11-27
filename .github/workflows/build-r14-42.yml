@@ -35,6 +35,7 @@ jobs:
           grep -F 'reopenElevatorShaft();' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
           grep -F 'paintConcealedSurfaceAccess();' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
           grep -F 'WOOD_TRAPDOOR = 96' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
+          grep -F 'for (int y = low + 1; y <= this.h - 1; y++)' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
           ! grep -nE 'paintPortalBlockhouseAndLockedLadder|westObservationBand|northWrapWindow' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
           grep -F 'paintConnectedGalleryRail(level + 1);' src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java
           grep -F 'cfg.getInt(pathMountainKindPrefix + kind.key(), kind.defaultShare())' src/main/java/ch/k42/metropolis/plugin/PluginConfig.java
