@@ -40,8 +40,6 @@ public final class MissileSiloGeometryProbe {
     }
     private static int countAtY(Capture c, int y, int id) {
         int n = 0;
-        check(countId(c, 89) == 0, v + ": glowstone is forbidden in and around the silo complex");
-
         for (Map.Entry<String,String> e : c.blocks.entrySet()) {
             String[] p = e.getKey().split(",");
             if (Integer.parseInt(p[1]) == y && e.getValue().startsWith(id + ":")) n++;
@@ -61,6 +59,8 @@ public final class MissileSiloGeometryProbe {
 
     private static void auditVariant(FarmMissileSiloGeometry.Variant v) {
         Capture c = render(v, null, null);
+        check(countId(c, 89) == 0, v + ": glowstone is forbidden in and around the silo complex");
+        check(countId(c, 124) > 0, v + ": powered industrial lamp fixtures are missing");
         Capture repeat = render(v, null, null);
         check(c.blocks.equals(repeat.blocks), v + ": block geometry is not deterministic");
         check(c.chests.equals(repeat.chests), v + ": chest operations are not deterministic");
