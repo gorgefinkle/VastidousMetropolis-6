@@ -1,6 +1,7 @@
 package ch.k42.metropolis.grid.urbanGrid.wild;
 
 import ch.k42.metropolis.grid.urbanGrid.context.CityRingField;
+import ch.k42.metropolis.grid.urbanGrid.forest.WildernessTerrainProfile;
 import ch.k42.metropolis.grid.urbanGrid.highway.HighwayNetwork;
 import ch.k42.metropolis.grid.urbanGrid.layout.WaterField;
 import ch.k42.metropolis.grid.urbanGrid.layout.WaterFields;
@@ -72,6 +73,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
     * -> WaterField creek lookup edge. */
    private volatile WaterField.CreekSource routeCreeks;
    private final CityRingField cities;
+   private final WildernessTerrainProfile terrainProfile;
    private final HydrologyConvergenceRegistry convergenceRegistry=new HydrologyConvergenceRegistry();
    private final Map<Long, FeatureCell> featureCells =
            new LinkedHashMap<Long, FeatureCell>(96, 0.75f, true) {
@@ -167,6 +169,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       this.water = water;
       this.highways = highways;
       this.cities = new CityRingField(seed);
+      this.terrainProfile = new WildernessTerrainProfile(seed);
    }
 
    private static long mix(long z) {
@@ -249,10 +252,16 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          int[] offset = candidateOffset(h, attempt, lakeReach);
          int x = idealX + offset[0], z = idealZ + offset[1];
          if (!footprintClear(x, z, footprint, footprint, highwayMask, 2)) continue;
-         int waterY = RiverConfig.isRiverEnabled()
-                 ? RiverConfig.getRiverBuildHeight() : OceanConfig.getOceanBuildHeight();
-         LakeSite lake = new LakeSite(this.seed, gx, gz, x * 16.0 + 8.0, z * 16.0 + 8.0,
-                 radius * 16.0, radius * ratio * 16.0, angle, waterY);
+         double centerX=x*16.0+8.0,centerZ=z*16.0+8.0;
+         double radiusX=radius*16.0,radiusZ=radius*ratio*16.0;
+         // A lake is legal only when the untouched wilderness terrain already
+         // forms a closed, gently graded basin. No fixed sea-level excavation
+         // is permitted to manufacture one on a flat or unsuitable surface.
+         WildernessTerrainProfile.BasinFit basin=this.terrainProfile.findBasin(
+                 centerX,centerZ,radiusX,radiusZ,angle);
+         if(basin==null)continue;
+         LakeSite lake = new LakeSite(this.seed,gx,gz,centerX,centerZ,radiusX,radiusZ,
+                 angle,basin.waterY,this.terrainProfile,basin);
          // A basin remains a lake even when no legal outlet route is available.
          // Where river/ocean receiving water is reachable, attach a continuous
          // polyline stream; otherwise preserve this as a genuine closed basin.
@@ -774,8 +783,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    }
 
    public static final class LakeSite {
-      /** Natural bank width beyond the open-water contour. */
-      public static final double SHORE_WIDTH_BLOCKS = 64.0;
+      /** Natural bank width beyond the topographic freshwater contour. */
+      public static final double SHORE_WIDTH_BLOCKS = 32.0;
       private static final double GRAD_STEP=6.0, GRAD_MIN=0.55, GRAD_MAX=1.8;
       public final String name;
       public final int gridX,gridZ;
@@ -783,17 +792,25 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       public final int waterY;
       public WildernessStreamCourse stream;
       private final double cosAngle,sinAngle,majorRadius;
+      private final WildernessTerrainProfile terrainProfile;
+      private final WildernessTerrainProfile.BasinFit basinFit;
       private final Noise2D warpNoise,bayNoise,detailNoise,coastNoise,bedNoise,shoreNoise;
       private final Map<Long,Boolean> chunkCoverage=new LinkedHashMap<Long,Boolean>(256,0.75f,true){
          @Override protected boolean removeEldestEntry(Map.Entry<Long,Boolean> eldest){return size()>8192;}
       };
       LakeSite(long seed,int gx,int gz,double centerX,double centerZ,double radiusX,double radiusZ,double angle,int waterY){
+         this(seed,gx,gz,centerX,centerZ,radiusX,radiusZ,angle,waterY,null,null);
+      }
+      LakeSite(long seed,int gx,int gz,double centerX,double centerZ,double radiusX,double radiusZ,
+               double angle,int waterY,WildernessTerrainProfile terrainProfile,
+               WildernessTerrainProfile.BasinFit basinFit) {
          long h=mix(seed ^ cellKey(gx,gz) ^ 0x4C414B454F434541L);
          this.name="Lake "+generatedName(seed ^ 0x4C414B454E414D45L,gx,gz);
          this.gridX=gx;this.gridZ=gz;this.centerX=centerX;this.centerZ=centerZ;
          this.radiusX=radiusX;this.radiusZ=radiusZ;this.angle=angle;this.waterY=waterY;
          this.cosAngle=Math.cos(angle);this.sinAngle=Math.sin(angle);
          this.majorRadius=Math.max(radiusX,radiusZ);
+         this.terrainProfile=terrainProfile;this.basinFit=basinFit;
          this.warpNoise=new Noise2D(h ^ 0x574152504C414B45L);
          this.bayNoise=new Noise2D(h ^ 0x424159534C414B45L);
          this.detailNoise=new Noise2D(h ^ 0x44455441494C4C4BL);
@@ -801,6 +818,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          this.bedNoise=new Noise2D(h ^ 0x424544464F524D4CL);
          this.shoreNoise=new Noise2D(h ^ 0x53484F52454C414BL);
       }
+      public boolean terrainDerived(){return this.terrainProfile!=null&&this.basinFit!=null;}
+      public WildernessTerrainProfile.BasinFit basinFit(){return this.basinFit;}
       public double normalizedRadius(double x,double z){
          double dx=x-centerX,dz=z-centerZ;
          double u=dx*cosAngle+dz*sinAngle,v=-dx*sinAngle+dz*cosAngle;
@@ -808,10 +827,17 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       }
       /** Positive inside open freshwater, negative outside the irregular coast. */
       public double distanceInsideShoreBlock(double x,double z){
-         double f=field(x,z), outsideExact=(SHORE_WIDTH_BLOCKS+24.0)*GRAD_MAX;
-         if(f>=112.0||f<=-(outsideExact+48.0))return f;
+         double f=field(x,z);
          double gx=(field(x+GRAD_STEP,z)-field(x-GRAD_STEP,z))/(2.0*GRAD_STEP);
          double gz=(field(x,z+GRAD_STEP)-field(x,z-GRAD_STEP))/(2.0*GRAD_STEP);
+         if(this.terrainDerived()) {
+            // The contour is defined by water level minus untouched land height.
+            // Convert that elevation difference to horizontal signed distance.
+            double gradient=Math.max(0.025,Math.min(0.45,Math.hypot(gx,gz)));
+            return f/gradient;
+         }
+         double outsideExact=(SHORE_WIDTH_BLOCKS+24.0)*GRAD_MAX;
+         if(f>=112.0||f<=-(outsideExact+48.0))return f;
          double gradient=Math.max(GRAD_MIN,Math.min(GRAD_MAX,Math.hypot(gx,gz)));
          double distance=f/gradient;
          if(f>40.0){double t=smoothStep(40.0,112.0,f);distance+=(f-distance)*t;}
@@ -834,6 +860,16 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
        * to the deep centre. No underwater shelf bands or depth plateaus.
        */
       public int depthAt(int x,int z){
+         if(this.terrainDerived()) {
+            // Follow the naturally submerged terrain floor. The bed therefore
+            // deepens with the existing basin and never cuts a preset 25-block
+            // cylindrical hole beneath an otherwise shallow landscape.
+            double px=x+0.5,pz=z+0.5;
+            double natural=this.terrainProfile.surfaceHeight(x,z);
+            double depth=this.waterY-natural+1.0
+                    +0.22*bedNoise.fbm(px/210.0,pz/210.0,2,0.52);
+            return Math.max(1,Math.min(25,(int)Math.round(depth)));
+         }
          double px=x+0.5,pz=z+0.5,distance=distanceInsideShoreBlock(px,pz);
          if(distance<=0.0)return 0;
          double basinSpan=Math.max(180.0,Math.min(radiusX,radiusZ)*0.92);
@@ -847,13 +883,25 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       public double shoreMaterialNoiseAt(double x,double z){return shoreNoise.fbm(x/52.0,z/52.0,2,0.5);}
       public double envelopeRadiusChunks(){return majorRadius*1.13/16.0+SHORE_WIDTH_BLOCKS/16.0;}
       private double field(double x,double z){
-         double radius=majorRadius,wavelength=radius*1.30,warp=radius*0.055;
+         double radius=majorRadius,rawRho=normalizedRadius(x,z);
+         if(this.terrainDerived()) {
+            // The lake's coastline is a topographic contour, not an ellipse
+            // pasted into the map. Gentle shoreline noise only adds local
+            // erosion; the existing wilderness elevation determines the bays.
+            double wavelength=radius*1.30,warp=Math.min(18.0,radius*0.035);
+            double px=x+warp*warpNoise.fbm(x/wavelength,z/wavelength,2,0.52);
+            double pz=z+warp*warpNoise.fbm(x/wavelength+37.1,z/wavelength-61.7,2,0.52);
+            int terrainY=this.terrainProfile.surfaceHeight((int)Math.floor(px),(int)Math.floor(pz));
+            double contour=this.waterY-terrainY+1.15*coastNoise.noise(x/92.0,z/92.0);
+            double envelope=radius*(1.13-rawRho);
+            return smoothMin(contour,envelope,2.5);
+         }
+         double wavelength=radius*1.30,warp=radius*0.055;
          double px=x+warp*warpNoise.fbm(x/wavelength,z/wavelength,2,0.52);
          double pz=z+warp*warpNoise.fbm(x/wavelength+37.1,z/wavelength-61.7,2,0.52);
          double dx=px-centerX,dz=pz-centerZ;
          double u=dx*cosAngle+dz*sinAngle,v=-dx*sinAngle+dz*cosAngle;
          double warpedRho=Math.sqrt(u*u/(radiusX*radiusX)+v*v/(radiusZ*radiusZ));
-         double rawRho=normalizedRadius(x,z);
          double value=radius*(1.0-warpedRho);
          value+=radius*0.135*bayNoise.fbm(x/(radius*0.82),z/(radius*0.82),3,0.52);
          value+=radius*0.030*detailNoise.fbm(x/(radius*0.22),z/(radius*0.22),2,0.5);
