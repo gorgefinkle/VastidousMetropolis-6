@@ -11,6 +11,9 @@ import ch.k42.metropolis.grid.urbanGrid.vanilla.VanillaWilderness;
 import ch.k42.metropolis.grid.urbanGrid.forest.ForestGenerator;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverConfig;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
+import ch.k42.metropolis.grid.urbanGrid.layout.WaterField;
+import ch.k42.metropolis.grid.urbanGrid.wild.HydrologySample;
+import ch.k42.metropolis.grid.urbanGrid.wild.WildernessStreamCourse;
 import ch.k42.metropolis.grid.urbanGrid.river.WaterCourseCarver;
 import ch.k42.metropolis.grid.urbanGrid.river.ConfluenceBed;
 import ch.k42.metropolis.minions.Cartesian2D;
@@ -202,12 +205,24 @@ public class RiverParcel extends Parcel {
 
       RiverProvider river = this.carrier != null ? this.carrier : this.grid.getRiverProviderAt(this.chunkX, this.chunkZ);
       GridRandom rand = this.grid.getRandom();
+      WaterField hydrology=this.grid.planWater();
       int baseX = this.chunkX << 4;
       int baseZ = this.chunkZ << 4;
 
       for (int lx = 0; lx < 16; lx++) {
          for (int lz = 0; lz < 16; lz++) {
-            carveColumnWithCreeks(world, river, this.grid, rand, baseX + lx, baseZ + lz);
+            int x=baseX+lx,z=baseZ+lz;
+            RiverProvider columnRiver=river;
+            if(river instanceof WildernessStreamCourse) {
+               HydrologySample sample=hydrology.hydrologySampleAt(x,z);
+               // Wilderness tributaries are rendered only where the shared
+               // city-aware biome layer grants STREAM ownership. At a keyed
+               // confluence the receiving ocean/river/creek keeps its parcel.
+               if(sample.feature()!=HydrologySample.Feature.STREAM
+                       ||!(sample.carrier() instanceof WildernessStreamCourse))continue;
+               columnRiver=sample.carrier();
+            }
+            carveColumnWithCreeks(world,columnRiver,this.grid,rand,x,z);
          }
       }
 
