@@ -917,7 +917,8 @@ final class FarmMissileSiloGeometry {
             for (int dz = -20; dz <= 20; dz++) {
                 double d = Math.hypot(dx, dz);
                 if (d >= 19.6 && d <= 20.2) put(dx, this.h, dz, IRON_BLOCK, 0);
-                if (Math.abs(d - 21.0) < .4) put(dx, this.h + 1, dz, IRON_BARS, 0);
+                // The steel-block collar below is the perimeter edge; do not
+                // add a separate diagonal-only iron-bar ring above it.
             }
         }
 
