@@ -17,6 +17,16 @@ public final class HydrologyConvergenceRegistry {
    }
    public synchronized HydrologyConvergenceKey resolve(HydrologyConvergenceKey key){return key==null?null:endpoints.get(new Identity(key));}
    public synchronized int size(){return endpoints.size();}
+   /** Stable convergence key owned by this receiver at the requested chunk. */
+   public synchronized HydrologyConvergenceKey findAt(
+           HydrologyConvergenceKey.Receiver receiver,int chunkX,int chunkZ) {
+      HydrologyConvergenceKey best=null;
+      for(HydrologyConvergenceKey key:endpoints.values()) {
+         if(key.receiver()!=receiver||key.chunkX()!=chunkX||key.chunkZ()!=chunkZ)continue;
+         if(best==null||key.compareTo(best)<0)best=key;
+      }
+      return best;
+   }
    private static final class Identity {
       final HydrologyConvergenceKey.Receiver receiver;final long network,endpoint;
       Identity(HydrologyConvergenceKey k){receiver=k.receiver();network=k.networkId();endpoint=k.endpointId();}
