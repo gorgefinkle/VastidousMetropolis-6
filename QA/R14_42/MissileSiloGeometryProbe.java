@@ -22,6 +22,13 @@ public final class MissileSiloGeometryProbe {
 
         @Override public void set(int x, int y, int z, int id, int data) {
             if (chunkX != null && (Math.floorDiv(x, 16) != chunkX || Math.floorDiv(z, 16) != chunkZ)) return;
+            if (x == 82 && y == 97 && z == 57) {
+                StringBuilder trace = new StringBuilder();
+                for (StackTraceElement e : Thread.currentThread().getStackTrace())
+                    trace.append(e).append(" <- ");
+                throw new IllegalStateException("unexpected legacy guardhouse-position placement id="
+                        + id + " data=" + data + " trace=" + trace);
+            }
             blocks.put(key(x, y, z), id + ":" + data);
         }
 
