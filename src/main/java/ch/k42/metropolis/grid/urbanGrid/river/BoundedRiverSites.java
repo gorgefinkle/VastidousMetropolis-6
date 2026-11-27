@@ -438,6 +438,15 @@ public final class BoundedRiverSites {
         return best<=maxDistanceBlocks?best:Double.NaN;
     }
 
+    /** Carrier lookup reads only the prepared tile snapshot and never arbitrates a new candidate. */
+    public synchronized BoundedRiverSegment preparedCarrierAt(int chunkX,int chunkZ) {
+        int tx=Math.floorDiv(chunkX,TILE),tz=Math.floorDiv(chunkZ,TILE);
+        List<Site> prepared=tiles.get(key(tx,tz));
+        if(prepared==null)return null;
+        for(Site site:prepared)if(site.ownsWetCell(chunkX,chunkZ))return site.river;
+        return null;
+    }
+
     /** Read exact open-channel endpoints from already prepared accepted creek plans. */
     public synchronized List<HydrologyConvergenceKey> convergenceEndpointsIn(int minX,int minZ,int maxX,int maxZ) {
         if(minX>maxX||minZ>maxZ)throw new IllegalArgumentException("Invalid convergence query area");
