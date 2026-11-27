@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 import ch.k42.metropolis.grid.urbanGrid.wild.HydrologyConvergenceKey;
+import ch.k42.metropolis.grid.urbanGrid.wild.HydrologySample;
 
 /**
  * Where the water is, from the seed alone: the river(s) and the ocean, each a pure function of position. No tile is
