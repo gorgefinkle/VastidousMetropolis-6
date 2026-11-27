@@ -1,4 +1,4 @@
-name: R14.44 Unified Worldgen
+name: R14.45 Unified Worldgen
 
 on:
   push:
@@ -86,6 +86,35 @@ jobs:
             src/main/java/ch/k42/metropolis/grid/urbanGrid/farm/FarmMissileSiloGeometry.java \
             QA/R14_42/MissileSiloGeometryProbe.java
           java -cp qa-out ch.k42.metropolis.grid.urbanGrid.farm.MissileSiloGeometryProbe
+      - name: Verify landmark planner has bounded non-recursive neighbor proposals
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("src/main/java/ch/k42/metropolis/grid/urbanGrid/districts/LandmarkPlans.java").read_text()
+          def method_body(signature):
+              start = source.index(signature)
+              opening = source.index("{", start)
+              depth = 0
+              for index in range(opening, len(source)):
+                  if source[index] == "{":
+                      depth += 1
+                  elif source[index] == "}":
+                      depth -= 1
+                      if depth == 0:
+                          return source[opening + 1:index]
+              raise AssertionError("Unclosed method: " + signature)
+          accepted = method_body("public synchronized WorldLayout.Landmark siteOf(")
+          raw = method_body("private WorldLayout.Landmark rawSiteOf(")
+          lower = method_body("private List<WorldLayout.Landmark> lowerSites(")
+          groups = method_body("private Set<String> groupsNearby(")
+          assert "this.make(cellX, cellZ, site, true)" in accepted
+          assert "this.make(cellX, cellZ, site, false)" in raw
+          assert "this.siteOf(" not in lower and "this.siteOf(" not in groups
+          assert "this.rawSiteOf(" in lower and "this.rawSiteOf(" in groups
+          assert "enforceNeighbourRules ? this.groupsNearby" in source
+          assert "enforceNeighbourRules ? this.lowerSites" in source
+          print("LandmarkNonRecursiveProbe PASS: accepted plans use memoized, one-hop raw neighbor proposals; no recursive siteOf edge")
+          PY
       - name: Build plugin JAR
         run: mvn --batch-mode --no-transfer-progress clean package
       - name: Verify named massif, lake and continuous stream plan/ownership
@@ -116,21 +145,21 @@ jobs:
           ! grep -Fq 'getDeclaredField("coneSeed")' src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/BiomeEcology.java
       - name: Verify embedded plugin version
         run: |
-          expected='0.1.20-R14.44-Startup-Fix-DEV'
-          actual="$(unzip -p target/Metropolis_R14_44_Unified_Worldgen_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          expected='0.1.21-R14.45-Startup-Landmark-Bounds-DEV'
+          actual="$(unzip -p target/Metropolis_R14_45_Unified_Worldgen_DEV.jar plugin.yml | sed -n 's/^version: //p')"
           test "$actual" = "$expected"
           echo "Embedded plugin version: $actual"
       - name: Assemble test delivery
         run: |
           mkdir -p delivery
-          cp target/Metropolis_R14_44_Unified_Worldgen_DEV.jar delivery/
-          zip -qr delivery/Metropolis_R14_44_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
+          cp target/Metropolis_R14_45_Unified_Worldgen_DEV.jar delivery/
+          zip -qr delivery/Metropolis_R14_45_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
           (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
           ls -lh delivery
       - name: Upload JAR and full source
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_43_Unified_Worldgen
+          name: Metropolis_R14_45_Unified_Worldgen
           path: delivery/*
           if-no-files-found: error
           retention-days: 14

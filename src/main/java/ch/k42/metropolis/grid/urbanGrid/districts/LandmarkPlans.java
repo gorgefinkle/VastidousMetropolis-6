@@ -69,6 +69,8 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
    private final ContextProvider contexts;
    private final int blockSize;
    private final Map<Long, Object> memo = new HashMap<Long, Object>();
+   // Unfiltered one-hop proposals prevent neighbor checks from recursively expanding the whole site graph.
+   private final Map<Long, Object> rawMemo = new HashMap<Long, Object>();
    private final Map<String, List<PriorityClip>> priorityCache = new HashMap<>();
    private final Set<String> missingPriorityWarned = new HashSet<>();
 
@@ -124,15 +126,25 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
       return configured;
    }
 
-   /** The original planner tests priority schematics and anchors in a deterministic nested order. */
+   /** The same priority candidate order, optionally applying local neighbor suppression. */
    private List<WorldLayout.Landmark> prioritySites(int cx, int cz, int k, String name, int limit) {
+      return prioritySites(cx, cz, k, name, limit, true);
+   }
+
+   /**
+    * Raw proposals are intentionally not checked against other sites. They
+    * are used only as one-hop evidence by the winning-rank filter, never
+    * reserved directly unless siteOf() accepts them.
+    */
+   private List<WorldLayout.Landmark> prioritySites(int cx, int cz, int k, String name,
+                                                     int limit, boolean enforceNeighbourRules) {
       List<WorldLayout.Landmark> out = new ArrayList<>();
       List<PriorityClip> candidates = priorityClips(name);
       if (candidates.isEmpty()) return out;
       int spacing = Math.max(0, PluginConfig.getLandmarkMinSpacing());
       boolean zoneMatch = PluginConfig.isLandmarkZoneMatchEnabled();
-      Set<String> used = groupsNearby(cx, cz, k);
-      List<WorldLayout.Landmark> lower = lowerSites(cx, cz, k);
+      Set<String> used = enforceNeighbourRules ? groupsNearby(cx, cz, k) : Collections.emptySet();
+      List<WorldLayout.Landmark> lower = enforceNeighbourRules ? lowerSites(cx, cz, k) : Collections.emptyList();
       for (int t = 0; t < ANCHOR_TRIES; t++) {
          int saltX = t == 0 ? 2 : 100 + 2*t;
          int saltZ = t == 0 ? 3 : 101 + 2*t;
@@ -143,8 +155,8 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
          for (PriorityClip p : candidates) {
             Cartesian2D size = p.size;
             Cartesian2D base = new Cartesian2D(ax-size.X/2,az-size.Y/2);
-            if (tooClose(base.X, base.Y, size.X, size.Y, lower, spacing)) continue;
-            if (used.contains(p.clip.getGroupId())) continue;
+            if (enforceNeighbourRules && tooClose(base.X, base.Y, size.X, size.Y, lower, spacing)) continue;
+            if (enforceNeighbourRules && used.contains(p.clip.getGroupId())) continue;
             if (ClipboardParcel.hasCreekOrigin(p.clip)) continue;
             if (p.clip.getConfig() != null && p.clip.getConfig().isRiverFacing()) continue;
             LandmarkZoneRule.Footprint footprint = UrbanGrid.zonesAround(contexts, base, size);
@@ -153,18 +165,22 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
             if (zoneMatch && !LandmarkZoneRule.allowsFootprint(p.clip, footprint)) continue;
             ContextType pin = zoneMatch ? LandmarkZoneRule.pinFor(p.clip, centre) : null;
             ContextType context = pin != null ? pin : (centre != null && centre != ContextType.UNDEFINED ? centre : ContextType.LANDMARK);
-            Minions.dLandmark("PRIORITY LANDMARK SITE cell=(%d,%d) group='%s' anchor=(%d,%d) size=%dx%d direction=%s; full road-ring required by WorldLayout.landmarkFits",
-                  cx,cz,p.clip.getGroupId(),ax,az,size.X,size.Y,p.direction);
+            if (enforceNeighbourRules) {
+               Minions.dLandmark("PRIORITY LANDMARK SITE cell=(%d,%d) group='%s' anchor=(%d,%d) size=%dx%d direction=%s; full road-ring required by WorldLayout.landmarkFits",
+                     cx,cz,p.clip.getGroupId(),ax,az,size.X,size.Y,p.direction);
+            }
             out.add(new WorldLayout.Landmark(ax,az,size.X,size.Y,context,new Choice(p.clip,p.direction,context)));
             if (out.size() >= limit) return out;
          }
       }
-      if (out.isEmpty()) Minions.dLandmark("PRIORITY LANDMARK '%s' could not find an urban candidate cell=(%d,%d); no unsafe fallback to unwrapped building", name,cx,cz);
+      if (enforceNeighbourRules && out.isEmpty())
+         Minions.dLandmark("PRIORITY LANDMARK '%s' could not find an urban candidate cell=(%d,%d); no unsafe fallback to unwrapped building", name,cx,cz);
       return out;
    }
 
-   private WorldLayout.Landmark prioritySite(int cx, int cz, int site, String name) {
-      List<WorldLayout.Landmark> sites = prioritySites(cx, cz, site, name, 1);
+   private WorldLayout.Landmark prioritySite(int cx, int cz, int site, String name,
+                                              boolean enforceNeighbourRules) {
+      List<WorldLayout.Landmark> sites = prioritySites(cx, cz, site, name, 1, enforceNeighbourRules);
       return sites.isEmpty() ? null : sites.get(0);
    }
 
@@ -203,14 +219,31 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
 
    @Override
    public synchronized WorldLayout.Landmark siteOf(int cellX, int cellZ, int site) {
-      long key = ((long) (cellX & 0xFFFFFF) << 32) | ((long) (cellZ & 0xFFFFFF) << 8) | (site & 0xFF);
+      long key = siteKey(cellX, cellZ, site);
       Object known = this.memo.get(key);
-      if (known != null) {
-         return known == NONE ? null : (WorldLayout.Landmark) known;
-      }
-      WorldLayout.Landmark made = this.make(cellX, cellZ, site);
+      if (known != null) return known == NONE ? null : (WorldLayout.Landmark) known;
+      WorldLayout.Landmark made = this.make(cellX, cellZ, site, true);
       this.memo.put(key, made == null ? NONE : made);
       return made;
+   }
+
+   /**
+    * A single deterministic candidate without neighbor suppression. This is
+    * deliberately a leaf operation: it never asks for another site's plan.
+    * Higher-ranked accepted sites compare against these proposals in a
+    * bounded neighborhood, avoiding recursive siteOf() dependency chains.
+    */
+   private WorldLayout.Landmark rawSiteOf(int cellX, int cellZ, int site) {
+      long key = siteKey(cellX, cellZ, site);
+      Object known = this.rawMemo.get(key);
+      if (known != null) return known == NONE ? null : (WorldLayout.Landmark) known;
+      WorldLayout.Landmark made = this.make(cellX, cellZ, site, false);
+      this.rawMemo.put(key, made == null ? NONE : made);
+      return made;
+   }
+
+   private static long siteKey(int cellX, int cellZ, int site) {
+      return ((long) (cellX & 0xFFFFFF) << 32) | ((long) (cellZ & 0xFFFFFF) << 8) | (site & 0xFF);
    }
 
    // ------------------------------------------------------------------ the draw
@@ -223,12 +256,12 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
       return (h >>> 11) * (1.0 / (1L << 53));
    }
 
-   private WorldLayout.Landmark make(int cx, int cz, int k) {
+   private WorldLayout.Landmark make(int cx, int cz, int k, boolean enforceNeighbourRules) {
       List<String> priority = priorityNames();
       if (k == 0 && !priority.isEmpty()) {
          String name = priority.get(Math.floorMod(cx + cz, priority.size()));
          if (!priorityClips(name).isEmpty()) {
-            return prioritySite(cx,cz,k,name);
+            return prioritySite(cx,cz,k,name,enforceNeighbourRules);
          }
       }
       if (unit(this.hash(cx, cz, k, 1)) * 100.0 >= PluginConfig.getLandmarkAttemptChancePercent()) {
@@ -237,11 +270,11 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
       final int cell = WorldLayout.LandmarkPlanner.CELL;
       final Cartesian2D maxFit = new Cartesian2D(MAX_SPAN, MAX_SPAN);
       // The explicit landmark pool does not depend on where the landmark stands, so it is asked once. Only when it is empty
-      // does the pool depend on the zone at the anchor (whatever the zone has that is large enough), asked per anchor below.
+      // does the pool depend on the zone at the anchor, asked per anchor below.
       final List<Cartesian2D> explicitSizes = this.clips.getLandmarkSizes(this.blockSize, ContextType.LANDMARK, SchematicType.BUILD, maxFit);
       final boolean explicit = !explicitSizes.isEmpty();
-      final Set<String> used = this.groupsNearby(cx, cz, k);
-      final List<WorldLayout.Landmark> lower = this.lowerSites(cx, cz, k);
+      final Set<String> used = enforceNeighbourRules ? this.groupsNearby(cx, cz, k) : Collections.emptySet();
+      final List<WorldLayout.Landmark> lower = enforceNeighbourRules ? this.lowerSites(cx, cz, k) : Collections.emptyList();
       final int spacing = Math.max(0, PluginConfig.getLandmarkMinSpacing());
       final boolean zoneMatch = PluginConfig.isLandmarkZoneMatchEnabled();
       final Direction[] directions = Direction.getDirections();
@@ -268,30 +301,26 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
 
          for (int s = 0; s < sizes.size(); s++) {
             Cartesian2D size = sizes.get((sizeStart + s) % sizes.size());
-            if (size.X > MAX_SPAN || size.Y > MAX_SPAN) {
-               continue;
-            }
+            if (size.X > MAX_SPAN || size.Y > MAX_SPAN) continue;
             Cartesian2D base = new Cartesian2D(ax - size.X / 2, az - size.Y / 2);
-            if (this.tooClose(base.X, base.Y, size.X, size.Y, lower, spacing)) {
+            if (enforceNeighbourRules && this.tooClose(base.X, base.Y, size.X, size.Y, lower, spacing)) {
                tooClose++;
-               continue;                                     // a smaller size may still clear its neighbour
+               continue; // a smaller size may still clear its neighbour
             }
             final LandmarkZoneRule.Footprint footprint = UrbanGrid.zonesAround(this.contexts, base, size);
             ContextType centre = footprint.centre;
             if (PluginConfig.isMorphomosEnabled() && centre != null && centre.isMorphomos()) {
                countryside++;
-               break;                                        // a landmark does not stand in the countryside: another anchor
+               break; // a landmark does not stand in the countryside: another anchor
             }
             ContextType fitContext = explicit ? ContextType.LANDMARK : (centre != null ? centre : this.contexts.getContext(base));
             for (int d = 0; d < directions.length; d++) {
                Direction direction = directions[(dirStart + d) % directions.length];
                List<Clipboard> candidates = new ArrayList<Clipboard>(this.clips.getFit(size, fitContext, SchematicType.BUILD, direction));
-               candidates.removeIf(ClipboardParcel::hasCreekOrigin);                   // only where a creek provably leaves it
-               candidates.removeIf(c -> c.getConfig() != null && c.getConfig().isRiverFacing());   // no river to face in the plan
-               if (zoneMatch) {
-                  candidates.removeIf(c -> !LandmarkZoneRule.allowsFootprint(c, footprint));
-               }
-               candidates.removeIf(c -> used.contains(c.getGroupId()));
+               candidates.removeIf(ClipboardParcel::hasCreekOrigin);
+               candidates.removeIf(c -> c.getConfig() != null && c.getConfig().isRiverFacing());
+               if (zoneMatch) candidates.removeIf(c -> !LandmarkZoneRule.allowsFootprint(c, footprint));
+               if (enforceNeighbourRules) candidates.removeIf(c -> used.contains(c.getGroupId()));
                if (candidates.isEmpty()) {
                   noCandidate++;
                   continue;
@@ -300,14 +329,18 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
                ContextType pin = zoneMatch ? LandmarkZoneRule.pinFor(chosen, centre) : null;
                ContextType context = pin != null ? pin
                        : (centre != null && centre != ContextType.UNDEFINED ? centre : ContextType.LANDMARK);
-               Minions.dLandmark("LANDMARK SITE cell=(%d,%d) k=%d anchor=(%d,%d) size=%dx%d group='%s' zone=%s direction=%s anchorTry=%d/%d",
-                       cx, cz, k, ax, az, size.X, size.Y, chosen.getGroupId(), context, direction, t + 1, ANCHOR_TRIES);
+               if (enforceNeighbourRules) {
+                  Minions.dLandmark("LANDMARK SITE cell=(%d,%d) k=%d anchor=(%d,%d) size=%dx%d group='%s' zone=%s direction=%s anchorTry=%d/%d",
+                          cx, cz, k, ax, az, size.X, size.Y, chosen.getGroupId(), context, direction, t + 1, ANCHOR_TRIES);
+               }
                return new WorldLayout.Landmark(ax, az, size.X, size.Y, context, new Choice(chosen, direction, context));
             }
          }
       }
-      Minions.dLandmark("LANDMARK SITE DROPPED cell=(%d,%d) k=%d after %d anchors: no size in pool=%d, countryside=%d, too close to a lower landmark=%d, no schematic fits the zones/clone rule=%d",
-              cx, cz, k, ANCHOR_TRIES, noSizes, countryside, tooClose, noCandidate);
+      if (enforceNeighbourRules) {
+         Minions.dLandmark("LANDMARK SITE DROPPED cell=(%d,%d) k=%d after %d anchors: no size in pool=%d, countryside=%d, too close to a lower landmark=%d, no schematic fits the zones/clone rule=%d",
+                 cx, cz, k, ANCHOR_TRIES, noSizes, countryside, tooClose, noCandidate);
+      }
       return null;
    }
 
@@ -348,7 +381,7 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
                if ((dx == 0 && dz == 0 && kk == k) || !this.lower(cx + dx, cz + dz, kk, cx, cz, k)) {
                   continue;
                }
-               WorldLayout.Landmark other = this.siteOf(cx + dx, cz + dz, kk);
+               WorldLayout.Landmark other = this.rawSiteOf(cx + dx, cz + dz, kk);
                if (other != null) {
                   out.add(other);
                }
@@ -405,7 +438,7 @@ public final class LandmarkPlans implements WorldLayout.LandmarkPlanner {
                if ((dx == 0 && dz == 0 && kk == k) || !this.lower(cx + dx, cz + dz, kk, cx, cz, k)) {
                   continue;
                }
-               WorldLayout.Landmark other = this.siteOf(cx + dx, cz + dz, kk);
+               WorldLayout.Landmark other = this.rawSiteOf(cx + dx, cz + dz, kk);
                if (other != null) {
                   used.add(((Choice) other.choice).clip.getGroupId());
                }
