@@ -1,5 +1,7 @@
 package ch.k42.metropolis.grid.urbanGrid.river;
 
+import ch.k42.metropolis.grid.urbanGrid.wild.HydrologyConvergenceKey;
+
 import ch.k42.metropolis.grid.urbanGrid.clipboard.Clipboard;
 import ch.k42.metropolis.grid.urbanGrid.clipboard.ClipboardProvider;
 import ch.k42.metropolis.grid.urbanGrid.enums.ContextType;
@@ -434,6 +436,38 @@ public final class BoundedRiverSites {
             }
         }
         return best<=maxDistanceBlocks?best:Double.NaN;
+    }
+
+    /** Read exact open-channel endpoints from already prepared accepted creek plans. */
+    public synchronized List<HydrologyConvergenceKey> convergenceEndpointsIn(int minX,int minZ,int maxX,int maxZ) {
+        if(minX>maxX||minZ>maxZ)throw new IllegalArgumentException("Invalid convergence query area");
+        Map<String,Site> unique=new TreeMap<>();
+        for(int tx=Math.floorDiv(minX,TILE);tx<=Math.floorDiv(maxX,TILE);tx++)
+            for(int tz=Math.floorDiv(minZ,TILE);tz<=Math.floorDiv(maxZ,TILE);tz++) {
+                List<Site> prepared=tiles.get(key(tx,tz));
+                if(prepared!=null)for(Site site:prepared)unique.put(site.id(),site);
+            }
+        List<HydrologyConvergenceKey> result=new ArrayList<>();
+        for(Site site:unique.values()) {
+            BoundedRiverSegment river=site.river;
+            long network=HydrologyConvergenceKey.stableId("bounded-creek:"+site.id());
+            int low=river.getAlongLoChunk(),high=river.getAlongHiChunk();
+            for(int along=low;along<=high;along+=2)appendConvergenceEndpoint(result,site,network,along,minX,minZ,maxX,maxZ);
+            if((high-low)%2!=0)appendConvergenceEndpoint(result,site,network,high,minX,minZ,maxX,maxZ);
+        }
+        result.sort(HydrologyConvergenceKey::compareTo);
+        return java.util.Collections.unmodifiableList(result);
+    }
+    private static void appendConvergenceEndpoint(List<HydrologyConvergenceKey> out,Site site,long network,
+            int along,int minX,int minZ,int maxX,int maxZ) {
+        BoundedRiverSegment river=site.river;
+        double alongBlock=along*16.0+8.0,acrossBlock=river.spineBlock(alongBlock);
+        if(!Double.isFinite(acrossBlock))return;
+        double x=river.isZBound()?acrossBlock:alongBlock,z=river.isZBound()?alongBlock:acrossBlock;
+        int cx=(int)Math.floor(x/16.0),cz=(int)Math.floor(z/16.0);
+        if(cx<minX||cx>maxX||cz<minZ||cz>maxZ||!river.isRiver(cx,cz)
+                ||site.ownership.at(cx,cz)!=BoundedRiverOwnershipPlan.Owner.WATER)return;
+        out.add(new HydrologyConvergenceKey(HydrologyConvergenceKey.Receiver.CREEK,network,along,x,z));
     }
 
     public synchronized List<Site> parksIn(int minX,int minZ,int maxX,int maxZ){
