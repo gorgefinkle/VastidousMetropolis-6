@@ -17,12 +17,14 @@ public final class LakeStreamCoverageProbe {
             WildernessFeatures features=WildernessFeatures.forSeed(seed);
             WaterField water=WaterFields.forSeed(seed,PluginConfig.getBlockSizeMin()+2);
             int lakeCount=0,streamCount=0;
+            double nearestLakeBlocks=Double.POSITIVE_INFINITY;
             boolean diagnosed=false;
             for(int gx=-2;gx<=2;gx++) {
                 for(int gz=-2;gz<=2;gz++) {
                     WildernessFeatures.LakeSite lake=features.lakeForCellProbe(gx,gz);
                     if(lake==null) continue;
                     lakeCount++;
+                    nearestLakeBlocks=Math.min(nearestLakeBlocks,Math.hypot(lake.centerX,lake.centerZ));
                     int cx=(int)Math.floor(lake.centerX/16.0);
                     int cz=(int)Math.floor(lake.centerZ/16.0);
                     if(features.lakeAt(cx,cz)==null || !water.isLake(cx,cz)
@@ -56,10 +58,14 @@ public final class LakeStreamCoverageProbe {
             }
             if(lakeCount==0)
                 throw new AssertionError("No planned lake basin appears in the 5x5 nearest feature-cell window for seed "+seed);
+            if(nearestLakeBlocks>8000.0)
+                throw new AssertionError("Nearest planned lake is too remote for ordinary exploration: seed="+seed
+                        +" distance="+Math.round(nearestLakeBlocks)+" blocks");
             if(streamCount==0)
                 throw new AssertionError("No connected outlet stream appears in the same 5x5 window for seed "+seed);
             System.out.println("LakeStreamCoverageProbe PASS seed="+seed
-                    +" visibleLakePlans="+lakeCount+" connectedStreamPlans="+streamCount);
+                    +" visibleLakePlans="+lakeCount+" connectedStreamPlans="+streamCount
+                    +" nearestLakeBlocks="+Math.round(nearestLakeBlocks));
         }
     }
 }
