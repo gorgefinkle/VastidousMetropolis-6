@@ -72,6 +72,7 @@ Sources:
 ## Material and interaction rules
 
 - Use the existing 1.12 legacy block ID/data adapter through `FarmPainter` so the structures remain compatible with the plugin's current palette.
+- No glowstone anywhere in or around the silo complex. Use lit redstone-lamp blocks as restrained industrial fixtures, grow lights, and perimeter lamps instead.
 - Use iron bars for the silo's top grating. No iron trapdoor block ID 167 is permitted anywhere in the silo feature.
 - The surface access iron door is closed and unpowered. Do not place an external button, lever, pressure plate, or powered circuit that makes the locked entrance immediately openable.
 - Keep doors, ladders, furniture, chests, and machinery within the site bounds and build-height limits.
