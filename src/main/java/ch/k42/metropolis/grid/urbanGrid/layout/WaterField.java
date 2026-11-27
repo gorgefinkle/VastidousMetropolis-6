@@ -46,20 +46,20 @@ public final class WaterField implements WorldLayout.Mask {
       /** Distance from a world-block point to the nearest accepted creek bank, or NaN when none is within the requested radius. */
       default double nearestBankDistanceBlocks(double blockX, double blockZ, double maxDistanceBlocks) { return Double.NaN; }
    }
-   private CreekSource creeks;
+   private volatile CreekSource creeks;
 
    /** Named wilderness lakes are independent of the river/creek channel field. */
    public interface LakeSource {
       boolean lakeOrBankAt(int chunkX, int chunkZ);
    }
-   private LakeSource lakes;
+   private volatile LakeSource lakes;
 
    /** Small named-lake outlets routed through wilderness and permitted to cross highways. */
    public interface StreamSource {
       boolean streamOrBankAt(int chunkX, int chunkZ);
       ch.k42.metropolis.grid.urbanGrid.river.RiverProvider carrierAt(int chunkX, int chunkZ);
    }
-   private StreamSource streams;
+   private volatile StreamSource streams;
 
    public synchronized void setLakes(LakeSource source) {
       this.lakes = source;
@@ -170,10 +170,13 @@ public final class WaterField implements WorldLayout.Mask {
    };
 
    /** Matches the R30ea reference: reserve a bounded box around actual bank cells within each lattice cell. */
-   private synchronized boolean hasCreekInLattice(int x, int z, CreekSource src) {
+   private boolean hasCreekInLattice(int x, int z, CreekSource src) {
       int cx = Math.floorDiv(x, lattice), cz = Math.floorDiv(z, lattice);
       long key = ((long)cx << 32) ^ (cz & 0xffffffffL);
-      int[] box = creekLatticeCache.get(key);
+      int[] box;
+      synchronized (this) {
+         box = creekLatticeCache.get(key);
+      }
       if (box == null) {
          int loX = Integer.MAX_VALUE, hiX = Integer.MIN_VALUE;
          int loZ = Integer.MAX_VALUE, hiZ = Integer.MIN_VALUE;
@@ -187,8 +190,14 @@ public final class WaterField implements WorldLayout.Mask {
                }
             }
          }
-         box = new int[]{loX, hiX, loZ, hiZ};
-         creekLatticeCache.put(key, box);
+         int[] made = new int[]{loX, hiX, loZ, hiZ};
+         synchronized (this) {
+            box = creekLatticeCache.get(key);
+            if (box == null) {
+               creekLatticeCache.put(key, made);
+               box = made;
+            }
+         }
       }
       if (box[0] == Integer.MAX_VALUE) return false;
       int pad = src.riverLatticePaddingChunks();
@@ -345,7 +354,7 @@ public final class WaterField implements WorldLayout.Mask {
    }
 
    /** R30ea zoning separates true banks, temporary creek planning envelopes and natural interfluves. */
-   public synchronized Kind zoneKind(int x, int z) {
+   public Kind zoneKind(int x, int z) {
       Kind base = baseZoneKind(x, z);
       if (base != Kind.NONE) return base;
       CreekSource src = creeks;

@@ -126,10 +126,10 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
 
    private synchronized void prepareForTile(int tileMinChunkX, int tileMinChunkZ) {
       int reach = Math.max(1, (int)Math.ceil((this.streamRange + this.cellSize / 2.0) / this.cellSize));
-      int minGX = Math.floorDiv(tileMinChunkX - 64, this.cellSize) - reach;
-      int maxGX = Math.floorDiv(tileMinChunkX + 63 + 64, this.cellSize) + reach;
-      int minGZ = Math.floorDiv(tileMinChunkZ - 64, this.cellSize) - reach;
-      int maxGZ = Math.floorDiv(tileMinChunkZ + 63 + 64, this.cellSize) + reach;
+      int minGX = Math.floorDiv(tileMinChunkX - 128, this.cellSize) - reach;
+      int maxGX = Math.floorDiv(tileMinChunkX + 63 + 128, this.cellSize) + reach;
+      int minGZ = Math.floorDiv(tileMinChunkZ - 128, this.cellSize) - reach;
+      int maxGZ = Math.floorDiv(tileMinChunkZ + 63 + 128, this.cellSize) + reach;
       // FeatureCell construction may route an outlet, but all its inputs are
       // now base water, highways, city rings and the captured creek source.
       // It cannot invoke the composed WaterField or start another plan phase.

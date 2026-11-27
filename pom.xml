@@ -8,7 +8,7 @@
     <artifactId>metropolis</artifactId>
     <version>0.1.22-R14.46-Hydrology-Planning-Phase-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.45 Startup Landmark Bounds)</name>
+    <name>Metropolis for Paper 26.2 (R14.46 Hydrology Planning Phase)</name>
     <description>Consolidates current world-generation corrections, Mother Willow geometry and the missile-silo complex</description>
 
     <properties>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_45_Unified_Worldgen_DEV</finalName>
+        <finalName>Metropolis_R14_46_Hydrology_Planning_Phase_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
