@@ -57,7 +57,9 @@ public final class WaterField implements WorldLayout.Mask {
    private volatile CreekSource creeks;
 
    /** A single accepted wilderness hydrology layer owns lakes and connected outlet streams. */
-   public interface HydrologyLayer extends LakeSource,StreamSource {}
+   public interface HydrologyLayer extends LakeSource,StreamSource {
+      HydrologySample sampleAt(WaterField water,int blockX,int blockZ);
+   }
    private volatile HydrologyLayer hydrology;
 
    public synchronized void setHydrologyLayer(HydrologyLayer source) {
@@ -66,6 +68,12 @@ public final class WaterField implements WorldLayout.Mask {
    }
 
    public HydrologyLayer hydrologyLayer(){return this.hydrology;}
+   /** Authoritative per-column sample from the same hydrology owner used for chunk zoning. */
+   public HydrologySample hydrologySampleAt(int blockX,int blockZ) {
+      HydrologyLayer source=this.hydrology;
+      return source==null?HydrologySample.none(blockX,blockZ):
+              source.sampleAt(this,blockX,blockZ);
+   }
 
    public ch.k42.metropolis.grid.urbanGrid.river.RiverProvider streamCarrierAt(int x,int z) {
       HydrologyLayer source=hydrology;
