@@ -209,8 +209,9 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       int idealZ = gz * this.cellSize + this.cellSize / 2;
       int mountainAttempts = 4;
       int lakeAttempts = 16;
-      int lakeReach = Math.max(20, this.cellSize / 2 - 20);
-      int maskReach = lakeReach + 24;
+      // Inland seas have a larger but bounded envelope, leaving open wilderness between basins.
+      int lakeReach = Math.max(24, this.cellSize / 2 - 44);
+      int maskReach = lakeReach + 52;
       HighwayNetwork.Snapshot highwayMask = this.highways.snapshot(
               idealX - maskReach, idealZ - maskReach, idealX + maskReach, idealZ + maskReach);
 
@@ -230,17 +231,20 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          return FeatureCell.EMPTY;
       }
 
-      int radius = 14 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
-      double ratio = 0.76 + unit(mix(h ^ 0x454C4C49505345L)) * 0.20;
+      // 24-31 chunk major-axis radii create broad inland seas, smaller than the world ocean.
+      // Placement reserves the noisy coast and its full finite natural bank.
+      int radius = 24 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
+      double ratio = 0.70 + unit(mix(h ^ 0x454C4C49505345L)) * 0.20;
       double angle = unit(mix(h ^ 0x4C414B45414E474CL)) * Math.PI;
+      int footprint = (int)Math.ceil(radius * 1.13 + LakeSite.SHORE_WIDTH_BLOCKS / 16.0 + 3.0);
       for (int attempt = 0; attempt < lakeAttempts; attempt++) {
          int[] offset = candidateOffset(h, attempt, lakeReach);
          int x = idealX + offset[0], z = idealZ + offset[1];
-         if (!footprintClear(x, z, radius, (int)Math.ceil(radius * ratio), highwayMask, 3)) continue;
-         if (!footprintClear(x, z, radius, (int)Math.ceil(radius * ratio), highwayMask, 1)) continue;
+         if (!footprintClear(x, z, footprint, footprint, highwayMask, 2)) continue;
+         int waterY = RiverConfig.isRiverEnabled()
+                 ? RiverConfig.getRiverBuildHeight() : OceanConfig.getOceanBuildHeight();
          LakeSite lake = new LakeSite(this.seed, gx, gz, x * 16.0 + 8.0, z * 16.0 + 8.0,
-                 radius * 16.0, radius * ratio * 16.0, angle,
-                 RiverConfig.getRiverBuildHeight());
+                 radius * 16.0, radius * ratio * 16.0, angle, waterY);
          // A basin remains a lake even when no legal outlet route is available.
          // Where river/ocean receiving water is reachable, attach a continuous
          // polyline stream; otherwise preserve this as a genuine closed basin.
@@ -300,7 +304,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       double dx = nearest.x - lake.centerX / 16.0;
       double dz = nearest.z - lake.centerZ / 16.0;
       double distance = Math.max(1.0, Math.hypot(dx, dz));
-      double inset = Math.min(lake.radiusX, lake.radiusZ) / 16.0 * 0.68;
+      double inset = Math.min(lake.radiusX, lake.radiusZ) / 16.0 * 0.62;
       int routeX = (int)Math.round(lake.centerX / 16.0 + dx / distance * inset);
       int routeZ = (int)Math.round(lake.centerZ / 16.0 + dz / distance * inset);
       List<int[]> path = route(routeX, routeZ, targets);
@@ -475,28 +479,28 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private WildernessStreamCourse buildOutlet(LakeSite lake, long featureHash, List<WaterTarget> targets) {
       if (targets.isEmpty()) return null;
       WaterTarget nearest = targets.get(0);
-      double dx = nearest.x - lake.centerX / 16.0;
-      double dz = nearest.z - lake.centerZ / 16.0;
+      double dx = nearest.x - lake.centerX / 16.0, dz = nearest.z - lake.centerZ / 16.0;
       double length = Math.max(1.0, Math.hypot(dx, dz));
-      double inset = Math.min(lake.radiusX, lake.radiusZ) / 16.0 * 0.68;
-      int startX = (int)Math.round(lake.centerX / 16.0 + dx / length * inset);
-      int startZ = (int)Math.round(lake.centerZ / 16.0 + dz / length * inset);
-      List<int[]> path = route(startX, startZ, targets);
-      if (path == null || path.size() < 2) return null;
-
-      double[] blockX = new double[path.size()];
-      double[] blockZ = new double[path.size()];
-      for (int i = 0; i < path.size(); i++) {
-         blockX[i] = path.get(i)[0] * 16.0 + 8.0;
-         blockZ[i] = path.get(i)[1] * 16.0 + 8.0;
+      double inset = Math.min(lake.radiusX, lake.radiusZ) / 16.0 * 0.62;
+      int startX = (int)Math.floor(lake.centerX / 16.0 + dx / length * inset);
+      int startZ = (int)Math.floor(lake.centerZ / 16.0 + dz / length * inset);
+      // Bays/headlands may bend the coast away from an ellipse. Start the outlet
+      // only after verifying the point is inside genuine open water.
+      if (lake.distanceInsideShoreBlock(startX * 16.0 + 8.0, startZ * 16.0 + 8.0) < 12.0) {
+         for (double factor : new double[] {0.52,0.42,0.32,0.22}) {
+            int sx=(int)Math.floor(lake.centerX/16.0+dx/length*Math.min(lake.radiusX,lake.radiusZ)/16.0*factor);
+            int sz=(int)Math.floor(lake.centerZ/16.0+dz/length*Math.min(lake.radiusX,lake.radiusZ)/16.0*factor);
+            if(lake.distanceInsideShoreBlock(sx*16.0+8.0,sz*16.0+8.0)>=12.0){startX=sx;startZ=sz;break;}
+         }
       }
-      long streamSeed = mix(featureHash ^ 0x53545245414D4C4BL);
-      // A narrow 10-12 block channel retains the smallest explicit
-      // highway-crossing bore used by RiverParcel. Banks stay short and the
-      // road deck itself remains untouched; no extra storm drains are added.
-      double width = 10.0 + unit(mix(streamSeed)) * 2.0;
-      double bank = 7.0 + unit(mix(streamSeed ^ 0x42414E4BL)) * 3.0;
-      return new WildernessStreamCourse(streamSeed, blockX, blockZ, width, bank);
+      List<int[]> path=route(startX,startZ,targets);
+      if(path==null||path.size()<2)return null;
+      double[] blockX=new double[path.size()], blockZ=new double[path.size()];
+      for(int i=0;i<path.size();i++){blockX[i]=path.get(i)[0]*16.0+8.0;blockZ[i]=path.get(i)[1]*16.0+8.0;}
+      long streamSeed=mix(featureHash ^ 0x53545245414D4C4BL);
+      double width=10.0+unit(mix(streamSeed))*2.0;
+      double bank=7.0+unit(mix(streamSeed ^ 0x42414E4BL))*3.0;
+      return new WildernessStreamCourse(streamSeed,blockX,blockZ,width,bank);
    }
 
    private List<WaterTarget> findTargets(int startX, int startZ) {
@@ -782,58 +786,101 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    }
 
    public static final class LakeSite {
-      public static final double WATER_EDGE = 0.79;
+      /** Natural bank width beyond the open-water contour. */
+      public static final double SHORE_WIDTH_BLOCKS = 64.0;
+      private static final double GRAD_STEP=6.0, GRAD_MIN=0.55, GRAD_MAX=1.8;
       public final String name;
-      public final int gridX, gridZ;
-      public final double centerX, centerZ, radiusX, radiusZ, angle;
+      public final int gridX,gridZ;
+      public final double centerX,centerZ,radiusX,radiusZ,angle;
       public final int waterY;
       public WildernessStreamCourse stream;
-
-      LakeSite(long seed, int gx, int gz, double centerX, double centerZ,
-               double radiusX, double radiusZ, double angle, int waterY) {
-         this.name = "Lake " + generatedName(seed ^ 0x4C414B454E414D45L, gx, gz);
-         this.gridX = gx;
-         this.gridZ = gz;
-         this.centerX = centerX;
-         this.centerZ = centerZ;
-         this.radiusX = radiusX;
-         this.radiusZ = radiusZ;
-         this.angle = angle;
-         this.waterY = waterY;
+      private final double cosAngle,sinAngle,majorRadius;
+      private final Noise2D warpNoise,bayNoise,detailNoise,coastNoise,bedNoise,shoreNoise;
+      private final Map<Long,Boolean> chunkCoverage=new LinkedHashMap<Long,Boolean>(256,0.75f,true){
+         @Override protected boolean removeEldestEntry(Map.Entry<Long,Boolean> eldest){return size()>8192;}
+      };
+      LakeSite(long seed,int gx,int gz,double centerX,double centerZ,double radiusX,double radiusZ,double angle,int waterY){
+         long h=mix(seed ^ cellKey(gx,gz) ^ 0x4C414B454F434541L);
+         this.name="Lake "+generatedName(seed ^ 0x4C414B454E414D45L,gx,gz);
+         this.gridX=gx;this.gridZ=gz;this.centerX=centerX;this.centerZ=centerZ;
+         this.radiusX=radiusX;this.radiusZ=radiusZ;this.angle=angle;this.waterY=waterY;
+         this.cosAngle=Math.cos(angle);this.sinAngle=Math.sin(angle);
+         this.majorRadius=Math.max(radiusX,radiusZ);
+         this.warpNoise=new Noise2D(h ^ 0x574152504C414B45L);
+         this.bayNoise=new Noise2D(h ^ 0x424159534C414B45L);
+         this.detailNoise=new Noise2D(h ^ 0x44455441494C4C4BL);
+         this.coastNoise=new Noise2D(h ^ 0x434F4153544C414BL);
+         this.bedNoise=new Noise2D(h ^ 0x424544464F524D4CL);
+         this.shoreNoise=new Noise2D(h ^ 0x53484F52454C414BL);
       }
-
-      public double normalizedRadius(double x, double z) {
-         double dx = x - this.centerX, dz = z - this.centerZ;
-         double c = Math.cos(this.angle), s = Math.sin(this.angle);
-         double rx = (dx * c - dz * s) / this.radiusX;
-         double rz = (dx * s + dz * c) / this.radiusZ;
-         double wave = Math.sin((x + this.gridX * 71.0) * 0.006)
-                 * Math.cos((z - this.gridZ * 53.0) * 0.005) * 0.018;
-         return Math.sqrt(rx * rx + rz * rz) + wave;
+      public double normalizedRadius(double x,double z){
+         double dx=x-centerX,dz=z-centerZ;
+         double u=dx*cosAngle+dz*sinAngle,v=-dx*sinAngle+dz*cosAngle;
+         return Math.sqrt(u*u/(radiusX*radiusX)+v*v/(radiusZ*radiusZ));
       }
-
-      public boolean intersectsChunk(int chunkX, int chunkZ) {
-         double bx = chunkX * 16.0, bz = chunkZ * 16.0;
-         // Center, four corners and four side midpoints catch narrow edge
-         // intersections without inflating the lake footprint by a buffer.
-         double[] offsets = {0.0, 8.0, 16.0};
-         for (double ox : offsets) {
-            for (double oz : offsets) {
-               if (normalizedRadius(bx + ox, bz + oz) <= 1.0) return true;
-            }
+      /** Positive inside open freshwater, negative outside the irregular coast. */
+      public double distanceInsideShoreBlock(double x,double z){
+         double f=field(x,z), outsideExact=(SHORE_WIDTH_BLOCKS+24.0)*GRAD_MAX;
+         if(f>=112.0||f<=-(outsideExact+48.0))return f;
+         double gx=(field(x+GRAD_STEP,z)-field(x-GRAD_STEP,z))/(2.0*GRAD_STEP);
+         double gz=(field(x,z+GRAD_STEP)-field(x,z-GRAD_STEP))/(2.0*GRAD_STEP);
+         double gradient=Math.max(GRAD_MIN,Math.min(GRAD_MAX,Math.hypot(gx,gz)));
+         double distance=f/gradient;
+         if(f>40.0){double t=smoothStep(40.0,112.0,f);distance+=(f-distance)*t;}
+         if(f< -outsideExact){double t=smoothStep(0.0,48.0,-outsideExact-f);distance+=(f-distance)*t;}
+         return distance;
+      }
+      public boolean waterAt(int x,int z){return distanceInsideShoreBlock(x+0.5,z+0.5)>0.0;}
+      public synchronized boolean intersectsChunk(int chunkX,int chunkZ){
+         long key=cellKey(chunkX,chunkZ);Boolean cached=chunkCoverage.get(key);
+         if(cached!=null)return cached;
+         double bx=chunkX*16.0,bz=chunkZ*16.0;double[] offsets={0.0,8.0,16.0};
+         boolean intersects=false;
+         outer:for(double ox:offsets)for(double oz:offsets){
+            if(distanceInsideShoreBlock(bx+ox,bz+oz)>=-SHORE_WIDTH_BLOCKS){intersects=true;break outer;}
          }
-         return false;
+         chunkCoverage.put(key,intersects);return intersects;
       }
-
-      public boolean waterAt(int x, int z) {
-         return normalizedRadius(x + 0.5, z + 0.5) < WATER_EDGE;
+      /**
+       * Shelf-free bathymetry: one continuous slope from the shallow margin
+       * to the deep centre. No underwater shelf bands or depth plateaus.
+       */
+      public int depthAt(int x,int z){
+         double px=x+0.5,pz=z+0.5,distance=distanceInsideShoreBlock(px,pz);
+         if(distance<=0.0)return 0;
+         double basinSpan=Math.max(180.0,Math.min(radiusX,radiusZ)*0.92);
+         double t=Math.max(0.0,Math.min(1.0,distance/basinSpan));
+         double continuous=1.0+23.0*Math.pow(t,1.28);
+         double reliefFade=smoothStep(18.0,basinSpan*0.72,distance);
+         double relief=bedNoise.fbm(px/260.0,pz/260.0,2,0.52)*0.85*reliefFade;
+         return Math.max(1,Math.min(25,(int)Math.round(continuous+relief)));
       }
-
-      public int depthAt(int x, int z) {
-         double r = normalizedRadius(x + 0.5, z + 0.5);
-         if (r >= WATER_EDGE) return 0;
-         double t = (WATER_EDGE - r) / WATER_EDGE;
-         return 3 + (int)Math.round(10.0 * Math.pow(t, 0.72));
+      public double bedMaterialNoiseAt(double x,double z){return bedNoise.fbm(x/210.0,z/210.0,2,0.52);}
+      public double shoreMaterialNoiseAt(double x,double z){return shoreNoise.fbm(x/52.0,z/52.0,2,0.5);}
+      public double envelopeRadiusChunks(){return majorRadius*1.13/16.0+SHORE_WIDTH_BLOCKS/16.0;}
+      private double field(double x,double z){
+         double radius=majorRadius,wavelength=radius*1.30,warp=radius*0.055;
+         double px=x+warp*warpNoise.fbm(x/wavelength,z/wavelength,2,0.52);
+         double pz=z+warp*warpNoise.fbm(x/wavelength+37.1,z/wavelength-61.7,2,0.52);
+         double dx=px-centerX,dz=pz-centerZ;
+         double u=dx*cosAngle+dz*sinAngle,v=-dx*sinAngle+dz*cosAngle;
+         double warpedRho=Math.sqrt(u*u/(radiusX*radiusX)+v*v/(radiusZ*radiusZ));
+         double rawRho=normalizedRadius(x,z);
+         double value=radius*(1.0-warpedRho);
+         value+=radius*0.135*bayNoise.fbm(x/(radius*0.82),z/(radius*0.82),3,0.52);
+         value+=radius*0.030*detailNoise.fbm(x/(radius*0.22),z/(radius*0.22),2,0.5);
+         value+=2.5*coastNoise.noise(x/84.0,z/84.0);
+         double cap=radius*(1.13-rawRho);
+         return smoothMin(value,cap,radius*0.055);
+      }
+      private static double smoothMin(double a,double b,double k){
+         double h=Math.max(k-Math.abs(a-b),0.0)/k;
+         return Math.min(a,b)-h*h*k*0.25;
+      }
+      private static double smoothStep(double a,double b,double value){
+         if(b<=a)return value<a?0.0:1.0;
+         double t=Math.max(0.0,Math.min(1.0,(value-a)/(b-a)));
+         return t*t*(3.0-2.0*t);
       }
    }
 

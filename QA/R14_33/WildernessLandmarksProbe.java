@@ -83,22 +83,53 @@ public final class WildernessLandmarksProbe {
                 seed, 11, -8, 1800.0, 2400.0, 288.0, 238.0, 0.61, 63);
         WildernessFeatures.LakeSite lakeB = new WildernessFeatures.LakeSite(
                 seed, 11, -8, 1800.0, 2400.0, 288.0, 238.0, 0.61, 63);
-        if (!lakeA.waterAt(1800, 2400) || lakeA.depthAt(1800, 2400) < 10) {
-            throw new AssertionError("named lake basin lacks a substantial central water column");
-        }
-        if (lakeA.waterAt(1800 + 280, 2400)) {
-            throw new AssertionError("named lake water extends beyond its shoreline edge");
-        }
-        if (!lakeA.intersectsChunk(Math.floorDiv(1800, 16), Math.floorDiv(2400, 16))) {
-            throw new AssertionError("lake footprint does not claim its center chunk");
-        }
-        if (lakeA.intersectsChunk(10000, 10000)) {
+        if(!lakeA.waterAt(1800,2400)||lakeA.depthAt(1800,2400)<20)
+            throw new AssertionError("lake centre must contain deep open freshwater");
+        if(!lakeA.intersectsChunk(Math.floorDiv(1800,16),Math.floorDiv(2400,16)))
+            throw new AssertionError("lake footprint does not claim its centre chunk");
+        if(lakeA.intersectsChunk(10000,10000))
             throw new AssertionError("lake footprint claims an unrelated chunk");
+        if(!lakeA.name.equals(lakeB.name))throw new AssertionError("lake name is not stable");
+        double centreA=lakeA.distanceInsideShoreBlock(1800.0,2400.0);
+        double centreB=lakeB.distanceInsideShoreBlock(1800.0,2400.0);
+        if(Math.abs(centreA-centreB)>1.0e-9)throw new AssertionError("lake field is not deterministic");
+
+        // Sample from the outer basin toward the centre. Depth must increase
+        // continuously over these broad intervals; no shelf/plateau bands.
+        double[] depths=new double[6];
+        double ux=Math.cos(0.61),uz=Math.sin(0.61);
+        for(int i=0;i<depths.length;i++){
+            double fraction=0.78-i*0.14;
+            int x=(int)Math.round(1800.0-ux*lakeA.radiusX*fraction);
+            int z=(int)Math.round(2400.0-uz*lakeA.radiusX*fraction);
+            depths[i]=lakeA.depthAt(x,z);
         }
-        if (!lakeA.name.equals(lakeB.name)) {
-            throw new AssertionError("lake name is not stable for the same world seed and site");
+        for(int i=1;i<depths.length;i++){
+            if(depths[i]<=depths[i-1])
+                throw new AssertionError("lake floor contains a shelf/plateau or fails to deepen inward: "
+                        +java.util.Arrays.toString(depths));
         }
 
-        System.out.println("WildernessLandmarksProbe PASS: summit rise="+summitRise+" blocks; asymmetric escarpment and irregular rim; alpine treeline/snowline; bounded lake basin and stable names");
+        // The irregular field should create broad bays/headlands, not a small
+        // circular/radial stamp.
+        double minCoast=Double.POSITIVE_INFINITY,maxCoast=Double.NEGATIVE_INFINITY;
+        for(int i=0;i<24;i++){
+            double a=i*Math.PI/12.0,lo=0.0,hi=400.0;
+            for(int n=0;n<28;n++){
+                double mid=(lo+hi)*0.5;
+                double x=lakeA.centerX+Math.cos(a)*mid,z=lakeA.centerZ+Math.sin(a)*mid;
+                if(lakeA.distanceInsideShoreBlock(x,z)>0.0)lo=mid;else hi=mid;
+            }
+            minCoast=Math.min(minCoast,hi);maxCoast=Math.max(maxCoast,hi);
+        }
+        if(maxCoast-minCoast<28.0)
+            throw new AssertionError("lake coastline lacks broad bays and headlands");
+        double beyond=lakeA.distanceInsideShoreBlock(
+                1800.0+Math.cos(0.61)*288.0*1.55,
+                2400.0+Math.sin(0.61)*288.0*1.55);
+        if(beyond>=-WildernessFeatures.LakeSite.SHORE_WIDTH_BLOCKS)
+            throw new AssertionError("lake beach ownership extends beyond its finite bank");
+
+        System.out.println("WildernessLandmarksProbe PASS: summit rise="+summitRise+" blocks; irregular freshwater coast; shelf-free continuous depth; finite bank; deterministic field");
     }
 }

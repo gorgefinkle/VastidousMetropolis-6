@@ -13,6 +13,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import ch.k42.metropolis.grid.urbanGrid.parcel.Parcel;
 
 import java.util.List;
 import java.util.Locale;
@@ -89,30 +90,33 @@ public final class CommandMetropolisLake implements CommandExecutor, TabComplete
       return true;
    }
 
-   private static Location shorelineLanding(World world, WildernessFeatures.LakeSite lake, Location player) {
-      double c = Math.cos(lake.angle), s = Math.sin(lake.angle);
-      double dx = player.getX() - lake.centerX, dz = player.getZ() - lake.centerZ;
-      double nx = (dx * c - dz * s) / lake.radiusX;
-      double nz = (dx * s + dz * c) / lake.radiusZ;
-      double length = Math.hypot(nx, nz);
-      if (length < 1.0e-6) { nx = 1.0; nz = 0.0; }
-      else { nx /= length; nz /= length; }
-      for (double radius : new double[] {0.90, 0.95, 0.98}) {
-         double x = lake.centerX + radius * (nx * lake.radiusX * c + nz * lake.radiusZ * s);
-         double z = lake.centerZ + radius * (-nx * lake.radiusX * s + nz * lake.radiusZ * c);
-         int bx = (int)Math.floor(x), bz = (int)Math.floor(z);
-         int groundY = world.getHighestBlockYAt(bx, bz);
-         if (groundY < world.getMinHeight() || groundY + 2 >= world.getMaxHeight()) continue;
-         Block ground = world.getBlockAt(bx, groundY, bz);
-         Block feet = world.getBlockAt(bx, groundY + 1, bz), head = world.getBlockAt(bx, groundY + 2, bz);
-         if (!ground.getType().isSolid() || ground.isLiquid() || !feet.isPassable() || feet.isLiquid()
-                 || !head.isPassable() || head.isLiquid()) continue;
-         return new Location(world, bx + .5, groundY + 1.0, bz + .5, player.getYaw(), player.getPitch());
+   private static Location shorelineLanding(World world,WildernessFeatures.LakeSite lake,Location player){
+      double dx=player.getX()-lake.centerX,dz=player.getZ()-lake.centerZ;
+      double baseAngle=Math.atan2(dz,dx);
+      // Find the actual noise-shaped shore instead of guessing an ellipse radius.
+      for(int step=0;step<24;step++){
+         int signed=step==0?0:((step+1)/2)*(step%2==1?1:-1);
+         double angle=baseAngle+Math.toRadians(signed*15.0),ux=Math.cos(angle),uz=Math.sin(angle);
+         double maxRadius=Math.max(lake.radiusX,lake.radiusZ)*1.20+WildernessFeatures.LakeSite.SHORE_WIDTH_BLOCKS;
+         for(double radius=8.0;radius<=maxRadius;radius+=8.0){
+            double x=lake.centerX+ux*radius,z=lake.centerZ+uz*radius;
+            double d=lake.distanceInsideShoreBlock(x,z);
+            if(d>-10.0||d<-WildernessFeatures.LakeSite.SHORE_WIDTH_BLOCKS+8.0)continue;
+            int bx=(int)Math.floor(x),bz=(int)Math.floor(z),groundY=world.getHighestBlockYAt(bx,bz);
+            while(groundY>world.getMinHeight()&&Parcel.isTreeBlock(world.getBlockAt(bx,groundY,bz).getType()))groundY--;
+            if(groundY<world.getMinHeight()||groundY+2>=world.getMaxHeight())continue;
+            Block ground=world.getBlockAt(bx,groundY,bz);
+            Block feet=world.getBlockAt(bx,groundY+1,bz),head=world.getBlockAt(bx,groundY+2,bz);
+            if(!ground.getType().isSolid()||ground.isLiquid()||Parcel.isTreeBlock(ground.getType())
+                    ||!feet.isPassable()||feet.isLiquid()||Parcel.isTreeBlock(feet.getType())
+                    ||!head.isPassable()||head.isLiquid()||Parcel.isTreeBlock(head.getType()))continue;
+            return new Location(world,bx+0.5,groundY+1.0,bz+0.5,player.getYaw(),player.getPitch());
+         }
       }
       return null;
    }
 
-   @Override
+      @Override
    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
       if (args.length != 1) return List.of();
       String typed = args[0] == null ? "" : args[0].toLowerCase(Locale.ROOT);
