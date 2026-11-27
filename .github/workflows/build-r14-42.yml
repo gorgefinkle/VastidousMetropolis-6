@@ -48,7 +48,9 @@ jobs:
           grep -F 'return new FeatureCell(null, lake)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
           grep -F 'nearestLake(originX, originZ)' src/main/java/ch/k42/metropolis/commands/CommandMetropolisLake.java
           grep -F 'nearestMountain(originX, originZ)' src/main/java/ch/k42/metropolis/commands/CommandMetropolisMassif.java
-          grep -F 'WildernessFeatures.install(seed)' src/main/java/ch/k42/metropolis/grid/urbanGrid/layout/WaterFields.java
+          grep -F 'installCreeks(generator);' src/main/java/ch/k42/metropolis/grid/urbanGrid/UrbanGrid.java
+          grep -F 'WildernessFeatures.install(seed);' src/main/java/ch/k42/metropolis/grid/urbanGrid/UrbanGrid.java
+          grep -F 'WildernessFeatures.prepareForTile(seed, this.root.X, this.root.Y);' src/main/java/ch/k42/metropolis/grid/urbanGrid/UrbanGrid.java
           ! grep -R -nE 'MountainKind\.VOLCANO|case VOLCANO|VOLCANO[[:space:]]*\(' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild src/main/java/ch/k42/metropolis/plugin/PluginConfig.java
           ! grep -Eq '^[[:space:]]+volcano:[[:space:]]*[1-9]' src/main/resources/config.yml
       - name: Verify Bloomlands rarity migration and cross-city creek berth wiring
