@@ -58,6 +58,12 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private final int streamRange;
    private int lastRouteExpansionsForProbe;
    private int lastRouteFrontierForProbe;
+   private int lastRouteCityBlocksForProbe;
+   private int lastRouteWaterBlocksForProbe;
+   private int lastRouteCreekBlocksForProbe;
+   private int lastRouteHighwayParallelBlocksForProbe;
+   private int lastRouteHighwayWidthBlocksForProbe;
+   private int lastRouteHighwayTurnBlocksForProbe;
    private final WaterField water;
    private final HighwayNetwork highways;
    private final CityRingField cities;
@@ -256,7 +262,10 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       int routeZ = (int)Math.round(lake.centerZ / 16.0 + dz / distance * inset);
       List<int[]> path = route(routeX, routeZ, targets);
       return new int[]{raw, targets.size(), path == null ? 0 : path.size(),
-              this.lastRouteExpansionsForProbe, this.lastRouteFrontierForProbe};
+              this.lastRouteExpansionsForProbe, this.lastRouteFrontierForProbe,
+              this.lastRouteCityBlocksForProbe, this.lastRouteWaterBlocksForProbe,
+              this.lastRouteCreekBlocksForProbe, this.lastRouteHighwayParallelBlocksForProbe,
+              this.lastRouteHighwayWidthBlocksForProbe, this.lastRouteHighwayTurnBlocksForProbe};
    }
 
    private int countReceivingRiverChunksForProbe(int startX, int startZ) {
@@ -522,6 +531,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       best.put(startKey, 0);
       long goalKey = Long.MIN_VALUE;
       int expansions = 0;
+      int cityBlocks = 0, waterBlocks = 0, creekBlocks = 0;
+      int highwayParallelBlocks = 0, highwayWidthBlocks = 0, highwayTurnBlocks = 0;
       final int[] dx = {1, -1, 0, 0};
       final int[] dz = {0, 0, 1, -1};
       while (!open.isEmpty() && expansions++ < MAX_ROUTE_EXPANSIONS) {
@@ -535,18 +546,18 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
          for (int direction = 0; direction < 4; direction++) {
             int nx = node.x + dx[direction], nz = node.z + dz[direction];
             if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue;
-            if (this.inOuterCity(nx, nz)) continue;
+            if (this.inOuterCity(nx, nz)) { cityBlocks++; continue; }
             WaterField.Kind base = this.water.baseKindAt(nx, nz);
-            if (base != WaterField.Kind.NONE && !this.water.isReceivingWaterAt(nx, nz)) continue;
-            if (this.water.isCreek(nx, nz)) continue;
+            if (base != WaterField.Kind.NONE && !this.water.isReceivingWaterAt(nx, nz)) { waterBlocks++; continue; }
+            if (this.water.isCreek(nx, nz)) { creekBlocks++; continue; }
 
             byte axes = highwayAxes.getOrDefault(cellKey(nx, nz), (byte)0);
             int moveAxis = dx[direction] != 0 ? 1 : 2;
-            if (axes != 0 && (axes & moveAxis) != 0) continue; // never travel along a highway
+            if (axes != 0 && (axes & moveAxis) != 0) { highwayParallelBlocks++; continue; }
             // Keep the crossing straight until the stream has cleared the highway width.
-            if (node.highwayRun > 0 && direction != node.direction) continue;
+            if (node.highwayRun > 0 && direction != node.direction) { highwayTurnBlocks++; continue; }
             int run = axes == 0 ? 0 : node.highwayRun + 1;
-            if (run > MAX_HIGHWAY_CROSSING_CHUNKS) continue;
+            if (run > MAX_HIGHWAY_CROSSING_CHUNKS) { highwayWidthBlocks++; continue; }
 
             int cost = node.cost + 10 + (axes == 0 ? 0 : 9)
                     + (node.direction != 4 && node.direction != direction ? 2 : 0);
@@ -561,6 +572,12 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       }
       this.lastRouteExpansionsForProbe = expansions;
       this.lastRouteFrontierForProbe = open.size();
+      this.lastRouteCityBlocksForProbe = cityBlocks;
+      this.lastRouteWaterBlocksForProbe = waterBlocks;
+      this.lastRouteCreekBlocksForProbe = creekBlocks;
+      this.lastRouteHighwayParallelBlocksForProbe = highwayParallelBlocks;
+      this.lastRouteHighwayWidthBlocksForProbe = highwayWidthBlocks;
+      this.lastRouteHighwayTurnBlocksForProbe = highwayTurnBlocks;
       if (goalKey == Long.MIN_VALUE) return null;
       List<int[]> reversed = new ArrayList<>();
       long key = goalKey;
