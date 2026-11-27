@@ -464,6 +464,10 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
             LakeSite lake = resolved == null ? null : resolved.lake;
             if (lake == null || lake.stream == null) continue;
             WildernessStreamCourse carrier = lake.stream;
+            // The terminal cell belongs to the ocean/river/creek receiver.
+            // Keeping stream parcel ownership out of that cell prevents the
+            // tributary from repainting the receiving network at the junction.
+            if (carrier.terminatesAt(chunkX,chunkZ)) continue;
             if (!carrier.isRiverOrBank(chunkX, chunkZ)) continue;
             double signed = carrier.distanceFromCenterBlock(chunkX * 16.0 + 8.0, chunkZ * 16.0 + 8.0);
             double distance = Math.max(0.0, Math.abs(signed) - carrier.getHalfWidthBlocks());
