@@ -6,6 +6,7 @@ import ch.k42.metropolis.grid.urbanGrid.enums.ContextType;
 import ch.k42.metropolis.grid.urbanGrid.enums.SchematicType;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildernessFeatures;
+import ch.k42.metropolis.grid.urbanGrid.wild.HydrologySample;
 import ch.k42.metropolis.minions.Cartesian2D;
 import ch.k42.metropolis.minions.GridRandom;
 import org.bukkit.Chunk;
@@ -34,12 +35,17 @@ public final class LakeParcel extends Parcel {
       WildernessFeatures.announceLake(lake,world.getName());
       int baseX=chunkX<<4,baseZ=chunkZ<<4;
       int minY=Math.max(world.getMinHeight()+1,1),maxY=world.getMaxHeight()-1;
-      int waterY=Math.min(maxY-4,Math.max(minY+4,lake.waterY));
       GridRandom rand=grid.getRandom();
-      RiverProvider stream=grid.planWater().streamCarrierAt(chunkX,chunkZ);
+      ch.k42.metropolis.grid.urbanGrid.layout.WaterField hydrology=grid.planWater();
+      RiverProvider stream=hydrology.streamCarrierAt(chunkX,chunkZ);
       for(int lx=0;lx<16;lx++)for(int lz=0;lz<16;lz++){
          int x=baseX+lx,z=baseZ+lz;
-         double distance=lake.distanceInsideShoreBlock(x+0.5,z+0.5);
+         HydrologySample sample=hydrology.hydrologySampleAt(x,z);
+         // Geometry and ownership come from the shared city-aware biome layer,
+         // not from a private LakeSite ellipse re-evaluated by this parcel.
+         if(sample.feature()!=HydrologySample.Feature.LAKE)continue;
+         int waterY=Math.min(maxY-4,Math.max(minY+4,sample.waterY()));
+         double distance=sample.signedDistanceBlocks();
          if(distance<=0.0&&stream!=null){
             double signed=stream.distanceFromCenterBlock(x,z);
             double reach=stream.getHalfWidthBlocks()+stream.getFallbackBankMarginBlocks();
@@ -52,7 +58,7 @@ public final class LakeParcel extends Parcel {
             // A rooted tree column becomes a natural wooded island, not a
             // severed trunk or a canopy suspended over newly carved water.
             if(containsTreeBlock(world,x,z,minY,maxY))continue;
-            paintWaterColumn(world,x,z,minY,maxY,waterY,lake.depthAt(x,z),lake);
+            paintWaterColumn(world,x,z,minY,maxY,waterY,sample.depth(),lake);
             world.setBiome(x,z,Biome.RIVER);
          }else{
             double shoreDistance=-distance;
