@@ -27,11 +27,11 @@ final class FarmMissileSiloGeometry {
     // boundary to modern Paper block states.
     private static final int AIR = 0, STONE = 1, DIRT = 3, COBBLE = 4, PLANKS = 5;
     private static final int WATER = 9, GLASS = 20, BED = 26, COBWEB = 30, WOOL = 35;
-    private static final int IRON_BLOCK = 42, STONE_SLAB = 44, GLOWSTONE = 89;
+    private static final int IRON_BLOCK = 42, STONE_SLAB = 44;
     private static final int IRON_BARS = 101, GLASS_PANE = 102, FENCE_GATE = 107;
     private static final int LADDER = 65, IRON_DOOR = 71, FENCE = 85;
     private static final int TORCH = 50, CHEST = 54, FURNACE = 61, CAULDRON = 118;
-    private static final int STONE_BRICKS = 98, REDSTONE_LAMP = 123, QUARTZ = 155;
+    private static final int STONE_BRICKS = 98, REDSTONE_LAMP = 123, REDSTONE_LAMP_ON = 124, QUARTZ = 155;
     private static final int TERRACOTTA = 159, HAY = 170, REDSTONE_BLOCK = 152;
     private static final int BREWING_STAND = 117, HOPPER = 154, TRIPWIRE_HOOK = 131;
     private static final int COBBLE_STAIRS = 67, STONE_BUTTON = 77;
@@ -135,8 +135,9 @@ final class FarmMissileSiloGeometry {
     }
 
     private void light(int dx, int y, int dz) {
-        put(dx, y, dz, REDSTONE_LAMP, 0);
-        put(dx, y + 1, dz, GLOWSTONE, 0);
+        // One ceiling-mounted, powered industrial lamp. The lit legacy state
+        // is self-illuminating; no glowstone or exposed redstone is needed.
+        put(dx, y + 1, dz, REDSTONE_LAMP_ON, 0);
     }
 
     private void supportColumn(int dx, int dz, int y0, int y1, int id, int data) {
@@ -634,7 +635,7 @@ final class FarmMissileSiloGeometry {
                     for (int dz : new int[]{-9,-3,3,9}) {
                         put(dx, y + 1, dz, DIRT, 0);
                         put(dx, y + 2, dz, WHEAT, 7);
-                        put(dx, y + 4, dz, GLOWSTONE, 0);
+                        put(dx, y + 4, dz, REDSTONE_LAMP_ON, 0);
                     }
                 }
                 for (int dz = -10; dz <= 10; dz += 5) {
@@ -945,7 +946,7 @@ final class FarmMissileSiloGeometry {
                     supportColumn(p[0], p[1], this.h + 1, this.h + 4, STONE_BRICKS, 0);
                 if (Math.abs(p[0]) == 45 && Math.abs(p[1]) == 45) {
                     supportColumn(p[0], p[1], this.h + 5, this.h + 7, IRON_BARS, 0);
-                    put(p[0], this.h + 8, p[1], GLOWSTONE, 0);
+                    put(p[0], this.h + 8, p[1], REDSTONE_LAMP_ON, 0);
                 }
             }
         }
@@ -976,7 +977,7 @@ final class FarmMissileSiloGeometry {
         // Antennas and warning beacons are narrow poles with no platform.
         for (int[] pole : new int[][]{{-31,-28},{-31,28},{29,-31},{29,31}}) {
             supportColumn(pole[0], pole[1], this.h + 1, this.h + 6, IRON_BARS, 0);
-            put(pole[0], this.h + 7, pole[1], GLOWSTONE, 0);
+            put(pole[0], this.h + 7, pole[1], REDSTONE_LAMP_ON, 0);
         }
 
         if (this.variant == Variant.TEST_FACILITY) {
