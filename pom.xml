@@ -6,9 +6,9 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.19-R14.43-Unified-Worldgen-DEV</version>
+    <version>0.1.20-R14.44-Startup-Fix-DEV</version>
     <packaging>jar</packaging>
-    <name>Metropolis for Paper 26.2 (R14.43 Unified Worldgen)</name>
+    <name>Metropolis for Paper 26.2 (R14.44 Startup Fix)</name>
     <description>Consolidates current world-generation corrections, Mother Willow geometry and the missile-silo complex</description>
 
     <properties>
@@ -60,7 +60,7 @@
     </dependencies>
 
     <build>
-        <finalName>Metropolis_R14_43_Unified_Worldgen_DEV</finalName>
+        <finalName>Metropolis_R14_44_Unified_Worldgen_DEV</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

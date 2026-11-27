@@ -1,4 +1,4 @@
-name: R14.43 Unified Worldgen
+name: R14.44 Unified Worldgen
 
 on:
   push:
@@ -107,17 +107,24 @@ jobs:
           grep -F 'Bukkit.getUnsafe().fromLegacy' src/main/java/ch/k42/metropolis/minions/LegacyBlocks.java
           grep -F 'LegacyMapper.getInstance().getBlockFromLegacy' src/main/java/ch/k42/metropolis/minions/LegacyBlocks.java
           grep -F 'result.getMaterial().isAir()' src/main/java/ch/k42/metropolis/minions/LegacyBlocks.java
+      - name: Verify BiomeEcology startup and world-seed coherence
+        run: |
+          mkdir -p qa-out
+          CP="target/classes:$(cat qa-out/classpath)"
+          javac -cp "$CP" -d qa-out QA/R14_44/BiomeEcologySeedProbe.java
+          java -cp "qa-out:$CP" ch.k42.metropolis.grid.urbanGrid.forest.BiomeEcologySeedProbe
+          ! grep -Fq 'getDeclaredField("coneSeed")' src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/BiomeEcology.java
       - name: Verify embedded plugin version
         run: |
-          expected='0.1.19-R14.43-Unified-Worldgen-DEV'
-          actual="$(unzip -p target/Metropolis_R14_43_Unified_Worldgen_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          expected='0.1.20-R14.44-Startup-Fix-DEV'
+          actual="$(unzip -p target/Metropolis_R14_44_Unified_Worldgen_DEV.jar plugin.yml | sed -n 's/^version: //p')"
           test "$actual" = "$expected"
           echo "Embedded plugin version: $actual"
       - name: Assemble test delivery
         run: |
           mkdir -p delivery
-          cp target/Metropolis_R14_43_Unified_Worldgen_DEV.jar delivery/
-          zip -qr delivery/Metropolis_R14_43_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
+          cp target/Metropolis_R14_44_Unified_Worldgen_DEV.jar delivery/
+          zip -qr delivery/Metropolis_R14_44_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
           (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
           ls -lh delivery
       - name: Upload JAR and full source

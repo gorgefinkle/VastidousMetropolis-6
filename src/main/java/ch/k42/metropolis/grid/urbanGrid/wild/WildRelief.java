@@ -5,6 +5,7 @@ package ch.k42.metropolis.grid.urbanGrid.wild;
  * (seed, x, z). The forest keeps its own relief (ForestTerrain); the generator blends all four by the biome weights.
  */
 public final class WildRelief {
+   private final long worldSeed;
    private final Noise2D mountain, mountainBase, dune, swell, mesa, mesaTop;
    // mountain kinds (see MountainKind)
    private final Noise2D kindNoise, rangeCrest, rangeWarpA, rangeWarpB, rangeShoulder, domeNoise, domeBump, plateauNoise, plateauUndulation, plateauGully;
@@ -30,6 +31,7 @@ public final class WildRelief {
 
    /** @param kindShares the share of each MountainKind (percent, in MountainKind order, normalised here); null = the defaults */
    public WildRelief(long worldSeed, double mountainHeight, int mesaStep, int mesaLevels, double duneScale, double[] kindShares) {
+      this.worldSeed = worldSeed;
       long s = worldSeed ^ 0x57494C4452454CL;
       this.kindNoise = new Noise2D(s ^ 0x77L);
       this.rangeCrest = new Noise2D(s ^ 0x78L);
@@ -78,6 +80,11 @@ public final class WildRelief {
       this.mesaStep = Math.max(2, mesaStep);
       this.mesaLevels = Math.max(1, mesaLevels);
       this.duneScale = Math.max(0.1, duneScale);
+   }
+
+   /** Original unsalted world seed used to construct every relief field. */
+   public long getWorldSeed() {
+      return this.worldSeed;
    }
 
    /** Horizontal size of the slow noise that decides which kind of mountain a place is, in blocks. */

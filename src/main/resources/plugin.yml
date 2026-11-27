@@ -1,6 +1,6 @@
 name: Metropolis
 main: ch.k42.metropolis.plugin.MetropolisPlugin
-version: 0.1.19-R14.43-Unified-Worldgen-DEV
+version: 0.1.20-R14.44-Startup-Fix-DEV
 load: startup
 authors: [AthmosPrime, trichner, spaceribs]
 website: k42.ch

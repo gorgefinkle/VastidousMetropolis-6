@@ -3,7 +3,6 @@ package ch.k42.metropolis.grid.urbanGrid.forest;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildBiome;
 import ch.k42.metropolis.grid.urbanGrid.wild.WildRelief;
 import java.lang.reflect.Method;
-import java.lang.reflect.Field;
 import java.util.HashMap;
 import org.bukkit.block.BlockFace;
 import java.util.Map;
@@ -83,16 +82,11 @@ public final class BiomeEcology {
         double k1=unit(hash(seed,a,b+1,salt))*(1-fx)+unit(hash(seed,a+1,b+1,salt))*fx;
         return k0*(1-fz)+k1*fz;
     }
-    // WildRelief derives coneSeed from world seed by two known XOR salts. Read the
-    // per-world value rather than using world-independent fixed fractures.
-    private static final Field WORLD_SEED_FIELD;
-    static {
-        try { WORLD_SEED_FIELD=WildRelief.class.getDeclaredField("coneSeed");WORLD_SEED_FIELD.setAccessible(true); }
-        catch (ReflectiveOperationException e) { throw new ExceptionInInitializerError(e); }
-    }
+    // Use the immutable world seed supplied to WildRelief. Do not infer it
+    // from private implementation fields: the relief noise layout can change
+    // without changing the world-coordinate seed shared by biome painters.
     private static long reliefSeed(WildRelief prior) {
-        try {return WORLD_SEED_FIELD.getLong(prior)^24568914886411596L^1129270853L;}
-        catch (IllegalAccessException e) {throw new IllegalStateException("WildRelief seed inaccessible",e);}
+        return prior.getWorldSeed();
     }
     // ForestTerrain intentionally salts the world seed before exposing getSeed().
     // All KarstLandforms relief, surface habitat, and large groves MUST use the
