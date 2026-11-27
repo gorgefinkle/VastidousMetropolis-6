@@ -40,6 +40,8 @@ public final class MissileSiloGeometryProbe {
     }
     private static int countAtY(Capture c, int y, int id) {
         int n = 0;
+        check(countId(c, 89) == 0, v + ": glowstone is forbidden in and around the silo complex");
+
         for (Map.Entry<String,String> e : c.blocks.entrySet()) {
             String[] p = e.getKey().split(",");
             if (Integer.parseInt(p[1]) == y && e.getValue().startsWith(id + ":")) n++;
