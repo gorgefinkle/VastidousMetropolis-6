@@ -43,10 +43,12 @@ grep -Fq 'if (axes != 0 && (axes & moveAxis) != 0) { highwayParallelBlocks++; co
 grep -Fq 'private static final int MAX_HIGHWAY_CROSSING_CHUNKS = 2' "$FEATURES"
 grep -Fq 'if (run > MAX_HIGHWAY_CROSSING_CHUNKS) { highwayWidthBlocks++; continue; }' "$FEATURES"
 grep -Fq 'if (node.highwayRun > 0 && direction != node.direction) { highwayTurnBlocks++; continue; }' "$FEATURES"
-grep -Fq 'this.water.isReceivingWaterAt(node.x, node.z)' "$FEATURES"
-grep -Fq 'base != WaterField.Kind.RIVER' "$FEATURES"
-grep -Fq 'base != WaterField.Kind.OCEAN' "$FEATURES"
-grep -Fq 'natural river/ocean bank is part of the receiving-water' "$FEATURES"
+grep -Fq 'WaterTarget endpoint=goals.get(cellKey(node.x,node.z))' "$FEATURES"
+grep -Fq 'this.plannedCreekAt(nx,nz)&&!exactCreekGoal' "$FEATURES"
+grep -Fq 'blockX[last]=routed.target.key.blockX()' "$FEATURES"
+grep -Fq 'HydrologyConvergenceKey.Receiver.OCEAN' "$FEATURES"
+grep -Fq 'HydrologyConvergenceKey.Receiver.RIVER' "$FEATURES"
+grep -Fq 'HydrologyConvergenceKey.Receiver.CREEK' "$FEATURES"
 ! grep -Fq 'this.water.kindAt(nx, nz)' "$FEATURES"
 
 # Separate lake and stream owners are installed before the first layout solve.
