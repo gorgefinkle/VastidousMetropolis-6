@@ -56,6 +56,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private final int spacing;
    private final int cellSize;
    private final int streamRange;
+   private int lastRouteExpansionsForProbe;
+   private int lastRouteFrontierForProbe;
    private final WaterField water;
    private final HighwayNetwork highways;
    private final CityRingField cities;
@@ -253,7 +255,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       int routeX = (int)Math.round(lake.centerX / 16.0 + dx / distance * inset);
       int routeZ = (int)Math.round(lake.centerZ / 16.0 + dz / distance * inset);
       List<int[]> path = route(routeX, routeZ, targets);
-      return new int[]{raw, targets.size(), path == null ? 0 : path.size()};
+      return new int[]{raw, targets.size(), path == null ? 0 : path.size(),
+              this.lastRouteExpansionsForProbe, this.lastRouteFrontierForProbe};
    }
 
    private int countReceivingRiverChunksForProbe(int startX, int startZ) {
@@ -556,6 +559,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
             open.add(new RouteNode(nextKey, nx, nz, direction, run, cost, score));
          }
       }
+      this.lastRouteExpansionsForProbe = expansions;
+      this.lastRouteFrontierForProbe = open.size();
       if (goalKey == Long.MIN_VALUE) return null;
       List<int[]> reversed = new ArrayList<>();
       long key = goalKey;

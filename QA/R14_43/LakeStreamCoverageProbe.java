@@ -34,7 +34,8 @@ public final class LakeStreamCoverageProbe {
                         if(!diagnosed) {
                             int[] diag=features.outletDiagnosticsForProbe(lake);
                             System.out.println("OUTLET-DIAG seed="+seed+" cell=("+gx+","+gz+") lakeChunk=("+cx+","+cz
-                                    +") rawReceiving="+diag[0]+" safeTargets="+diag[1]+" routePoints="+diag[2]);
+                                    +") rawReceiving="+diag[0]+" safeTargets="+diag[1]+" routePoints="+diag[2]
+                                    +" routeExpansions="+diag[3]+" frontier="+diag[4]);
                             diagnosed=true;
                         }
                         continue;
