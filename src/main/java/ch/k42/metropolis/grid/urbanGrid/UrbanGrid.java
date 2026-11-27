@@ -3814,6 +3814,13 @@ public class UrbanGrid extends Grid implements DistrictHost {
             @Override public double nearestBankDistanceBlocks(double x,double z,double maxDistance) {
                return sites.nearestBankDistanceBlocks(x,z,maxDistance);
             }
+            @Override public void prepareForConvergenceArea(int minX,int minZ,int maxX,int maxZ) {
+               sites.prepareForChunkArea(minX,minZ,maxX,maxZ);
+            }
+            @Override public java.util.List<ch.k42.metropolis.grid.urbanGrid.wild.HydrologyConvergenceKey>
+                    convergenceEndpoints(int minX,int minZ,int maxX,int maxZ) {
+               return sites.convergenceEndpointsIn(minX,minZ,maxX,maxZ);
+            }
          });
       }
    }
