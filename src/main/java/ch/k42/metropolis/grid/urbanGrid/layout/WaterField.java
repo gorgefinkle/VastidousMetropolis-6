@@ -119,6 +119,13 @@ public final class WaterField implements WorldLayout.Mask {
       this.creekLatticeCache.clear();
    }
 
+   /** The base creek reservation provider, captured by later hydrology phases.
+    * Planners must query this source directly; they must not call kindAt()/isCreek()
+    * while WaterField is composing the final creek/lake/stream result. */
+   public synchronized CreekSource creekSource() {
+      return this.creeks;
+   }
+
    /** True only for a dry chunk temporarily held for river-style creek layout. */
    public boolean isCreekPlanningOnlyDryAt(int x, int z) {
       CreekSource src = creeks;

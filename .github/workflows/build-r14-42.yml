@@ -1,4 +1,4 @@
-name: R14.45 Unified Worldgen
+name: R14.46 Hydrology Planning Phase
 
 on:
   push:
@@ -145,21 +145,21 @@ jobs:
           ! grep -Fq 'getDeclaredField("coneSeed")' src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/BiomeEcology.java
       - name: Verify embedded plugin version
         run: |
-          expected='0.1.21-R14.45-Startup-Landmark-Bounds-DEV'
-          actual="$(unzip -p target/Metropolis_R14_45_Unified_Worldgen_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          expected='0.1.22-R14.46-Hydrology-Planning-Phase-DEV'
+          actual="$(unzip -p target/Metropolis_R14_46_Hydrology_Planning_Phase_DEV.jar plugin.yml | sed -n 's/^version: //p')"
           test "$actual" = "$expected"
           echo "Embedded plugin version: $actual"
       - name: Assemble test delivery
         run: |
           mkdir -p delivery
-          cp target/Metropolis_R14_45_Unified_Worldgen_DEV.jar delivery/
+          cp target/Metropolis_R14_46_Hydrology_Planning_Phase_DEV.jar delivery/
           zip -qr delivery/Metropolis_R14_45_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
           (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
           ls -lh delivery
       - name: Upload JAR and full source
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_45_Unified_Worldgen
+          name: Metropolis_R14_46_Hydrology_Planning_Phase
           path: delivery/*
           if-no-files-found: error
           retention-days: 14

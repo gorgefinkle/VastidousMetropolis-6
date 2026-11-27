@@ -932,6 +932,10 @@ public class UrbanGrid extends Grid implements DistrictHost {
       // Registration was moved to prepareWorldPlan(), before any domain lookup.
       prepareWorldPlan(this.generator);
       this.registerCreeks();
+      // Resolve bounded creeks, lakes and their outlet streams as a complete
+      // tile planning phase. WorldLayout/WaterField lookups below are read-only;
+      // they cannot create new hydrology routes while the domain is being solved.
+      WildernessFeatures.prepareForTile(seed, this.root.X, this.root.Y);
 
       this.placeNetworkHighways();   // the lanes
       // Bounded creek shore shoulders must resolve against the same

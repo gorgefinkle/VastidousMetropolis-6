@@ -6,7 +6,7 @@
 
     <groupId>ch.k42</groupId>
     <artifactId>metropolis</artifactId>
-    <version>0.1.21-R14.45-Startup-Landmark-Bounds-DEV</version>
+    <version>0.1.22-R14.46-Hydrology-Planning-Phase-DEV</version>
     <packaging>jar</packaging>
     <name>Metropolis for Paper 26.2 (R14.45 Startup Landmark Bounds)</name>
     <description>Consolidates current world-generation corrections, Mother Willow geometry and the missile-silo complex</description>

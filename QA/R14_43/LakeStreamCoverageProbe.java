@@ -16,6 +16,7 @@ public final class LakeStreamCoverageProbe {
         for(long seed:seeds) {
             WildernessFeatures features=WildernessFeatures.forSeed(seed);
             WaterField water=WaterFields.forSeed(seed,PluginConfig.getBlockSizeMin()+2);
+            WildernessFeatures.install(seed);
             int lakeCount=0,streamCount=0;
             double nearestLakeBlocks=Double.POSITIVE_INFINITY;
             boolean diagnosed=false;
@@ -48,7 +49,11 @@ public final class LakeStreamCoverageProbe {
                     int sz=(int)Math.floor(lake.stream.pointZBlock(point)/16.0);
                     if(!lake.stream.isRiverOrBank(sx,sz))
                         throw new AssertionError("Outlet polyline fails to own its own route chunk");
+                    int resolvedBeforeLookup=features.resolvedFeatureCellCountForProbe();
                     RiverProvider carrier=features.streamCarrierAt(sx,sz);
+                    int resolvedAfterLookup=features.resolvedFeatureCellCountForProbe();
+                    if(resolvedAfterLookup!=resolvedBeforeLookup)
+                        throw new AssertionError("WaterField stream lookup lazily resolved more feature cells");
                     if(!(carrier instanceof WildernessStreamCourse))
                         throw new AssertionError("Shared feature plan lost its continuous stream carrier");
                     if(!water.isStream(sx,sz) || water.streamCarrierAt(sx,sz)==null)

@@ -67,6 +67,10 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    private int lastRouteHighwayTurnBlocksForProbe;
    private final WaterField water;
    private final HighwayNetwork highways;
+   /** Installed once, after bounded creek reservations and before layout solving.
+    * This direct source avoids the recursive composed WaterField -> stream planner
+    * -> WaterField creek lookup edge. */
+   private volatile WaterField.CreekSource routeCreeks;
    private final CityRingField cities;
    private final Map<Long, FeatureCell> featureCells =
            new LinkedHashMap<Long, FeatureCell>(96, 0.75f, true) {
@@ -97,10 +101,6 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       HighwayNetwork highways = HighwayNetworks.forSeed(seed);
       found = new WildernessFeatures(seed, spacing, water, highways);
       CACHE.put(key, found);
-      if (PluginConfig.isCityRingsEnabled() && PluginConfig.isForestGenerationEnabled()) {
-         water.setLakes(found);
-         water.setStreams(found);
-      }
       return found;
    }
 
@@ -108,8 +108,39 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    public static void install(long seed) {
       if (!PluginConfig.isCityRingsEnabled() || !PluginConfig.isForestGenerationEnabled()) return;
       WildernessFeatures features = forSeed(seed);
+      // Capture the already-installed bounded creek source exactly once.
+      // Outlet routing is allowed to consult this base reservation directly,
+      // but never to call back through WaterField.isCreek()/kindAt().
+      features.routeCreeks = features.water.creekSource();
       features.water.setLakes(features);
       features.water.setStreams(features);
+   }
+
+   /** Resolve the hydrology cells relevant to a 64x64-chunk tile, plus a
+    * one-tile layout halo, as a single planning phase before WorldLayout asks
+    * WaterField any zoning questions. Later WaterField lookups are read-only. */
+   public static void prepareForTile(long seed, int tileMinChunkX, int tileMinChunkZ) {
+      if (!PluginConfig.isCityRingsEnabled() || !PluginConfig.isForestGenerationEnabled()) return;
+      forSeed(seed).prepareForTile(tileMinChunkX, tileMinChunkZ);
+   }
+
+   private synchronized void prepareForTile(int tileMinChunkX, int tileMinChunkZ) {
+      int reach = Math.max(1, (int)Math.ceil((this.streamRange + this.cellSize / 2.0) / this.cellSize));
+      int minGX = Math.floorDiv(tileMinChunkX - 64, this.cellSize) - reach;
+      int maxGX = Math.floorDiv(tileMinChunkX + 63 + 64, this.cellSize) + reach;
+      int minGZ = Math.floorDiv(tileMinChunkZ - 64, this.cellSize) - reach;
+      int maxGZ = Math.floorDiv(tileMinChunkZ + 63 + 64, this.cellSize) + reach;
+      // FeatureCell construction may route an outlet, but all its inputs are
+      // now base water, highways, city rings and the captured creek source.
+      // It cannot invoke the composed WaterField or start another plan phase.
+      for (int gx = minGX; gx <= maxGX; gx++) {
+         for (int gz = minGZ; gz <= maxGZ; gz++) {
+            this.cell(gx, gz);
+         }
+      }
+      // A prior tile may have cached a negative lookup before these cells
+      // became part of the resolved window. Re-read against the new snapshot.
+      this.streamChunkCache.clear();
    }
 
    private WildernessFeatures(long seed, int spacing, WaterField water, HighwayNetwork highways) {
@@ -157,6 +188,16 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       FeatureCell made = this.buildCell(gx, gz);
       this.featureCells.put(key, made);
       return made;
+   }
+
+   /** Read only a feature cell already resolved by prepareForTile() or by an
+    * explicit nearest-landmark/QA request. WaterField callbacks must not build it. */
+   private synchronized FeatureCell resolvedCell(int gx, int gz) {
+      return this.featureCells.get(cellKey(gx, gz));
+   }
+
+   int resolvedFeatureCellCountForProbe() {
+      synchronized (this) { return this.featureCells.size(); }
    }
 
    private FeatureCell buildCell(int gx, int gz) {
@@ -232,7 +273,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
             if (r > 1.0) continue;
             int x = centerX + dx, z = centerZ + dz;
             if (this.inOuterCity(x, z) || this.water.baseKindAt(x, z) != WaterField.Kind.NONE
-                    || this.water.isCreek(x, z) || highwayMask.at(x, z)) return false;
+                    || this.plannedCreekAt(x, z) || highwayMask.at(x, z)) return false;
          }
       }
       return true;
@@ -375,14 +416,16 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
    public MountainSite mountainAt(int blockX, int blockZ) {
       int gx = Math.floorDiv(Math.floorDiv(blockX, 16), this.cellSize);
       int gz = Math.floorDiv(Math.floorDiv(blockZ, 16), this.cellSize);
-      MountainSite site = cell(gx, gz).mountain;
+      FeatureCell resolved = resolvedCell(gx, gz);
+      MountainSite site = resolved == null ? null : resolved.mountain;
       return site != null && site.contains(blockX, blockZ) ? site : null;
    }
 
    public LakeSite lakeAt(int chunkX, int chunkZ) {
       int gx = Math.floorDiv(chunkX, this.cellSize);
       int gz = Math.floorDiv(chunkZ, this.cellSize);
-      LakeSite lake = cell(gx, gz).lake;
+      FeatureCell resolved = resolvedCell(gx, gz);
+      LakeSite lake = resolved == null ? null : resolved.lake;
       return lake != null && lake.intersectsChunk(chunkX, chunkZ) ? lake : null;
    }
 
@@ -412,7 +455,8 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       int cellReach = Math.max(1, (int)Math.ceil((this.streamRange + this.cellSize / 2.0) / this.cellSize));
       for (int dx = -cellReach; dx <= cellReach; dx++) {
          for (int dz = -cellReach; dz <= cellReach; dz++) {
-            LakeSite lake = cell(gx + dx, gz + dz).lake;
+            FeatureCell resolved = this.featureCells.get(cellKey(gx + dx, gz + dz));
+            LakeSite lake = resolved == null ? null : resolved.lake;
             if (lake == null || lake.stream == null) continue;
             WildernessStreamCourse carrier = lake.stream;
             if (!carrier.isRiverOrBank(chunkX, chunkZ)) continue;
@@ -516,6 +560,11 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
       }
    }
 
+   private boolean plannedCreekAt(int chunkX, int chunkZ) {
+      WaterField.CreekSource source = this.routeCreeks;
+      return source != null && source.waterOrBank(chunkX, chunkZ);
+   }
+
    private List<int[]> route(int startX, int startZ, List<WaterTarget> targets) {
       int radius = this.streamRange;
       int minX = startX - radius, maxX = startX + radius;
@@ -557,7 +606,7 @@ public final class WildernessFeatures implements WaterField.LakeSource, WaterFie
                     && base != WaterField.Kind.RIVER
                     && base != WaterField.Kind.OCEAN
                     && !this.water.isReceivingWaterAt(nx, nz)) { waterBlocks++; continue; }
-            if (this.water.isCreek(nx, nz)) { creekBlocks++; continue; }
+            if (this.plannedCreekAt(nx, nz)) { creekBlocks++; continue; }
 
             byte axes = highwayAxes.getOrDefault(cellKey(nx, nz), (byte)0);
             int moveAxis = dx[direction] != 0 ? 1 : 2;
