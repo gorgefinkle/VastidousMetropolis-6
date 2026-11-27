@@ -23,16 +23,17 @@ public final class WildernessStreamCourse extends RiverProvider {
    private final double minX, maxX, minZ, maxZ;
    private final boolean localAxisZ;
    private final boolean axisPinned;
+   private final HydrologyConvergenceKey convergenceKey;
 
-   public WildernessStreamCourse(long seed, double[] xs, double[] zs,
-                                 double widthBlocks, double bankMarginBlocks) {
-      this(seed, xs.clone(), zs.clone(), widthBlocks, bankMarginBlocks,
-              dominantAxis(xs, zs), false);
+   public WildernessStreamCourse(long seed,double[] xs,double[] zs,double widthBlocks,double bankMarginBlocks) {
+      this(seed,xs,zs,widthBlocks,bankMarginBlocks,null);
    }
-
-   private WildernessStreamCourse(long seed, double[] xs, double[] zs,
-                                  double widthBlocks, double bankMarginBlocks,
-                                  boolean localAxisZ, boolean axisPinned) {
+   public WildernessStreamCourse(long seed,double[] xs,double[] zs,double widthBlocks,double bankMarginBlocks,
+                                 HydrologyConvergenceKey convergenceKey) {
+      this(seed,xs.clone(),zs.clone(),widthBlocks,bankMarginBlocks,dominantAxis(xs,zs),false,convergenceKey);
+   }
+   private WildernessStreamCourse(long seed,double[] xs,double[] zs,double widthBlocks,double bankMarginBlocks,
+                                  boolean localAxisZ,boolean axisPinned,HydrologyConvergenceKey convergenceKey) {
       super(seed, false, Double.NaN, Double.NaN);
       if (xs == null || zs == null || xs.length != zs.length || xs.length < 2)
          throw new IllegalArgumentException("A wilderness stream needs at least two matched path points");
@@ -47,6 +48,7 @@ public final class WildernessStreamCourse extends RiverProvider {
       this.bankMarginBlocks = bankMarginBlocks;
       this.localAxisZ = localAxisZ;
       this.axisPinned = axisPinned;
+      this.convergenceKey=convergenceKey;
       double loX = Double.POSITIVE_INFINITY, hiX = Double.NEGATIVE_INFINITY;
       double loZ = Double.POSITIVE_INFINITY, hiZ = Double.NEGATIVE_INFINITY;
       for (int i = 0; i < xs.length; i++) {
@@ -71,6 +73,8 @@ public final class WildernessStreamCourse extends RiverProvider {
    public long courseSeed() {
       return this.courseSeed;
    }
+   /** Exact receiving-network junction shared with the receiver plan. */
+   public HydrologyConvergenceKey convergenceKey(){return this.convergenceKey;}
 
    public int pointCount() {
       return this.xs.length;
@@ -84,8 +88,8 @@ public final class WildernessStreamCourse extends RiverProvider {
 
    public WildernessStreamCourse forChunk(int chunkX, int chunkZ) {
       boolean zAxis = isZBoundAt(chunkX * 16.0 + 8.0, chunkZ * 16.0 + 8.0);
-      return new WildernessStreamCourse(this.courseSeed, this.xs, this.zs,
-              this.widthBlocks, this.bankMarginBlocks, zAxis, true);
+      return new WildernessStreamCourse(this.courseSeed,this.xs,this.zs,
+              this.widthBlocks,this.bankMarginBlocks,zAxis,true,this.convergenceKey);
    }
 
    public boolean isZBoundAt(int chunkX, int chunkZ) {
