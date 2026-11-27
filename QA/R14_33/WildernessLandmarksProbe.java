@@ -104,11 +104,16 @@ public final class WildernessLandmarksProbe {
             int z=(int)Math.round(2400.0-uz*lakeA.radiusX*fraction);
             depths[i]=lakeA.depthAt(x,z);
         }
+        int risingSteps=0;
         for(int i=1;i<depths.length;i++){
-            if(depths[i]<=depths[i-1])
-                throw new AssertionError("lake floor contains a shelf/plateau or fails to deepen inward: "
+            if(depths[i]<depths[i-1])
+                throw new AssertionError("lake floor gets shallower toward its centre: "
                         +java.util.Arrays.toString(depths));
+            if(depths[i]>depths[i-1])risingSteps++;
         }
+        if(risingSteps<4 || depths[depths.length-1]-depths[0]<10.0)
+            throw new AssertionError("lake floor has an extended depth plateau instead of a continuous basin: "
+                    +java.util.Arrays.toString(depths));
 
         // The irregular field should create broad bays/headlands, not a small
         // circular/radial stamp.
