@@ -89,7 +89,7 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress clean package
       - name: Verify named massif, lake and continuous stream plan/ownership
         run: |
-          QA/R14_33/run_wilderness_landmarks_probe.sh
+          sh QA/R14_33/run_wilderness_landmarks_probe.sh
           mkdir -p qa-out
           mvn -B -ntp -q dependency:build-classpath -DincludeScope=compile -Dmdep.outputFile=qa-out/classpath
           CP="target/classes:$(cat qa-out/classpath)"
