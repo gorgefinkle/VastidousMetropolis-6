@@ -20,7 +20,8 @@ FOREST="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/ForestGenera
 # Placement is deterministic and accepts only the feature's actual footprint.
 grep -Fq 'private static final int MOUNTAIN_CLEARANCE = 18' "$FEATURES"
 grep -Fq 'private static final int MOUNTAIN_THRESHOLD = 2' "$FEATURES"
-grep -Fq 'private static final int LAKE_THRESHOLD = 38' "$FEATURES"
+grep -Fq 'private static final int LAKE_THRESHOLD = 60' "$FEATURES"
+grep -Fq 'this.cellSize = 192' "$FEATURES"
 grep -Fq 'this.inOuterCity(x, z)' "$FEATURES"
 grep -Fq 'CityRingField.withinOuterCity' "$FEATURES" || grep -Fq 'this.cities.withinOuterCity' "$FEATURES"
 grep -Fq 'r > 1.0' "$FEATURES"
