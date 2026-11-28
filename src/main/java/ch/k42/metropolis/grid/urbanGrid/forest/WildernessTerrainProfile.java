@@ -63,7 +63,7 @@ public final class WildernessTerrainProfile {
       int[] core={surfaceHeight((int)Math.round(centerX),(int)Math.round(centerZ))};
       double coreSum=core[0],coreMin=core[0],coreMax=core[0];
       int coreCount=1;
-      for(double radius:new double[]{0.22,0.42,0.58}) {
+      for(double radius:new double[]{0.22,0.42}) {
          int points=radius<0.3?12:16;
          for(int i=0;i<points;i++) {
             double a=(Math.PI*2.0*i)/points;
