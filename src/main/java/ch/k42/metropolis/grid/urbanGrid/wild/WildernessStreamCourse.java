@@ -18,6 +18,8 @@ public final class WildernessStreamCourse extends RiverProvider {
    private final long courseSeed;
    private final double[] xs;
    private final double[] zs;
+   /** Downstream water surface at each centreline point; null only for legacy test courses. */
+   private final double[] waterYs;
    private final double widthBlocks;
    private final double bankMarginBlocks;
    private final double minX, maxX, minZ, maxZ;
@@ -30,9 +32,16 @@ public final class WildernessStreamCourse extends RiverProvider {
    }
    public WildernessStreamCourse(long seed,double[] xs,double[] zs,double widthBlocks,double bankMarginBlocks,
                                  HydrologyConvergenceKey convergenceKey) {
-      this(seed,xs.clone(),zs.clone(),widthBlocks,bankMarginBlocks,dominantAxis(xs,zs),false,convergenceKey);
+      this(seed,xs.clone(),zs.clone(),null,widthBlocks,bankMarginBlocks,dominantAxis(xs,zs),false,convergenceKey);
    }
-   private WildernessStreamCourse(long seed,double[] xs,double[] zs,double widthBlocks,double bankMarginBlocks,
+   public WildernessStreamCourse(long seed,double[] xs,double[] zs,double[] waterYs,
+                                 double widthBlocks,double bankMarginBlocks,
+                                 HydrologyConvergenceKey convergenceKey) {
+      this(seed,xs.clone(),zs.clone(),waterYs==null?null:waterYs.clone(),
+              widthBlocks,bankMarginBlocks,dominantAxis(xs,zs),false,convergenceKey);
+   }
+   private WildernessStreamCourse(long seed,double[] xs,double[] zs,double[] waterYs,
+                                  double widthBlocks,double bankMarginBlocks,
                                   boolean localAxisZ,boolean axisPinned,HydrologyConvergenceKey convergenceKey) {
       super(seed, false, Double.NaN, Double.NaN);
       if (xs == null || zs == null || xs.length != zs.length || xs.length < 2)
@@ -44,6 +53,11 @@ public final class WildernessStreamCourse extends RiverProvider {
       this.courseSeed = seed;
       this.xs = xs;
       this.zs = zs;
+      if(waterYs!=null&&waterYs.length!=xs.length)
+         throw new IllegalArgumentException("A stream water profile needs one level per path point");
+      if(waterYs!=null)for(double y:waterYs)if(!Double.isFinite(y))
+         throw new IllegalArgumentException("Stream water levels must be finite");
+      this.waterYs=waterYs;
       this.widthBlocks = widthBlocks;
       this.bankMarginBlocks = bankMarginBlocks;
       this.localAxisZ = localAxisZ;
@@ -91,9 +105,36 @@ public final class WildernessStreamCourse extends RiverProvider {
    /** World-block centreline point, exposed read-only for deterministic ownership audits. */
    public double pointZBlock(int point) { return this.zs[point]; }
 
+   /** Total centreline length, useful for sinuosity and route-quality QA. */
+   public double lengthBlocks() {
+      double length=0.0;
+      for(int i=1;i<this.xs.length;i++)length+=Math.hypot(this.xs[i]-this.xs[i-1],this.zs[i]-this.zs[i-1]);
+      return length;
+   }
+
+   /** Direct distance between the source lake and receiving network. */
+   public double directLengthBlocks() {
+      return Math.hypot(this.xs[this.xs.length-1]-this.xs[0],this.zs[this.zs.length-1]-this.zs[0]);
+   }
+
+   /** Interpolated longitudinal water surface, or fallback for a legacy course without levels. */
+   public int waterYAt(double worldBlockX,double worldBlockZ) {
+      if(this.waterYs==null)return ch.k42.metropolis.grid.urbanGrid.river.RiverConfig.getRiverBuildHeight()
+              -ch.k42.metropolis.grid.urbanGrid.river.RiverConfig.getRiverDepth();
+      Nearest nearest=nearest(worldBlockX,worldBlockZ);
+      if(nearest==null||nearest.segmentIndex<0)return (int)Math.round(this.waterYs[0]);
+      double a=this.waterYs[nearest.segmentIndex],b=this.waterYs[nearest.segmentIndex+1];
+      return (int)Math.round(a+(b-a)*nearest.segmentT);
+   }
+
+   /** Endpoint values used to verify that an outlet descends into its receiver. */
+   public int sourceWaterY(){return this.waterYs==null?waterYAt(this.xs[0],this.zs[0]):(int)Math.round(this.waterYs[0]);}
+   public int receiverWaterY(){return this.waterYs==null?waterYAt(this.xs[this.xs.length-1],this.zs[this.zs.length-1])
+           :(int)Math.round(this.waterYs[this.waterYs.length-1]);}
+
    public WildernessStreamCourse forChunk(int chunkX, int chunkZ) {
       boolean zAxis = isZBoundAt(chunkX * 16.0 + 8.0, chunkZ * 16.0 + 8.0);
-      return new WildernessStreamCourse(this.courseSeed,this.xs,this.zs,
+      return new WildernessStreamCourse(this.courseSeed,this.xs,this.zs,this.waterYs,
               this.widthBlocks,this.bankMarginBlocks,zAxis,true,this.convergenceKey);
    }
 
@@ -354,17 +395,23 @@ public final class WildernessStreamCourse extends RiverProvider {
             bestDistanceSq = distanceSq;
             double length = Math.sqrt(lengthSq);
             double signed = (dx * oz - dz * ox) / length;
-            best = new Nearest(px, pz, dx, dz, Math.sqrt(distanceSq), signed);
+            best = new Nearest(px, pz, dx, dz, Math.sqrt(distanceSq), signed,i,t);
          }
       }
       return best;
    }
 
    private static final class Nearest {
-      final double x, z, dx, dz, distance, signedDistance;
+      final double x, z, dx, dz, distance, signedDistance,segmentT;
+      final int segmentIndex;
       Nearest(double x, double z, double dx, double dz, double distance, double signedDistance) {
-         this.x=x; this.z=z; this.dx=dx; this.dz=dz;
-         this.distance=distance; this.signedDistance=signedDistance;
+         this(x,z,dx,dz,distance,signedDistance,-1,0.0);
+      }
+      Nearest(double x,double z,double dx,double dz,double distance,double signedDistance,
+              int segmentIndex,double segmentT) {
+         this.x=x;this.z=z;this.dx=dx;this.dz=dz;
+         this.distance=distance;this.signedDistance=signedDistance;
+         this.segmentIndex=segmentIndex;this.segmentT=segmentT;
       }
    }
 }
