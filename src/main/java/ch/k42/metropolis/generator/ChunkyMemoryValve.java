@@ -49,6 +49,9 @@ public final class ChunkyMemoryValve {
     private static final Map<String, Integer> GROWTH = new ConcurrentHashMap<>();
     /** Branch builds ready to flush now (not waiting for parcels or unloaded support chunks). */
     private static final Map<String, Integer> GROWTH_RUNNABLE = new ConcurrentHashMap<>();
+    /** Exact compact candidate count and backing-array bytes retained by pending branch builds. */
+    private static final Map<String, Long> GROWTH_SUPPORT_HITS = new ConcurrentHashMap<>();
+    private static final Map<String, Long> GROWTH_SUPPORT_BYTES = new ConcurrentHashMap<>();
     private static final Map<String, State> STATES = new HashMap<>(); // main thread only
     private static final AtomicBoolean STARTED = new AtomicBoolean();
     private static volatile boolean missingServiceWarned;
@@ -90,6 +93,14 @@ public final class ChunkyMemoryValve {
     /** Updates the subset of branch-growth builds that can flush with loaded support chunks. */
     public static void growthRunnablePending(World world, int count) {
         updateQueue(world, GROWTH_RUNNABLE, count);
+    }
+
+    /** Updates exact retained primitive candidate count and backing-array size. */
+    public static void growthStorage(World world, long candidateCount, long backingBytes) {
+        if (world == null) return;
+        String name = world.getName();
+        GROWTH_SUPPORT_HITS.put(name, Math.max(0L, candidateCount));
+        GROWTH_SUPPORT_BYTES.put(name, Math.max(0L, backingBytes));
     }
 
     private static void updateQueue(World world, Map<String, Integer> source, int count) {
@@ -160,6 +171,8 @@ public final class ChunkyMemoryValve {
                         + "%), free=" + mib(remaining) + " MiB, deferred=" + deferredTotal
                         + ", branchGrowth=" + growthTotal + ", branchGrowthReady=" + growthRunnableTotal
                         + ", branchGrowthWaiting=" + Math.max(0L, growthTotal - growthRunnableTotal)
+                        + ", branchSupportHits=" + sumLong(GROWTH_SUPPORT_HITS)
+                        + ", branchSupportBuffer=" + mib(sumLong(GROWTH_SUPPORT_BYTES)) + " MiB"
                         + ", populationQueue=" + sum(PENDING)
                         + ", postGcRetained=" + pct(retainedUsage) + "% (diagnostic only), "
                         + gcStats() + ", " + retentionStats());
@@ -315,6 +328,12 @@ public final class ChunkyMemoryValve {
     private static long sum(Map<String, Integer> values) {
         long total = 0L;
         for (int count : values.values()) total += Math.max(0, count);
+        return total;
+    }
+
+    private static long sumLong(Map<String, Long> values) {
+        long total = 0L;
+        for (long value : values.values()) total += Math.max(0L, value);
         return total;
     }
 

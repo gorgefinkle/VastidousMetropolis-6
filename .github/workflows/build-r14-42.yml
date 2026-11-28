@@ -1,4 +1,4 @@
-name: R14.51 Independent Branch Queue and Chunky Hysteresis
+name: R14.6 Compact Branch Growth
 
 on:
   push:
@@ -209,23 +209,60 @@ jobs:
           javac -cp "$CP" -d qa-out QA/R14_44/BiomeEcologySeedProbe.java
           java -cp "qa-out:$CP" ch.k42.metropolis.grid.urbanGrid.forest.BiomeEcologySeedProbe
           ! grep -Fq 'getDeclaredField("coneSeed")' src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/BiomeEcology.java
+      - name: Verify compact branch growth storage and exact readiness indexing
+        run: |
+          set -euo pipefail
+          mkdir -p qa-out
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/provider/BranchSupportBuffer.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/provider/BranchGrowthWaitIndex.java \
+            QA/R14_6/BranchSupportBufferProbe.java \
+            QA/R14_6/BranchGrowthWaitIndexProbe.java
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.provider.BranchSupportBufferProbe
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.provider.BranchGrowthWaitIndexProbe
+          python3 - <<'PY'
+          from pathlib import Path
+          normal = Path("src/main/java/ch/k42/metropolis/grid/urbanGrid/provider/DecayProviderNormal.java").read_text()
+          branch = Path("src/main/java/ch/k42/metropolis/grid/urbanGrid/provider/DecayProviderBranch.java").read_text()
+          drain = Path("src/main/java/ch/k42/metropolis/grid/urbanGrid/provider/BranchGrowthDrain.java").read_text()
+          valve = Path("src/main/java/ch/k42/metropolis/generator/ChunkyMemoryValve.java").read_text()
+          checks = {
+              "packed candidate buffer": "BranchSupportBuffer supportHits" in normal,
+              "no retained SupportHit objects": "class SupportHit" not in normal and "SupportHit" not in branch,
+              "O(1) runnable count": "return Math.max(0, this.readyGrowthBuilds)" in normal,
+              "one shared timeout queue": "PriorityQueue<GrowthTimeout>" in normal,
+              "no per-build Bukkit timer": "timeoutTask" not in normal,
+              "coordinate-indexed parcel waits": "growthWaitIndex.waitingForCell" in normal,
+              "no pending-build placement sweep": "new ArrayList<>(this.pendingBuilds.keySet())" not in normal,
+              "flush aliases packed buffer": "ctx.supportHits = pending.supportHits" in normal,
+              "candidate bytes reported": "growthStorage(" in normal and "branchSupportBuffer=" in valve,
+              "branch candidates rehydrated only at flush": "world.getBlockAt(" in branch and "ctx.supportHits.x(i)" in branch,
+              "async completion wakes drain": "completedLoadSignals.add(job)" in drain and "wakeCompletedLoads();" in drain,
+              "drain retry delay enforced": "if (tick < job.retryAt)" in drain,
+              "staging expiry does not retain completed jobs": "WeakReference<Job>" in drain,
+          }
+          for name, ok in checks.items():
+              print(("PASS" if ok else "FAIL") + ": " + name)
+          if not all(checks.values()):
+              raise SystemExit(1)
+          PY
       - name: Verify embedded plugin version
         run: |
-          expected='0.1.27-R14.51-Independent-Branch-Queue-DEV'
-          actual="$(unzip -p target/Metropolis_R14_51_Independent_Branch_Queue_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          expected='0.1.28-R14.6-Compact-Branch-Growth-DEV'
+          actual="$(unzip -p target/Metropolis_R14_6_Compact_Branch_Growth_DEV.jar plugin.yml | sed -n 's/^version: //p')"
           test "$actual" = "$expected"
           echo "Embedded plugin version: $actual"
       - name: Assemble test delivery
         run: |
           mkdir -p delivery
-          cp target/Metropolis_R14_51_Independent_Branch_Queue_DEV.jar delivery/
-          zip -qr delivery/Metropolis_R14_51_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
+          cp target/Metropolis_R14_6_Compact_Branch_Growth_DEV.jar delivery/
+          zip -qr delivery/Metropolis_R14_6_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
           (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
           ls -lh delivery
       - name: Upload JAR and full source
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_51_Independent_Branch_Queue
+          name: Metropolis_R14_6_Compact_Branch_Growth
           path: delivery/*
           if-no-files-found: error
           retention-days: 14

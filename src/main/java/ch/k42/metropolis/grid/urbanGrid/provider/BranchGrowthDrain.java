@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -49,6 +50,8 @@ public final class BranchGrowthDrain implements Runnable {
     private final PriorityQueue<Expiry> stagingExpiries =
             new PriorityQueue<>(Comparator.comparingLong(Expiry::due));
     private final AtomicInteger pendingLoadsInFlight = new AtomicInteger();
+    /** Async callbacks publish only job signals; all job/Bukkit state changes happen in run(). */
+    private final ConcurrentLinkedQueue<Job> completedLoadSignals = new ConcurrentLinkedQueue<>();
     private int pendingJobs;
     private int retainedChunkTickets;
     // Bukkit chunk tickets are plugin-scoped, not job-scoped. Reference-count
@@ -143,6 +146,12 @@ public final class BranchGrowthDrain implements Runnable {
             job.parked = false;
             return;
         }
+        if (job.parked) {
+            // Invalidate the old parked lease immediately. If this job parks
+            // again before the stale expiry is drained, it gets a fresh TTL.
+            job.stagingSince = 0L;
+            job.stagingExpiryTick = 0L;
+        }
         job.parked = false;
         job.queued = true;
         if (front) rotation.addFirst(job);
@@ -162,7 +171,7 @@ public final class BranchGrowthDrain implements Runnable {
         if (job.stagingSince != 0L) return;
         job.stagingSince = tick;
         job.stagingExpiryTick = tick + STAGING_TICKET_TTL_TICKS;
-        stagingExpiries.add(new Expiry(job, job.stagingExpiryTick));
+        stagingExpiries.add(new Expiry(new java.lang.ref.WeakReference<>(job), job.stagingExpiryTick));
     }
 
     private boolean allWaitingChunksRetained(Job job, World world, Set<Long> waiting) {
@@ -178,8 +187,8 @@ public final class BranchGrowthDrain implements Runnable {
         while (processed < 32 && !stagingExpiries.isEmpty()
                 && stagingExpiries.peek().due() <= tick) {
             Expiry expiry = stagingExpiries.poll();
-            Job job = expiry.job();
-            if (job.stagingExpiryTick != expiry.due()) continue;
+            Job job = expiry.job().get();
+            if (job == null || job.stagingExpiryTick != expiry.due()) continue;
             if (!job.parked) {
                 // The dependency event woke this job before its old lease
                 // expired. Clear the stale lease; a later re-park will get a
@@ -340,9 +349,13 @@ public final class BranchGrowthDrain implements Runnable {
                     job.lastReloadAttempt.put(value, tick);
                 } else {
                     job.pendingLoads.put(value, future);
-                    // This callback touches only an atomic counter. Bukkit
-                    // access and all job-state transitions remain on main.
-                    future.whenComplete((loaded, failure) -> pendingLoadsInFlight.decrementAndGet());
+                    // This callback touches no Bukkit API or job maps. It only
+                    // decrements the global counter and posts a signal; run()
+                    // performs all state transitions on the server thread.
+                    future.whenComplete((loaded, failure) -> {
+                        pendingLoadsInFlight.decrementAndGet();
+                        completedLoadSignals.add(job);
+                    });
                 }
             } catch (RuntimeException failure) {
                 pendingLoadsInFlight.decrementAndGet();
@@ -366,11 +379,34 @@ public final class BranchGrowthDrain implements Runnable {
         }
     }
 
+    private boolean isCurrentJob(Job job) {
+        IdentityHashMap<Object, Job> ownerJobs = this.jobs.get(job.owner);
+        return ownerJobs != null && ownerJobs.get(job.build) == job;
+    }
+
+    private void wakeCompletedLoads() {
+        int processed = 0;
+        while (processed < 512) {
+            Job job = this.completedLoadSignals.poll();
+            if (job == null) break;
+            processed++;
+            if (!this.isCurrentJob(job)) continue;
+            job.retryAt = Math.min(job.retryAt, this.tick);
+            if (job.parked) {
+                this.queueReady(job, true);
+            } else if (job.queued) {
+                this.rotation.remove(job);
+                this.rotation.addFirst(job);
+            }
+        }
+    }
+
     @Override
     public void run() {
         if (!plugin.isEnabled()) { shutdown(); return; }
         ++tick;
         expireParkedJobs();
+        wakeCompletedLoads();
         if (!rotation.isEmpty() && tick % 400L == 0 && rotation.size() > 20) {
             plugin.getLogger().info("Branch growth ready queue depth: " + rotation.size()
                     + ", retained jobs=" + pendingJobs);
@@ -389,6 +425,12 @@ public final class BranchGrowthDrain implements Runnable {
             try {
                 reflect(job);
                 if (!stillPending(job)) { complete(job); continue; }
+                // A failed flush or load retry must not spin every tick when
+                // no dependency event has arrived to justify an early retry.
+                if (tick < job.retryAt) {
+                    queueReady(job, false);
+                    continue;
+                }
 
                 World w = world(job);
                 if (w == null) {
@@ -451,6 +493,7 @@ public final class BranchGrowthDrain implements Runnable {
 
     private void shutdown() {
         if (ticker != null) { ticker.cancel(); ticker = null; }
+        completedLoadSignals.clear();
         for (IdentityHashMap<Object, Job> map : jobs.values()) {
             for (Job job : map.values()) release(job);
         }
@@ -462,7 +505,7 @@ public final class BranchGrowthDrain implements Runnable {
         if (instance == this) instance = null;
     }
 
-    private record Expiry(Job job, long due) {}
+    private record Expiry(java.lang.ref.WeakReference<Job> job, long due) {}
 
     static final class Job {
         final Object owner;

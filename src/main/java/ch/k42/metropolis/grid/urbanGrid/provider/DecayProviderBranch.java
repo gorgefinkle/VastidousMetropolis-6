@@ -2,7 +2,6 @@ package ch.k42.metropolis.grid.urbanGrid.provider;
 
 import ch.k42.metropolis.grid.urbanGrid.provider.DecayProviderNormal.Ctx;
 import ch.k42.metropolis.grid.urbanGrid.provider.DecayProviderNormal.GNode;
-import ch.k42.metropolis.grid.urbanGrid.provider.DecayProviderNormal.SupportHit;
 import ch.k42.metropolis.minions.DecayOption;
 import ch.k42.metropolis.minions.Minions;
 import ch.k42.metropolis.plugin.PluginConfig;
@@ -441,19 +440,20 @@ final class DecayProviderBranch {
         // a height-banded sample would otherwise have thrown away before
         // fairness ever got a chance to run.
         List<GNode> raw = new ArrayList<>();
-        for (SupportHit hit : ctx.supportHits) {
-            if (this.isThinStandaloneSupport(hit.block)) {
+        for (int i = 0; i < ctx.supportHits.size(); i++) {
+            // Rehydrate Bukkit wrappers only for this bounded flush. The
+            // PendingBuild itself stores only packed primitive coordinates.
+            Block support = world.getBlockAt(
+                    ctx.supportHits.x(i), ctx.supportHits.y(i), ctx.supportHits.z(i));
+            if (this.isThinStandaloneSupport(support)) {
                 continue;
             }
-            // Glass panes (etc) are still perfectly normal SupportHits --
-            // they decay and host vines like anything else -- they're just
-            // not a valid branch anchor. See
-            // DecayProviderNormal.isBranchableSupport()/nonBranchSupportBlocks,
-            // a set deliberately independent of vine/decay eligibility.
-            if (!this.owner.isBranchableSupport(hit.block)) {
+            // Glass panes (etc) are still ordinary decay/vine supports, but
+            // are excluded from branch anchors independently of that rule.
+            if (!this.owner.isBranchableSupport(support)) {
                 continue;
             }
-            for (Block neighbour : this.getOutwardNeighbours(hit.block)) {
+            for (Block neighbour : this.getOutwardNeighbours(support)) {
                 if (!neighbour.isEmpty()) {
                     continue;
                 }
