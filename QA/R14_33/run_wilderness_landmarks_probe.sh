@@ -16,6 +16,7 @@ GRID="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/UrbanGrid.java"
 WATER_FIELDS="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/layout/WaterFields.java"
 LAKE="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/parcel/LakeParcel.java"
 FOREST="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/ForestGenerator.java"
+PROFILE="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/WildernessTerrainProfile.java"
 
 # Placement is deterministic and accepts only the feature's actual footprint.
 grep -Fq 'private static final int MOUNTAIN_CLEARANCE = 18' "$FEATURES"
