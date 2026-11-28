@@ -2,6 +2,9 @@ package ch.k42.metropolis.grid.urbanGrid.wild;
 
 import ch.k42.metropolis.grid.urbanGrid.UrbanGrid;
 import ch.k42.metropolis.grid.urbanGrid.river.RiverProvider;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * One continuous, narrow wilderness tributary. The route is stored as a
@@ -26,23 +29,25 @@ public final class WildernessStreamCourse extends RiverProvider {
    private final boolean localAxisZ;
    private final boolean axisPinned;
    private final HydrologyConvergenceKey convergenceKey;
+   private final SegmentSpatialIndex segmentSpatialIndex;
 
    public WildernessStreamCourse(long seed,double[] xs,double[] zs,double widthBlocks,double bankMarginBlocks) {
       this(seed,xs,zs,widthBlocks,bankMarginBlocks,null);
    }
    public WildernessStreamCourse(long seed,double[] xs,double[] zs,double widthBlocks,double bankMarginBlocks,
                                  HydrologyConvergenceKey convergenceKey) {
-      this(seed,xs.clone(),zs.clone(),null,widthBlocks,bankMarginBlocks,dominantAxis(xs,zs),false,convergenceKey);
+      this(seed,xs.clone(),zs.clone(),null,widthBlocks,bankMarginBlocks,dominantAxis(xs,zs),false,convergenceKey,null);
    }
    public WildernessStreamCourse(long seed,double[] xs,double[] zs,double[] waterYs,
                                  double widthBlocks,double bankMarginBlocks,
                                  HydrologyConvergenceKey convergenceKey) {
       this(seed,xs.clone(),zs.clone(),waterYs==null?null:waterYs.clone(),
-              widthBlocks,bankMarginBlocks,dominantAxis(xs,zs),false,convergenceKey);
+              widthBlocks,bankMarginBlocks,dominantAxis(xs,zs),false,convergenceKey,null);
    }
    private WildernessStreamCourse(long seed,double[] xs,double[] zs,double[] waterYs,
                                   double widthBlocks,double bankMarginBlocks,
-                                  boolean localAxisZ,boolean axisPinned,HydrologyConvergenceKey convergenceKey) {
+                                  boolean localAxisZ,boolean axisPinned,HydrologyConvergenceKey convergenceKey,
+                                  SegmentSpatialIndex sharedSegmentIndex) {
       super(seed, false, Double.NaN, Double.NaN);
       if (xs == null || zs == null || xs.length != zs.length || xs.length < 2)
          throw new IllegalArgumentException("A wilderness stream needs at least two matched path points");
@@ -77,6 +82,9 @@ public final class WildernessStreamCourse extends RiverProvider {
          loZ = Math.min(loZ, zs[i]); hiZ = Math.max(hiZ, zs[i]);
       }
       this.minX = loX; this.maxX = hiX; this.minZ = loZ; this.maxZ = hiZ;
+      double queryReach=this.widthBlocks/2.0+this.bankMarginBlocks+8.0;
+      this.segmentSpatialIndex=sharedSegmentIndex==null
+              ?new SegmentSpatialIndex(this.xs,this.zs,queryReach):sharedSegmentIndex;
    }
 
    private static boolean dominantAxis(double[] xs, double[] zs) {
@@ -140,7 +148,7 @@ public final class WildernessStreamCourse extends RiverProvider {
    public WildernessStreamCourse forChunk(int chunkX, int chunkZ) {
       boolean zAxis = isZBoundAt(chunkX * 16.0 + 8.0, chunkZ * 16.0 + 8.0);
       return new WildernessStreamCourse(this.courseSeed,this.xs,this.zs,this.waterYs,
-              this.widthBlocks,this.bankMarginBlocks,zAxis,true,this.convergenceKey);
+              this.widthBlocks,this.bankMarginBlocks,zAxis,true,this.convergenceKey,this.segmentSpatialIndex);
    }
 
    public boolean isZBoundAt(int chunkX, int chunkZ) {
@@ -386,7 +394,9 @@ public final class WildernessStreamCourse extends RiverProvider {
    private Nearest nearest(double x, double z) {
       double bestDistanceSq = Double.POSITIVE_INFINITY;
       Nearest best = null;
-      for (int i = 0; i < this.xs.length - 1; i++) {
+      int[] nearby=this.segmentSpatialIndex.segmentsAt(x,z);
+      if(nearby==null)return null;
+      for (int i : nearby) {
          double ax = this.xs[i], az = this.zs[i];
          double dx = this.xs[i + 1] - ax, dz = this.zs[i + 1] - az;
          double lengthSq = dx * dx + dz * dz;
@@ -404,6 +414,47 @@ public final class WildernessStreamCourse extends RiverProvider {
          }
       }
       return best;
+   }
+
+   /**
+    * Spatial index over the centreline segments. A segment is entered in each
+    * chunk touched by its bounding box expanded by the maximum water/bank query
+    * reach. Repeated block samples then inspect only nearby segments instead of
+    * scanning the full dense course. Chunk views share this immutable index.
+    */
+   private static final class SegmentSpatialIndex {
+      private final Map<Long,int[]> byChunk;
+
+      SegmentSpatialIndex(double[] xs,double[] zs,double reachBlocks) {
+         Map<Long,ArrayList<Integer>> collecting=new HashMap<>();
+         for(int i=0;i<xs.length-1;i++) {
+            int minChunkX=chunk(Math.min(xs[i],xs[i+1])-reachBlocks);
+            int maxChunkX=chunk(Math.max(xs[i],xs[i+1])+reachBlocks);
+            int minChunkZ=chunk(Math.min(zs[i],zs[i+1])-reachBlocks);
+            int maxChunkZ=chunk(Math.max(zs[i],zs[i+1])+reachBlocks);
+            for(int cz=minChunkZ;cz<=maxChunkZ;cz++)for(int cx=minChunkX;cx<=maxChunkX;cx++)
+               collecting.computeIfAbsent(key(cx,cz),ignored->new ArrayList<>()).add(i);
+         }
+         Map<Long,int[]> built=new HashMap<>(collecting.size()*2);
+         for(Map.Entry<Long,ArrayList<Integer>> entry:collecting.entrySet()) {
+            ArrayList<Integer> indices=entry.getValue();
+            int[] packed=new int[indices.size()];
+            for(int i=0;i<packed.length;i++)packed[i]=indices.get(i);
+            built.put(entry.getKey(),packed);
+         }
+         this.byChunk=Map.copyOf(built);
+      }
+
+      int[] segmentsAt(double blockX,double blockZ) {
+         return this.byChunk.get(key(chunk(blockX),chunk(blockZ)));
+      }
+
+      private static int chunk(double block) {
+         return Math.floorDiv((int)Math.floor(block),16);
+      }
+      private static long key(int chunkX,int chunkZ) {
+         return ((long)chunkX<<32)^(chunkZ&0xffffffffL);
+      }
    }
 
    private static final class Nearest {
