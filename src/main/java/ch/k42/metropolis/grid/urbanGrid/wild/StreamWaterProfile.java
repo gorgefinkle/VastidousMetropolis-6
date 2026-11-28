@@ -110,7 +110,7 @@ public final class StreamWaterProfile {
                modulation*=0.22;
             }
          }
-         weights[i]=length*Math.max(0.45,Math.min(18.0,modulation));
+         weights[i]=length*Math.max(0.10,Math.min(18.0,modulation));
          totalWeight+=weights[i];
          cumulative[i+1]=totalWeight;
       }
