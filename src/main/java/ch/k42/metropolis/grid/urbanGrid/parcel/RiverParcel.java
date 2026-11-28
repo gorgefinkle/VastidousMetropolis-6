@@ -947,6 +947,12 @@ public class RiverParcel extends Parcel {
       // different heights.
       int buildHeight = RiverConfig.getRiverBuildHeight();
       int waterY = buildHeight - RiverConfig.getRiverDepth();
+      if(river instanceof WildernessStreamCourse stream) {
+         // Tributary water follows its planned downstream profile. This is a
+         // generation-plan property, not a post-paint slope correction.
+         waterY=stream.waterYAt(blockX,blockZ);
+         buildHeight=waterY+RiverConfig.getRiverDepth();
+      }
       double halfWidth = river.widthAtBlock(river.isZBound() ? blockZ : blockX) / 2.0;
       double signed = river.distanceFromCenterBlock(blockX, blockZ);
       // A bounded creek has a finite along-axis span. Road-approach chunks
