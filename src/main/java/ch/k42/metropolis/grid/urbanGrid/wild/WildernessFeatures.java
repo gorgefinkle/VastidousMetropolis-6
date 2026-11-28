@@ -451,12 +451,15 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       WaterField.Kind base=water.baseKindAt(chunkX,chunkZ);
       double px=blockX+0.5,pz=blockZ+0.5;
       if(base==WaterField.Kind.OCEAN) {
-         double signed=water.ocean()==null?Double.NaN:
-                 water.ocean().oceanDistanceInsideShoreBlock(px,pz);
+         ch.k42.metropolis.grid.urbanGrid.ocean.OceanProvider ocean=water.ocean();
+         ch.k42.metropolis.grid.urbanGrid.ocean.OceanProvider.Sample sample=
+                 ocean==null?null:ocean.sample(px,pz);
+         double signed=ocean==null?Double.NaN:ocean.oceanDistanceInsideShoreBlock(px,pz);
+         int surfaceY=sample==null?OceanConfig.getOceanBuildHeight():sample.surfaceY;
          HydrologyConvergenceKey key=this.convergenceRegistry.findAt(
                  HydrologyConvergenceKey.Receiver.OCEAN,chunkX,chunkZ);
          return new HydrologySample(blockX,blockZ,base,HydrologySample.Feature.OCEAN,
-                 Double.isFinite(signed)&&signed>0.0,signed,OceanConfig.getOceanBuildHeight(),0,null,key);
+                 Double.isFinite(signed)&&signed>0.0,signed,surfaceY,0,null,key);
       }
       if(base==WaterField.Kind.RIVER) {
          RiverProvider carrier=water.riverAt(chunkX,chunkZ);
@@ -466,8 +469,9 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          HydrologyConvergenceKey.Receiver receiver=HydrologyConvergenceKey.Receiver.RIVER;
          HydrologyConvergenceKey key=this.convergenceRegistry.findAt(receiver,chunkX,chunkZ);
          boolean open=Double.isFinite(signed)&&Double.isFinite(width)&&Math.abs(signed)<=width*.5;
+         int riverSurfaceY=RiverConfig.getRiverBuildHeight()-RiverConfig.getRiverDepth();
          return new HydrologySample(blockX,blockZ,base,HydrologySample.Feature.RIVER,
-                 open,signed,RiverConfig.getRiverBuildHeight(),0,carrier,key);
+                 open,signed,riverSurfaceY,0,carrier,key);
       }
       WaterField.CreekSource creekSource=water.creekSource();
       if(creekSource!=null&&creekSource.waterOrBank(chunkX,chunkZ)) {
@@ -479,7 +483,8 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          HydrologyConvergenceKey key=this.convergenceRegistry.findAt(
                  HydrologyConvergenceKey.Receiver.CREEK,chunkX,chunkZ);
          return new HydrologySample(blockX,blockZ,WaterField.Kind.CREEK,
-                 HydrologySample.Feature.CREEK,open,signed,RiverConfig.getRiverBuildHeight(),0,carrier,key);
+                 HydrologySample.Feature.CREEK,open,signed,
+                 RiverConfig.getRiverBuildHeight()-RiverConfig.getRiverDepth(),0,carrier,key);
       }
       LakeSite lake=this.lakeAt(chunkX,chunkZ);
       if(lake!=null) {
@@ -595,8 +600,13 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
 
    private int receiverWaterY(HydrologyConvergenceKey key) {
       return switch(key.receiver()) {
-         case OCEAN -> OceanConfig.getOceanBuildHeight();
-         case RIVER,CREEK -> RiverConfig.getRiverBuildHeight();
+         case OCEAN -> {
+            ch.k42.metropolis.grid.urbanGrid.ocean.OceanProvider ocean=this.water.ocean();
+            ch.k42.metropolis.grid.urbanGrid.ocean.OceanProvider.Sample sample=ocean==null?null:
+                    ocean.sample(key.blockX(),key.blockZ());
+            yield sample==null?OceanConfig.getOceanBuildHeight():sample.surfaceY;
+         }
+         case RIVER,CREEK -> RiverConfig.getRiverBuildHeight()-RiverConfig.getRiverDepth();
       };
    }
 
@@ -766,7 +776,9 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       StreamMeanderGuide meanderGuide=new StreamMeanderGuide(guideSeed,startX,startZ,
               guideTarget.x,guideTarget.z);
       Map<Long,Byte> highwayAxes=highwayAxes(minX,minZ,maxX,maxZ);
-      Map<Long,Integer> routeHeights=new HashMap<>();
+      Map<Long,Integer> routeHeights=new LinkedHashMap<Long,Integer>(8192,0.75f,true) {
+         @Override protected boolean removeEldestEntry(Map.Entry<Long,Integer> eldest){return size()>32768;}
+      };
       PriorityQueue<RouteNode> open=new PriorityQueue<>(Comparator.comparingInt((RouteNode n)->n.score)
               .thenComparingInt(n->n.cost).thenComparingLong(n->n.key));
       Map<Long,Integer> best=new HashMap<>();Map<Long,Long> previous=new HashMap<>();
