@@ -71,7 +71,9 @@ public final class StreamWaterProfile {
       double[] x=new double[n],z=new double[n];
       for(int i=0;i<n;i++){x[i]=px.get(i);z[i]=pz.get(i);}
 
-      double[] weights=new double[n-1],cumulative=new double[n];
+      double[] distanceAlong=new double[n],weights=new double[n-1],cumulative=new double[n];
+      for(int i=1;i<n;i++)
+         distanceAlong[i]=distanceAlong[i-1]+Math.hypot(x[i]-x[i-1],z[i]-z[i-1]);
 
       Noise2D gradeNoise=new Noise2D(seed^0x475241444550524FL);
       double[] naturalBreak=new double[n-1];
