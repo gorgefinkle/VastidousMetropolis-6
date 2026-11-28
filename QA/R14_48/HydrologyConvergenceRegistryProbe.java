@@ -32,6 +32,30 @@ public final class HydrologyConvergenceRegistryProbe {
          throw new AssertionError("Spatial endpoint index is not deterministic for shared receiver chunks");
       if(spatial.findAt(HydrologyConvergenceKey.Receiver.OCEAN,10,20)!=null)
          throw new AssertionError("Spatial endpoint index leaked across receiver types");
+      // The spatial index must stay synchronized with bounded LRU eviction.
+      // A lookup refreshes its endpoint, so the oldest *other* entry is evicted.
+      HydrologyConvergenceRegistry bounded=new HydrologyConvergenceRegistry();
+      long boundedNetwork=HydrologyConvergenceKey.stableId("probe:bounded-registry");
+      HydrologyConvergenceKey firstBounded=null,secondBounded=null,lastBounded=null;
+      for(int i=0;i<65536;i++) {
+         HydrologyConvergenceKey key=new HydrologyConvergenceKey(
+                 HydrologyConvergenceKey.Receiver.OCEAN,boundedNetwork,i,i*16.0,0.0);
+         bounded.register(key);
+         if(i==0)firstBounded=key;
+         if(i==1)secondBounded=key;
+      }
+      if(!firstBounded.equals(bounded.findAt(HydrologyConvergenceKey.Receiver.OCEAN,0,0)))
+         throw new AssertionError("Spatial lookup failed before bounded eviction");
+      lastBounded=new HydrologyConvergenceKey(
+              HydrologyConvergenceKey.Receiver.OCEAN,boundedNetwork,65536L,65536.0*16.0,0.0);
+      bounded.register(lastBounded);
+      if(bounded.size()!=65536||bounded.resolve(firstBounded)==null)
+         throw new AssertionError("Recent spatially-read endpoint was incorrectly evicted");
+      if(bounded.resolve(secondBounded)!=null
+              ||bounded.findAt(HydrologyConvergenceKey.Receiver.OCEAN,1,0)!=null)
+         throw new AssertionError("Evicted endpoint remained in the spatial index");
+      if(!lastBounded.equals(bounded.findAt(HydrologyConvergenceKey.Receiver.OCEAN,65536,0)))
+         throw new AssertionError("Newest endpoint missing from the spatial index");
       System.out.println("HydrologyConvergenceRegistryProbe PASS endpoints="+registry.size());
    }
 }
