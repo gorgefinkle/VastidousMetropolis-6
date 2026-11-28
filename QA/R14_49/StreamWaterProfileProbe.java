@@ -32,6 +32,24 @@ public final class StreamWaterProfileProbe {
       if(!hasGradientVariation)
          throw new AssertionError("Stream grade has no natural variation along its length");
 
+      // Smooth terrain receives a smooth descent; a genuine sharp existing
+      // drop can attract a local waterfall without prescribing its location.
+      StreamWaterProfile.Profile smoothGround=StreamWaterProfile.create(
+              routeX,routeZ,160,72,0x464C415452495645L,(x,z)->110);
+      StreamWaterProfile.Profile naturalCliff=StreamWaterProfile.create(
+              routeX,routeZ,160,72,0x464C415452495645L,(x,z)->x<600?140:90);
+      if(smoothGround.maximumSampleDrop()>1.0)
+         throw new AssertionError("Smooth terrain produced an artificial waterfall");
+      if(naturalCliff.maximumSampleDrop()<smoothGround.maximumSampleDrop()*3.0)
+         throw new AssertionError("A natural terrain break did not influence the water drop: smooth="
+                 +smoothGround.maximumSampleDrop()+" cliff="+naturalCliff.maximumSampleDrop());
+      double[] cliffLevels=naturalCliff.waterY();
+      int cliffIndex=50;
+      double dropAtCliff=cliffLevels[cliffIndex-1]-cliffLevels[cliffIndex];
+      double dropAway=cliffLevels[20]-cliffLevels[21];
+      if(dropAtCliff<=dropAway)
+         throw new AssertionError("Waterfall response was not concentrated at the pre-existing terrain break");
+
       StreamWaterProfile.Profile gentle=StreamWaterProfile.create(
               new double[]{0.0,420.0},new double[]{0.0,65.0},91,89,0x47454E544C45L,(x,z)->110);
       if(gentle.waterY()[0]!=91.0||gentle.waterY()[gentle.pointCount()-1]!=89.0
