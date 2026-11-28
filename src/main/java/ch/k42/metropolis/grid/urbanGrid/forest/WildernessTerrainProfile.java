@@ -56,7 +56,7 @@ public final class WildernessTerrainProfile {
     * lowest surrounding rim; no terrain is lowered to manufacture a basin.
     */
    public BasinFit findBasin(double centerX,double centerZ,double radiusX,double radiusZ,double angle) {
-      if(!(radiusX>=40.0&&radiusZ>=28.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ)) {
+      if(!(radiusX>=32.0&&radiusZ>=22.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ)) {
          this.lastBasinReject="invalid-footprint";return null;
       }
       double c=Math.cos(angle),s=Math.sin(angle);
@@ -182,25 +182,34 @@ public final class WildernessTerrainProfile {
       scored.sort(Comparator.comparingDouble((Scored candidate)->candidate.score).reversed()
               .thenComparingDouble(candidate->candidate.x).thenComparingDouble(candidate->candidate.z));
       List<BasinCandidate> result=new ArrayList<>();
-      // The closed rim is the 72% contour used by the coarse suitability pass.
-      // Use that as the actual lake radius; the wider search radius is not a
-      // licence to extend water over the surrounding wilderness.
-      double basinRadiusX=radiusX*0.72,basinRadiusZ=radiusZ*0.72;
+      // Test progressively smaller closed contours around each low point.
+      // The accepted radius is the first complete freshwater basin that fits;
+      // no water is extended beyond the naturally enclosing contour.
+      final double[] scales={0.72,0.62,0.52,0.42,0.32};
+      java.util.Map<String,Integer> acceptedScales=new java.util.TreeMap<>();
       for(Scored candidate:scored) {
-         fullTested++;
-         BasinFit fit=findBasin(candidate.x,candidate.z,basinRadiusX,basinRadiusZ,preferredAngle);
-         if(fit==null) {
-            rejectionCounts.merge(this.lastBasinReject,1,Integer::sum);
-            continue;
+         boolean fitted=false;
+         for(double scale:scales) {
+            double basinRadiusX=radiusX*scale,basinRadiusZ=radiusZ*scale;
+            if(basinRadiusX<32.0||basinRadiusZ<22.0)continue;
+            fullTested++;
+            BasinFit fit=findBasin(candidate.x,candidate.z,basinRadiusX,basinRadiusZ,preferredAngle);
+            if(fit==null) {
+               rejectionCounts.merge(this.lastBasinReject,1,Integer::sum);
+               continue;
+            }
+            accepted++;
+            acceptedScales.merge(String.format(java.util.Locale.ROOT,"%.2f",scale),1,Integer::sum);
+            result.add(new BasinCandidate(candidate.x,candidate.z,preferredAngle,
+                    basinRadiusX,basinRadiusZ,fit,candidate.score));
+            fitted=true;
+            break;
          }
-         accepted++;
-         result.add(new BasinCandidate(candidate.x,candidate.z,preferredAngle,
-                 basinRadiusX,basinRadiusZ,fit,candidate.score));
          if(result.size()>=maximum)break;
       }
       this.lastSearchSummary="sampled="+(side*side)+" coarseAccepted="+scored.size()
               +" coarseRejected="+coarseRejected+" fullTested="+fullTested
-              +" accepted="+accepted+" bestRise="+String.format(java.util.Locale.ROOT,"%.2f",bestRise)
+              +" accepted="+accepted+" scales="+acceptedScales+" bestRise="+String.format(java.util.Locale.ROOT,"%.2f",bestRise)
               +" bestRimSpread="+String.format(java.util.Locale.ROOT,"%.2f",bestSpread)
               +" rejects="+rejectionCounts;
       return java.util.Collections.unmodifiableList(result);
