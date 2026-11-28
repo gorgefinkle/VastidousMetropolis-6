@@ -167,7 +167,12 @@ public final class DiskDeferredChunkQueue implements AutoCloseable {
     }
 
     private void addToWindow(long key) {
-        if (window.size() + transientRetries.size() >= MAX_IN_MEMORY || !windowKeys.add(key)) return;
+        // The active in-flight chunk is also a retained queue entry. Nested
+        // populate callbacks may enqueue while it is active, so reserve that
+        // slot instead of allowing 128 ready entries plus one active entry.
+        int activeSlots = this.active == null ? 0 : 1;
+        if (window.size() + transientRetries.size() + activeSlots >= MAX_IN_MEMORY
+                || !windowKeys.add(key)) return;
         window.addLast(new Entry(key));
     }
 

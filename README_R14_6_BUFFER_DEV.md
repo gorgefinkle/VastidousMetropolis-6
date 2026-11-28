@@ -31,7 +31,7 @@ release. The current Minecraft/Paper coordinate and storage limits still apply.
 ## Changes in R14.6
 
 - Disk-first deferred jobs stored as sharded, unique coordinate marker files
-  under `<world>/metropolis/deferred-populates/`, with only a 128-job RAM window.
+  under `<world>/metropolis/deferred-populates/`, with a 128-entry total retained-RAM cap, including the active job.
   New enqueues are written to disk *before* the deferring callback returns.
 - Streaming startup scan and idempotent migration of the existing
   `deferred-populates.tsv`; old TSV deleted only after every record has been
@@ -52,7 +52,7 @@ release. The current Minecraft/Paper coordinate and storage limits still apply.
   Guava / Gson libraries: 254 production Java sources, 534 class files.
 - Deterministic standalone QA: 1200 queued chunks, two shutdown/restart
   cycles, one retry, legacy queue migration, deduplication, negative coords,
-  corrupt legacy fail-closed, and memory-window <=128; PASS.
+  corrupt legacy fail-closed, and memory-window <=128 including an active job and nested enqueue; PASS.
 - Identical class bytes for 524 R14.5 compiled classes; changed classes are
   restricted to the generator and plugin wiring. All independent planner and
   road-shape classes are byte-identical.

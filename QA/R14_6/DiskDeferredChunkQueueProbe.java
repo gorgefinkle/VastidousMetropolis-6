@@ -12,6 +12,7 @@ public final class DiskDeferredChunkQueueProbe {
         Path base = dir.resolve("pending");
         Path legacy = dir.resolve("deferred-populates.tsv");
         int total = 1200;
+        int expectedTotal = total;
         Set<Long> expected = new HashSet<>();
         // Include multiple quadrants and the exact -1 boundary that used
         // to be mishandled by an unrelated planner sentinel.
@@ -34,8 +35,21 @@ public final class DiskDeferredChunkQueueProbe {
             verify(q.pending() == total, "startup missed pending jobs");
             var first = q.poll(10_000_000_000L);
             verify(first != null, "startup did not load pending jobs");
+            // A nested populate can enqueue another chunk while this queue
+            // already has one active job. The active slot must count toward
+            // the same 128-entry retained-RAM limit.
+            int nestedX = 9_876_543;
+            int nestedZ = -1_234_567;
+            long nestedKey = ((long) nestedX << 32) | (nestedZ & 0xffffffffL);
+            expected.add(nestedKey);
+            verify(q.enqueue(nestedX, nestedZ), "nested enqueue was not durably recorded");
+            expectedTotal = total + 1;
+            verify(q.inMemory() <= DiskDeferredChunkQueue.MAX_IN_MEMORY,
+                    "active job plus nested enqueue exceeded the RAM window");
             q.retry(10_000_000_000L);
-            verify(q.pending() == total, "retry incorrectly acknowledged a job");
+            verify(q.pending() == expectedTotal, "retry incorrectly acknowledged a job");
+            verify(q.inMemory() <= DiskDeferredChunkQueue.MAX_IN_MEMORY,
+                    "retry released active slot incorrectly");
             // Persisted retry hints use wall-clock time; wait out the one-second cooldown
             // so this probe remains deterministic across fast and slow CI hosts.
             Thread.sleep(1100L);
@@ -48,7 +62,7 @@ public final class DiskDeferredChunkQueueProbe {
                 q.complete();
                 processed++;
             }
-            verify(q.pending() == total - processed, "acknowledgement count incorrect");
+            verify(q.pending() == expectedTotal - processed, "acknowledgement count incorrect");
             verify(q.inMemory() <= 128, "window overflow after drain");
         }
         // Migrate the old TSV format idempotently, including a duplicate.
@@ -57,7 +71,7 @@ public final class DiskDeferredChunkQueueProbe {
         expected.add((13L << 32) | (-99 & 0xffffffffL));
         try (DiskDeferredChunkQueue q = new DiskDeferredChunkQueue(base, legacy)) {
             verify(!Files.exists(legacy), "legacy file not removed after complete migration");
-            verify(q.pending() == total - processed + 2, "migration count incorrect");
+            verify(q.pending() == expectedTotal - processed + 2, "migration count incorrect");
             int remaining = (int)q.pending();
             for (int i = 0; i < remaining; i++) {
                 var item = q.poll(25_000_000_000L + i);
