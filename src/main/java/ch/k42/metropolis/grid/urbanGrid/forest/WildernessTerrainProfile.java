@@ -149,7 +149,7 @@ public final class WildernessTerrainProfile {
          Scored(double x,double z,double score){this.x=x;this.z=z;this.score=score;}
       }
       List<Scored> scored=new ArrayList<>();
-      int side=21;
+      int side=29;
       double bestRise=Double.NEGATIVE_INFINITY,bestSpread=Double.POSITIVE_INFINITY;
       int coarseRejected=0,fullTested=0,accepted=0;
       java.util.Map<String,Integer> rejectionCounts=new java.util.TreeMap<>();
@@ -187,8 +187,9 @@ public final class WildernessTerrainProfile {
       // no water is extended beyond the naturally enclosing contour.
       final double[] scales={0.72,0.62,0.52,0.42,0.32};
       java.util.Map<String,Integer> acceptedScales=new java.util.TreeMap<>();
-      for(Scored candidate:scored) {
-         boolean fitted=false;
+      int candidateLimit=Math.min(scored.size(),Math.max(24,maximum*2));
+      for(int candidateIndex=0;candidateIndex<candidateLimit;candidateIndex++) {
+         Scored candidate=scored.get(candidateIndex);
          for(double scale:scales) {
             double basinRadiusX=radiusX*scale,basinRadiusZ=radiusZ*scale;
             if(basinRadiusX<32.0||basinRadiusZ<22.0)continue;
@@ -202,7 +203,6 @@ public final class WildernessTerrainProfile {
             acceptedScales.merge(String.format(java.util.Locale.ROOT,"%.2f",scale),1,Integer::sum);
             result.add(new BasinCandidate(candidate.x,candidate.z,preferredAngle,
                     basinRadiusX,basinRadiusZ,fit,candidate.score));
-            fitted=true;
             break;
          }
          if(result.size()>=maximum)break;
