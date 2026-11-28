@@ -56,7 +56,7 @@ public final class WildernessTerrainProfile {
     * lowest surrounding rim; no terrain is lowered to manufacture a basin.
     */
    public BasinFit findBasin(double centerX,double centerZ,double radiusX,double radiusZ,double angle) {
-      if(!(radiusX>=64.0&&radiusZ>=44.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ)) {
+      if(!(radiusX>=40.0&&radiusZ>=28.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ)) {
          this.lastBasinReject="invalid-footprint";return null;
       }
       double c=Math.cos(angle),s=Math.sin(angle);
@@ -182,15 +182,20 @@ public final class WildernessTerrainProfile {
       scored.sort(Comparator.comparingDouble((Scored candidate)->candidate.score).reversed()
               .thenComparingDouble(candidate->candidate.x).thenComparingDouble(candidate->candidate.z));
       List<BasinCandidate> result=new ArrayList<>();
+      // The closed rim is the 72% contour used by the coarse suitability pass.
+      // Use that as the actual lake radius; the wider search radius is not a
+      // licence to extend water over the surrounding wilderness.
+      double basinRadiusX=radiusX*0.72,basinRadiusZ=radiusZ*0.72;
       for(Scored candidate:scored) {
          fullTested++;
-         BasinFit fit=findBasin(candidate.x,candidate.z,radiusX,radiusZ,preferredAngle);
+         BasinFit fit=findBasin(candidate.x,candidate.z,basinRadiusX,basinRadiusZ,preferredAngle);
          if(fit==null) {
             rejectionCounts.merge(this.lastBasinReject,1,Integer::sum);
             continue;
          }
          accepted++;
-         result.add(new BasinCandidate(candidate.x,candidate.z,preferredAngle,fit,candidate.score));
+         result.add(new BasinCandidate(candidate.x,candidate.z,preferredAngle,
+                 basinRadiusX,basinRadiusZ,fit,candidate.score));
          if(result.size()>=maximum)break;
       }
       this.lastSearchSummary="sampled="+(side*side)+" coarseAccepted="+scored.size()
@@ -204,10 +209,12 @@ public final class WildernessTerrainProfile {
    public String lastSearchDiagnostic(){return this.lastSearchSummary;}
 
    public static final class BasinCandidate {
-      public final double centerX,centerZ,angle,score;
+      public final double centerX,centerZ,angle,radiusX,radiusZ,score;
       public final BasinFit fit;
-      BasinCandidate(double centerX,double centerZ,double angle,BasinFit fit,double score) {
-         this.centerX=centerX;this.centerZ=centerZ;this.angle=angle;this.fit=fit;this.score=score;
+      BasinCandidate(double centerX,double centerZ,double angle,double radiusX,double radiusZ,
+                     BasinFit fit,double score) {
+         this.centerX=centerX;this.centerZ=centerZ;this.angle=angle;
+         this.radiusX=radiusX;this.radiusZ=radiusZ;this.fit=fit;this.score=score;
       }
    }
 
