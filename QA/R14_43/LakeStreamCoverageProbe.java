@@ -20,12 +20,18 @@ public final class LakeStreamCoverageProbe {
             int lakeCount=0,streamCount=0;
             double nearestLakeBlocks=Double.POSITIVE_INFINITY;
             boolean diagnosed=false;
+            StringBuilder lakePositions=new StringBuilder();
             for(int gx=-2;gx<=2;gx++) {
                 for(int gz=-2;gz<=2;gz++) {
                     WildernessFeatures.LakeSite lake=features.lakeForCellProbe(gx,gz);
                     if(lake==null) continue;
                     lakeCount++;
                     nearestLakeBlocks=Math.min(nearestLakeBlocks,Math.hypot(lake.centerX,lake.centerZ));
+                    if(lakePositions.length()>0)lakePositions.append("; ");
+                    lakePositions.append("cell=(").append(gx).append(',').append(gz).append(") center=(")
+                            .append(Math.round(lake.centerX)).append(',').append(Math.round(lake.centerZ))
+                            .append(") radius=(").append(Math.round(lake.radiusX)).append(',')
+                            .append(Math.round(lake.radiusZ)).append(")");
                     int cx=(int)Math.floor(lake.centerX/16.0);
                     int cz=(int)Math.floor(lake.centerZ/16.0);
                     if(features.lakeAt(cx,cz)==null || !water.isLake(cx,cz)
@@ -107,7 +113,8 @@ public final class LakeStreamCoverageProbe {
             }
             if(nearestLakeBlocks>8000.0)
                 throw new AssertionError("Nearest planned lake is too remote for ordinary exploration: seed="+seed
-                        +" distance="+Math.round(nearestLakeBlocks)+" blocks");
+                        +" distance="+Math.round(nearestLakeBlocks)+" blocks locations=["+lakePositions+"] "
+                        +features.lakePlacementDiagnosticsForProbe());
             if(streamCount==0)
                 throw new AssertionError("No connected outlet stream appears in the same 5x5 window for seed "+seed);
             System.out.println("LakeStreamCoverageProbe PASS seed="+seed
