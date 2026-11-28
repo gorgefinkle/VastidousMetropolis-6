@@ -42,7 +42,7 @@ public final class ChunkyMemoryValve {
     private static final int MIN_STABLE_SAMPLES = ChunkyBackpressurePolicy.MIN_QUEUE_STABLE_SAMPLES;
     private static final long RAPID_REPAUSE_COOLDOWN_NS = ChunkyBackpressurePolicy.RAPID_REPAUSE_COOLDOWN_NS;
 
-    /** Weighted runnable backlog (deferred chunks + 2 x ready branch builds). */
+    /** Population backlog only; branch growth has an independent scheduler. */
     private static final Map<String, Integer> PENDING = new ConcurrentHashMap<>();
     private static final Map<String, Integer> DEFERRED = new ConcurrentHashMap<>();
     /** All retained branch builds, including those waiting for future generation. */
@@ -96,8 +96,8 @@ public final class ChunkyMemoryValve {
         if (world == null) return;
         String name = world.getName();
         source.put(name, Math.max(0, count));
-        PENDING.put(name, ChunkyBackpressurePolicy.weightedActiveQueueSize(
-                DEFERRED.getOrDefault(name, 0), GROWTH_RUNNABLE.getOrDefault(name, 0)));
+        PENDING.put(name, ChunkyBackpressurePolicy.populationQueueSize(
+                DEFERRED.getOrDefault(name, 0)));
         // Population may be reentrant through WorldEdit and chunk loads.
         // Never schedule Bukkit tasks from that callback; onEnable owns startup.
     }
@@ -111,7 +111,7 @@ public final class ChunkyMemoryValve {
                 return;
             }
             Bukkit.getScheduler().runTaskTimer(plugin, ChunkyMemoryValve::tick, 20L, 20L);
-            Bukkit.getLogger().info("[Metropolis] Chunky back-pressure enabled: pause at 74% heap, 128 ready branch-growth builds, or weighted active queue 1024; resume after 10s/10 samples at deferred <=64, ready branch growth <=16 and weighted queue <=64, with >=512 MiB absolute free heap; repeat pause adds 60s cooldown.");
+            Bukkit.getLogger().info("[Metropolis] Chunky back-pressure enabled: pause at 74% heap or 1024 deferred population jobs; resume only at <=68% heap and deferred <=64 for 10s/10 samples, with >=512 MiB free; branch growth uses its own queue and drain.");
         } catch (RuntimeException | LinkageError ex) {
             STARTED.set(false);
             Bukkit.getLogger().severe("[Metropolis] Chunky heap guard NOT SCHEDULED: " + ex);
@@ -160,7 +160,7 @@ public final class ChunkyMemoryValve {
                         + "%), free=" + mib(remaining) + " MiB, deferred=" + deferredTotal
                         + ", branchGrowth=" + growthTotal + ", branchGrowthReady=" + growthRunnableTotal
                         + ", branchGrowthWaiting=" + Math.max(0L, growthTotal - growthRunnableTotal)
-                        + ", weightedActive=" + sum(PENDING)
+                        + ", populationQueue=" + sum(PENDING)
                         + ", postGcRetained=" + pct(retainedUsage) + "% (diagnostic only), "
                         + gcStats() + ", " + retentionStats());
             }
@@ -172,7 +172,7 @@ public final class ChunkyMemoryValve {
                 int growthTotal = GROWTH.getOrDefault(name, 0);
                 int growthRunnable = GROWTH_RUNNABLE.getOrDefault(name, 0);
                 int growthWaiting = Math.max(0, growthTotal - growthRunnable);
-                int activeQueue = ChunkyBackpressurePolicy.weightedActiveQueueSize(deferred, growthRunnable);
+                int activeQueue = ChunkyBackpressurePolicy.populationQueueSize(deferred);
                 boolean running = Boolean.TRUE.equals(isRunning.invoke(api, name));
 
                 // An API continueTask() success can precede the new worker becoming
@@ -229,11 +229,11 @@ public final class ChunkyMemoryValve {
                         if (running) pause.invoke(api, name);
                         String reason;
                         if (!queuesLow) {
-                            reason = "waiting for deferred/ready branch-growth queues to drain";
+                            reason = "waiting for deferred population queue to drain";
                         } else if (remaining < MIN_FREE_RESUME_BYTES) {
                             reason = "waiting for at least 512 MiB absolute free heap";
-                        } else if (usage >= HARD_PAUSE) {
-                            reason = "waiting below the 86% emergency heap ceiling";
+                        } else if (usage > ChunkyBackpressurePolicy.RESUME_HEAP) {
+                            reason = "waiting for heap use to fall to " + pct(ChunkyBackpressurePolicy.RESUME_HEAP) + "% or lower";
                         } else if (state.recoveryCooldownActive) {
                             reason = "waiting for rapid repeat-pause cooldown";
                         } else if (running) {
@@ -254,12 +254,13 @@ public final class ChunkyMemoryValve {
                         state.stableSamples = 0;
                         state.resumeUnconfirmed = true;
                         state.resumeConfirmUntil = now + RESUME_CONFIRM_NS;
-                        log.info("[Metropolis] Chunky resumed after queue recovery in " + name
+                        log.info("[Metropolis] Chunky resumed after population/heap recovery in " + name
                                 + ": deferred=" + deferred
-                                + ", readyBranchGrowth=" + growthRunnable
-                                + ", waitingBranchGrowth=" + growthWaiting
-                                + ", weightedActive=" + activeQueue
-                                + ", heap=" + pct(usage) + "%, free=" + mib(remaining)
+                                + ", branchGrowthReady=" + growthRunnable
+                                + ", branchGrowthWaiting=" + growthWaiting
+                                + ", populationQueue=" + activeQueue
+                                + ", heap=" + pct(usage) + "% (resume ceiling "
+                                + pct(ChunkyBackpressurePolicy.RESUME_HEAP) + "%), free=" + mib(remaining)
                                 + " MiB (post-GC retained " + pct(retainedUsage) + "% is diagnostic only).");
                     } else {
                         status(log, name, state, now, usage, retainedUsage, remaining,
@@ -282,23 +283,20 @@ public final class ChunkyMemoryValve {
                         state.recoveryCooldownActive = true;
                         state.recoveryNotBefore = now + RAPID_REPAUSE_COOLDOWN_NS;
                     }
-                    String pauseReason = growthRunnable >= BRANCH_GROWTH_PAUSE
-                            ? "ready branch-growth backlog reached its priority pause limit"
-                            : activeQueue >= QUEUE_PAUSE
-                                ? "weighted active queue reached its pause limit"
-                                : "heap protective threshold reached";
+                    String pauseReason = deferred >= QUEUE_PAUSE
+                            ? "deferred population backlog reached its pause limit"
+                            : "heap protective threshold reached";
                     log.warning("[Metropolis] Chunky protective pause in " + name
                             + ": " + pauseReason
                             + "; deferred=" + deferred
                             + ", readyBranchGrowth=" + growthRunnable
                             + ", waitingBranchGrowth=" + growthWaiting
-                            + ", weightedActive=" + activeQueue
+                            + ", populationQueue=" + activeQueue
                             + ", heap=" + pct(usage) + "%, post-GC retained=" + pct(retainedUsage)
                             + "% (diagnostic only), free=" + mib(remaining) + " MiB"
                             + "; resume after deferred <= " + QUEUE_RESUME
-                            + ", ready branch growth <= " + BRANCH_GROWTH_RESUME
-                            + ", weighted active <= " + QUEUE_RESUME
-                            + " for 10s/10 samples, plus >=512 MiB free and below the 86% emergency ceiling"
+                            + " and heap <= " + pct(ChunkyBackpressurePolicy.RESUME_HEAP)
+                            + "% for 10s/10 samples, plus >=512 MiB free; branch growth drains independently"
                             + (state.recoveryCooldownActive
                                 ? ", repeat-pause cooldown "
                                     + Math.max(0L, state.recoveryNotBefore - now) / 1_000_000_000L + "s"
@@ -326,12 +324,12 @@ public final class ChunkyMemoryValve {
         if (now - state.lastStatusNs < STATUS_NS) return;
         state.lastStatusNs = now;
         int growthWaiting = Math.max(0, growthTotal - growthRunnable);
-        int activeQueue = ChunkyBackpressurePolicy.weightedActiveQueueSize(deferred, growthRunnable);
+        int activeQueue = ChunkyBackpressurePolicy.populationQueueSize(deferred);
         log.warning("[Metropolis] Chunky paused in " + name + ": " + reason
                 + "; deferred=" + deferred
                 + ", readyBranchGrowth=" + growthRunnable
                 + ", waitingBranchGrowth=" + growthWaiting
-                + ", weightedActive=" + activeQueue
+                + ", populationQueue=" + activeQueue
                 + ", heap=" + pct(usage) + "%, post-GC retained=" + pct(retainedUsage)
                 + "% (diagnostic only), free=" + mib(remaining) + " MiB"
                 + ", paused=" + ((now - state.pausedAt) / 1_000_000_000L)

@@ -1,4 +1,4 @@
-name: R14.50 Terrain-Integrated Hydrology
+name: R14.51 Independent Branch Queue and Chunky Hysteresis
 
 on:
   push:
@@ -150,6 +150,29 @@ jobs:
             src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/HydrologyConvergenceRegistry.java \
             QA/R14_48/HydrologyConvergenceRegistryProbe.java
           java -cp qa-out ch.k42.metropolis.grid.urbanGrid.wild.HydrologyConvergenceRegistryProbe
+      - name: Probe independent branch queue and Chunky heap hysteresis
+        run: |
+          mkdir -p qa-out
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/generator/ChunkyBackpressurePolicy.java \
+            QA/R14_51/ChunkyBranchQueueIsolationProbe.java
+          java -cp qa-out ch.k42.metropolis.generator.ChunkyBranchQueueIsolationProbe
+          python3 - <<'PY'
+          from pathlib import Path
+          drain = Path("src/main/java/ch/k42/metropolis/grid/urbanGrid/provider/BranchGrowthDrain.java").read_text()
+          valve = Path("src/main/java/ch/k42/metropolis/generator/ChunkyMemoryValve.java").read_text()
+          policy = Path("src/main/java/ch/k42/metropolis/generator/ChunkyBackpressurePolicy.java").read_text()
+          assert "Ready work only. Jobs waiting on chunks are parked outside this deque." in drain
+          assert "current.queueReady(existing, true);" in drain
+          assert "private void park(Job job)" in drain and "scheduleStagingExpiry(job);" in drain
+          assert "expireParkedJobs();" in drain
+          assert "MAX_PENDING_LOADS_GLOBAL = 256" in drain
+          assert "private final PriorityQueue<Expiry> stagingExpiries" in drain
+          assert "RESUME_HEAP = 0.68" in policy and "SOFT_PAUSE = 0.74" in policy
+          assert "PENDING.put(name, ChunkyBackpressurePolicy.populationQueueSize(" in valve
+          assert "growthRunnable >= BRANCH_GROWTH_PAUSE" not in valve
+          print("R14.51 BranchQueueIsolationSourceAudit PASS")
+          PY
       - name: Build plugin JAR
         run: mvn --batch-mode --no-transfer-progress clean package
       - name: Verify named massif, lake and continuous stream plan/ownership
@@ -188,21 +211,21 @@ jobs:
           ! grep -Fq 'getDeclaredField("coneSeed")' src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/BiomeEcology.java
       - name: Verify embedded plugin version
         run: |
-          expected='0.1.26-R14.50-Terrain-Integrated-Hydrology-DEV'
-          actual="$(unzip -p target/Metropolis_R14_50_Terrain_Hydrology_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          expected='0.1.27-R14.51-Independent-Branch-Queue-DEV'
+          actual="$(unzip -p target/Metropolis_R14_51_Independent_Branch_Queue_DEV.jar plugin.yml | sed -n 's/^version: //p')"
           test "$actual" = "$expected"
           echo "Embedded plugin version: $actual"
       - name: Assemble test delivery
         run: |
           mkdir -p delivery
-          cp target/Metropolis_R14_50_Terrain_Hydrology_DEV.jar delivery/
-          zip -qr delivery/Metropolis_R14_50_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
+          cp target/Metropolis_R14_51_Independent_Branch_Queue_DEV.jar delivery/
+          zip -qr delivery/Metropolis_R14_51_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
           (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
           ls -lh delivery
       - name: Upload JAR and full source
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_50_Terrain_Hydrology
+          name: Metropolis_R14_51_Independent_Branch_Queue
           path: delivery/*
           if-no-files-found: error
           retention-days: 14
