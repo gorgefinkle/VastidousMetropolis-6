@@ -90,6 +90,6 @@ public final class DiskDeferredChunkQueueProbe {
         try { new DiskDeferredChunkQueue(base, legacy).close(); }
         catch (java.io.IOException ex) { failClosed = true; }
         verify(failClosed && Files.exists(legacy), "corrupt legacy queue was discarded");
-        System.out.println("PASS jobs=" + total + " restarts=2 retries=1 migrations=2 bounded-window=128 negative-coordinates=PASS no-loss=PASS fail-closed=PASS");
+        System.out.println("PASS jobs=" + total + " nested-enqueue=PASS active-inclusive-window=128 restarts=2 retries=1 migrations=2 negative-coordinates=PASS no-loss=PASS fail-closed=PASS");
     }
 }
