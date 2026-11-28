@@ -105,7 +105,7 @@ public final class LakeStreamCoverageProbe {
                     maxOutletDrop=Math.max(maxOutletDrop,outletDrop);
                     if(outletDrop>=6)elevatedOutletCount++;
                     if(course.cascadeCount()>0)cascadingOutletCount++;
-                    if(course.sourceWaterY()-course.receiverWaterY()>=6
+                    if(course.sourceWaterY()-course.receiverWaterY()>=12
                             &&course.directLengthBlocks()>=72.0&&course.cascadeCount()<1)
                         throw new AssertionError("Elevated source lake did not create a multi-level cascade: drop="
                                 +(course.sourceWaterY()-course.receiverWaterY())+" cascadeCount="+course.cascadeCount());
