@@ -125,6 +125,15 @@ jobs:
             src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/StreamMeanderGuide.java \
             QA/R14_49/StreamMeanderGuideProbe.java
           java -cp qa-out ch.k42.metropolis.grid.urbanGrid.wild.StreamMeanderGuideProbe
+      - name: Probe high-lake drainage without cutting through massifs
+        run: |
+          mkdir -p qa-out
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/Noise2D.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/StreamWaterProfile.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessDrainageCost.java \
+            QA/R14_49/WildernessDrainageCostProbe.java
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.wild.WildernessDrainageCostProbe
       - name: Probe multi-level stream cascades and elevated lake outlets
         run: |
           mkdir -p qa-out
