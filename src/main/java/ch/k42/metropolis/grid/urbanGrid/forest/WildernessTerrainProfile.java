@@ -51,7 +51,7 @@ public final class WildernessTerrainProfile {
     * lowest surrounding rim; no terrain is lowered to manufacture a basin.
     */
    public BasinFit findBasin(double centerX,double centerZ,double radiusX,double radiusZ,double angle) {
-      if(!(radiusX>=96.0&&radiusZ>=96.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ))
+      if(!(radiusX>=112.0&&radiusZ>=72.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ))
          return null;
       double c=Math.cos(angle),s=Math.sin(angle);
       int[] core={surfaceHeight((int)Math.round(centerX),(int)Math.round(centerZ))};
