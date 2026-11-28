@@ -1,6 +1,9 @@
 package ch.k42.metropolis.grid.urbanGrid.forest;
 
 import ch.k42.metropolis.plugin.PluginConfig;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -82,9 +85,9 @@ public final class WildernessTerrainProfile {
       double rimMean=rimSum/rimCount;
       double rise=rimMean-coreMean;
       // A flat plateau or a shallow noise dimple is not a lake basin.
-      if(rise<2.25 || rimMax-rimMin>22.0) return null;
-      int waterY=(int)Math.floor(Math.min(coreMean+Math.max(1.6,Math.min(5.0,rise*.55)),rimMin-1.0));
-      if(waterY<coreMin+2 || waterY>=rimMin) return null;
+      if(rise<1.5 || rimMax-rimMin>34.0) return null;
+      int waterY=(int)Math.floor(Math.min(coreMean+Math.max(1.25,Math.min(3.5,rise*.45)),rimMin-1.0));
+      if(waterY<coreMin+1 || waterY>=rimMin) return null;
 
       int submerged=0;
       for(double radius:new double[]{0.22,0.42,0.58}) {
@@ -97,7 +100,7 @@ public final class WildernessTerrainProfile {
             if(surfaceHeight(x,z)<=waterY+1)submerged++;
          }
       }
-      if(submerged<Math.ceil(44.0*0.68)) return null;
+      if(submerged<Math.ceil(44.0*0.60)) return null;
 
       int rimAbove=0;
       for(int i=0;i<40;i++) {
@@ -107,7 +110,7 @@ public final class WildernessTerrainProfile {
          int z=(int)Math.round(centerZ+s*radiusX*u+c*radiusZ*v);
          if(surfaceHeight(x,z)>=waterY+1)rimAbove++;
       }
-      if(rimAbove<30) return null;
+      if(rimAbove<28) return null;
 
       // Refuse escarpments that would require a vertical cut at the shore.
       int maxEdgeStep=0;
@@ -121,6 +124,67 @@ public final class WildernessTerrainProfile {
       }
       if(maxEdgeStep>15) return null;
       return new BasinFit(waterY,coreMean,rimMean,coreMin,rimMin,rise,maxEdgeStep);
+   }
+
+   /**
+    * Search the unmodified wilderness surface for naturally enclosed depressions.
+    * This is deliberately a terrain-first scan: feature-cell randomness supplies
+    * the search domain, not the lake centre. Returned candidates are ranked by
+    * their natural low-point / closed-rim score and still pass findBasin().
+    */
+   public List<BasinCandidate> findNearbyBasins(double originX,double originZ,
+           double searchRadiusBlocks,double radiusX,double radiusZ,double preferredAngle,int maximum) {
+      if(maximum<=0||searchRadiusBlocks<0||!Double.isFinite(originX)||!Double.isFinite(originZ))
+         return java.util.Collections.emptyList();
+      final class Scored {
+         final double x,z,score;
+         Scored(double x,double z,double score){this.x=x;this.z=z;this.score=score;}
+      }
+      List<Scored> scored=new ArrayList<>();
+      int side=17;
+      double step=side<=1?0.0:(searchRadiusBlocks*2.0)/(side-1);
+      double c=Math.cos(preferredAngle),sn=Math.sin(preferredAngle);
+      for(int ix=0;ix<side;ix++)for(int iz=0;iz<side;iz++) {
+         double x=originX-searchRadiusBlocks+ix*step;
+         double z=originZ-searchRadiusBlocks+iz*step;
+         int center=surfaceHeight((int)Math.round(x),(int)Math.round(z));
+         double sum=0.0,min=Double.POSITIVE_INFINITY,max=Double.NEGATIVE_INFINITY;
+         int above=0,count=16;
+         for(int p=0;p<count;p++) {
+            double a=Math.PI*2.0*p/count;
+            double u=Math.cos(a)*0.72,v=Math.sin(a)*0.72;
+            int sx=(int)Math.round(x+c*radiusX*u-sn*radiusZ*v);
+            int sz=(int)Math.round(z+sn*radiusX*u+c*radiusZ*v);
+            int height=surfaceHeight(sx,sz);
+            sum+=height;min=Math.min(min,height);max=Math.max(max,height);
+            if(height>=center+1)above++;
+         }
+         double rise=sum/count-center;
+         double spread=max-min;
+         // Cheap coarse rejection. Full closure, waterline and shoreline-grade
+         // tests are applied to the best candidates below.
+         if(rise<1.0||above<9||spread>42.0)continue;
+         double score=rise+0.18*(min-center)-0.035*spread;
+         scored.add(new Scored(x,z,score));
+      }
+      scored.sort(Comparator.comparingDouble((Scored candidate)->candidate.score).reversed()
+              .thenComparingDouble(candidate->candidate.x).thenComparingDouble(candidate->candidate.z));
+      List<BasinCandidate> result=new ArrayList<>();
+      for(Scored candidate:scored) {
+         BasinFit fit=findBasin(candidate.x,candidate.z,radiusX,radiusZ,preferredAngle);
+         if(fit==null)continue;
+         result.add(new BasinCandidate(candidate.x,candidate.z,preferredAngle,fit,candidate.score));
+         if(result.size()>=maximum)break;
+      }
+      return java.util.Collections.unmodifiableList(result);
+   }
+
+   public static final class BasinCandidate {
+      public final double centerX,centerZ,angle,score;
+      public final BasinFit fit;
+      BasinCandidate(double centerX,double centerZ,double angle,BasinFit fit,double score) {
+         this.centerX=centerX;this.centerZ=centerZ;this.angle=angle;this.fit=fit;this.score=score;
+      }
    }
 
    public static final class BasinFit {
