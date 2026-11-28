@@ -54,7 +54,7 @@ public final class StreamWaterProfile {
          double length=Math.hypot(dx,dz);
          if(length<1.0e-6)continue;
          totalLength+=length;
-         int pieces=Math.max(1,(int)Math.ceil(length/20.0));
+         int pieces=Math.max(1,(int)Math.ceil(length/12.0));
          for(int p=1;p<=pieces;p++) {
             double t=p/(double)pieces;
             px.add(inputX[i-1]+dx*t);
@@ -67,13 +67,13 @@ public final class StreamWaterProfile {
       for(int i=0;i<n;i++){x[i]=px.get(i);z[i]=pz.get(i);}
 
       int drop=sourceY-receiverY;
-      int cascadeCount=drop>=6&&totalLength>=180.0
+      int cascadeCount=drop>=6&&totalLength>=72.0
               ?Math.min(5,Math.max(1,drop/4)):0;
       double[] centers=new double[cascadeCount];
       Noise2D noise=new Noise2D(seed^0x4341534341444553L);
       for(int c=0;c<cascadeCount;c++) {
          double base=0.14+0.72*(c+1.0)/(cascadeCount+1.0);
-         double jitter=noise.noise(c*7.13+1.9,seed*0.0000001+2.7)*0.035;
+         double jitter=noise.noise(c*7.13+1.9,((Noise2D.mix(seed^c*0x9E3779B97F4A7C15L)>>>11)*0x1.0p-53)*13.0)*0.035;
          centers[c]=Math.max(0.12,Math.min(0.88,base+jitter));
       }
 
@@ -99,7 +99,7 @@ public final class StreamWaterProfile {
          double nearestCascade=Double.POSITIVE_INFINITY;
          for(double center:centers)nearestCascade=Math.min(nearestCascade,Math.abs(progress-center));
          if(cascadeCount>0) {
-            double radius=Math.max(0.009,Math.min(0.038,22.0/Math.max(1.0,totalLength)));
+            double radius=Math.max(0.009,Math.min(0.08,22.0/Math.max(1.0,totalLength)));
             if(nearestCascade<radius) {
                double t=1.0-nearestCascade/radius;
                // Concentrate the vertical change into a short cascade lip.
