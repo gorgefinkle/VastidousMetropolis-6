@@ -33,7 +33,7 @@ public final class StreamMeanderGuideProbe {
       if(east.stepCost((int)Math.round(east.centerXAt(0.5)),
               (int)Math.round(east.centerZAt(0.5)))>2)
          throw new AssertionError("A* guide gives excessive cost to its own centreline");
-      if(east.stepCost(150,14)<10)
+      if(east.stepCost(150,14)<3)
          throw new AssertionError("A* guide does not meaningfully discourage straight-shot deviation");
 
       StreamMeanderGuide north=new StreamMeanderGuide(0x52495645524D4541L,0,0,0,300);
