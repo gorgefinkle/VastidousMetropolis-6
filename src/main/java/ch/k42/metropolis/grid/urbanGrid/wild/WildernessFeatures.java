@@ -663,6 +663,15 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       Map<Long,WaterTarget> goals=new HashMap<>();
       for(WaterTarget t:targets)goals.putIfAbsent(cellKey(t.x,t.z),t);
       if(goals.isEmpty())return null;
+      // A deterministic broad-scale guide gives each stream several gentle
+      // lateral swings. A* still chooses the legal route around city, highway,
+      // existing-water and creek reservations; the guide supplies natural
+      // meander rather than allowing an unobstructed straight shot by default.
+      WaterTarget guideTarget=targets.get(0);
+      long guideSeed=Noise2D.mix(this.seed ^ cellKey(startX,startZ)
+              ^ guideTarget.key.networkId() ^ Long.rotateLeft(guideTarget.key.endpointId(),17));
+      StreamMeanderGuide meanderGuide=new StreamMeanderGuide(guideSeed,startX,startZ,
+              guideTarget.x,guideTarget.z);
       Map<Long,Byte> highwayAxes=highwayAxes(minX,minZ,maxX,maxZ);
       PriorityQueue<RouteNode> open=new PriorityQueue<>(Comparator.comparingInt((RouteNode n)->n.score)
               .thenComparingInt(n->n.cost).thenComparingLong(n->n.key));
@@ -694,7 +703,9 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
             if(axes!=0&&(axes&moveAxis)!=0){highwayParallelBlocks++;continue;}
             if(node.highwayRun>0&&direction!=node.direction){highwayTurnBlocks++;continue;}
             int run=axes==0?0:node.highwayRun+1;if(run>MAX_HIGHWAY_CROSSING_CHUNKS){highwayWidthBlocks++;continue;}
-            int cost=node.cost+10+(axes==0?0:9)+(node.direction!=4&&node.direction!=direction?2:0);
+            int cost=node.cost+10+(axes==0?0:9)
+                    +(node.direction!=4&&node.direction!=direction?5:0)
+                    +meanderGuide.stepCost(nx,nz);
             long next=routeKey(nx,nz,direction,run);Integer old=best.get(next);if(old!=null&&old<=cost)continue;
             best.put(next,cost);previous.put(next,node.key);
             open.add(new RouteNode(next,nx,nz,direction,run,cost,cost+heuristic(nx,nz,targets)*10));
