@@ -20,7 +20,6 @@ public final class WildernessStreamCourse extends RiverProvider {
    private final double[] zs;
    /** Downstream water surface at each centreline point; null only for legacy test courses. */
    private final double[] waterYs;
-   private final int cascadeCount;
    private final double widthBlocks;
    private final double bankMarginBlocks;
    private final double minX, maxX, minZ, maxZ;
@@ -59,10 +58,6 @@ public final class WildernessStreamCourse extends RiverProvider {
       if(waterYs!=null)for(double y:waterYs)if(!Double.isFinite(y))
          throw new IllegalArgumentException("Stream water levels must be finite");
       this.waterYs=waterYs;
-      int cascades=0;
-      if(waterYs!=null)for(int i=1;i<waterYs.length;i++)
-         if(Math.floor(waterYs[i-1])-Math.floor(waterYs[i])>=2.0)cascades++;
-      this.cascadeCount=cascades;
       this.widthBlocks = widthBlocks;
       this.bankMarginBlocks = bankMarginBlocks;
       this.localAxisZ = localAxisZ;
@@ -134,9 +129,6 @@ public final class WildernessStreamCourse extends RiverProvider {
 
    /** Endpoint values used to verify that an outlet descends into its receiver. */
    public int sourceWaterY(){return this.waterYs==null?waterYAt(this.xs[0],this.zs[0]):(int)Math.round(this.waterYs[0]);}
-   /** Number of short reaches that visibly drop at least two water levels. */
-   public int cascadeCount(){return this.cascadeCount;}
-
    public int receiverWaterY(){return this.waterYs==null?waterYAt(this.xs[this.xs.length-1],this.zs[this.zs.length-1])
            :(int)Math.round(this.waterYs[this.waterYs.length-1]);}
 
