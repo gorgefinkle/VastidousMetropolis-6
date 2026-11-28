@@ -37,7 +37,7 @@ public final class LakeStreamCoverageProbe {
                             (int)Math.floor(lake.centerZ));
                     if(lakeSample.feature()!=HydrologySample.Feature.LAKE||!lakeSample.openWater()
                             ||lakeSample.depth()<1||lakeSample.waterY()!=lake.waterY)
-                        throw new AssertionError("Lake column does not resolve through the unified freshwater biome layer: "+lakeSample.feature());
+                        throw new AssertionError("Lake column does not resolve through the unified freshwater biome layer: feature="+lakeSample.feature()+" open="+lakeSample.openWater()+" signed="+lakeSample.signedDistanceBlocks()+" depth="+lakeSample.depth()+" sampleY="+lakeSample.waterY()+" siteY="+lake.waterY);
                     if(lake.stream==null) {
                         if(!diagnosed) {
                             int[] diag=features.outletDiagnosticsForProbe(lake);
