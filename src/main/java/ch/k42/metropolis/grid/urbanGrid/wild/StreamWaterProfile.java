@@ -102,11 +102,12 @@ public final class StreamWaterProfile {
             double radius=Math.max(0.009,Math.min(0.038,22.0/Math.max(1.0,totalLength)));
             if(nearestCascade<radius) {
                double t=1.0-nearestCascade/radius;
-               modulation*=1.0+19.0*t*t*(3.0-2.0*t);
-            } else if(nearestCascade<radius*2.2) {
-               // Slow the approach and runout around each cascade, creating
-               // visibly calmer pool sections rather than a uniform ramp.
-               modulation*=0.72;
+               // Concentrate the vertical change into a short cascade lip.
+               modulation*=1.0+9.0*t*t*(3.0-2.0*t);
+            } else {
+               // Long quiet reaches between drops behave like pools and slow
+               // riffles. The remaining total fall is delivered at the next lip.
+               modulation*=0.22;
             }
          }
          weights[i]=length*Math.max(0.45,Math.min(18.0,modulation));
