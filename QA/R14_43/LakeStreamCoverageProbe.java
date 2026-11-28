@@ -114,7 +114,7 @@ public final class LakeStreamCoverageProbe {
             if(nearestLakeBlocks>8000.0)
                 throw new AssertionError("Nearest planned lake is too remote for ordinary exploration: seed="+seed
                         +" distance="+Math.round(nearestLakeBlocks)+" blocks locations=["+lakePositions+"] "
-                        +features.lakePlacementDiagnosticsForProbe());
+                        +" latestBasinSearch={"+features.basinSearchDiagnosticForProbe()+"}");
             if(streamCount==0)
                 throw new AssertionError("No connected outlet stream appears in the same 5x5 window for seed "+seed);
             System.out.println("LakeStreamCoverageProbe PASS seed="+seed
