@@ -117,6 +117,14 @@ jobs:
           assert "enforceNeighbourRules ? this.lowerSites" in source
           print("LandmarkNonRecursiveProbe PASS: accepted plans use memoized, one-hop raw neighbor proposals; no recursive siteOf edge")
           PY
+      - name: Probe deterministic natural stream meandering
+        run: |
+          mkdir -p qa-out
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/Noise2D.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/StreamMeanderGuide.java \
+            QA/R14_49/StreamMeanderGuideProbe.java
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.wild.StreamMeanderGuideProbe
       - name: Probe convergence-key identity, spatial lookup and LRU eviction
         run: |
           mkdir -p qa-out
