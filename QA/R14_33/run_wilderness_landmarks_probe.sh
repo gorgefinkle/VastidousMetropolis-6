@@ -19,6 +19,7 @@ FOREST="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/ForestGenera
 PROFILE="$ROOT/src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/WildernessTerrainProfile.java"
 
 # Placement is deterministic and accepts only the feature's actual footprint.
+grep -Fq 'int footprint=(int)Math.ceil((Math.max(candidate.radiusX,candidate.radiusZ)*1.13' "$FEATURES"
 grep -Fq 'private static final int MOUNTAIN_CLEARANCE = 18' "$FEATURES"
 grep -Fq 'private static final int MOUNTAIN_THRESHOLD = 2' "$FEATURES"
 grep -Fq 'private static final int LAKE_THRESHOLD = 60' "$FEATURES"
