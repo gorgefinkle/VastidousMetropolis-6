@@ -80,6 +80,10 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
    private final AtomicLong lakeRandomSkips=new AtomicLong();
    private final AtomicLong lakeBasinCandidates=new AtomicLong();
    private final AtomicLong lakeFootprintRejects=new AtomicLong();
+   private final AtomicLong lakeCityRejects=new AtomicLong();
+   private final AtomicLong lakeWaterRejects=new AtomicLong();
+   private final AtomicLong lakeCreekRejects=new AtomicLong();
+   private final AtomicLong lakeHighwayRejects=new AtomicLong();
    private final AtomicLong lakeAccepted=new AtomicLong();
    private final Map<Long, FeatureCell> featureCells =
            new LinkedHashMap<Long, FeatureCell>(96, 0.75f, true) {
@@ -220,6 +224,10 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
               +" randomSkips="+this.lakeRandomSkips.get()
               +" basinCandidates="+this.lakeBasinCandidates.get()
               +" footprintRejects="+this.lakeFootprintRejects.get()
+              +" blockers={city:"+this.lakeCityRejects.get()
+              +",water:"+this.lakeWaterRejects.get()
+              +",creek:"+this.lakeCreekRejects.get()
+              +",highway:"+this.lakeHighwayRejects.get()+"}"
               +" accepted="+this.lakeAccepted.get()
               +" latestSearch={"+this.terrainProfile.lastSearchDiagnostic()+"}";
    }
@@ -278,6 +286,14 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          int x=(int)Math.floor(candidate.centerX/16.0),z=(int)Math.floor(candidate.centerZ/16.0);
          if(!footprintClear(x,z,footprint,footprint,highwayMask,2)) {
             this.lakeFootprintRejects.incrementAndGet();
+            String blocker=lakeFootprintBlocker(x,z,footprint,footprint,highwayMask,2);
+            switch(blocker) {
+               case "city" -> this.lakeCityRejects.incrementAndGet();
+               case "water" -> this.lakeWaterRejects.incrementAndGet();
+               case "creek" -> this.lakeCreekRejects.incrementAndGet();
+               case "highway" -> this.lakeHighwayRejects.incrementAndGet();
+               default -> { }
+            }
             continue;
          }
          LakeSite lake=new LakeSite(this.seed,gx,gz,candidate.centerX,candidate.centerZ,
@@ -301,6 +317,22 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          (int)Math.floorMod(a, reach * 2L + 1L) - reach,
          (int)Math.floorMod(b, reach * 2L + 1L) - reach
       };
+   }
+
+   private String lakeFootprintBlocker(int centerX,int centerZ,int radiusX,int radiusZ,
+                                       HighwayNetwork.Snapshot highwayMask,int step) {
+      int extentX=radiusX+1,extentZ=radiusZ+1;
+      for(int dx=-extentX;dx<=extentX;dx+=step)for(int dz=-extentZ;dz<=extentZ;dz+=step) {
+         double r=(double)dx*dx/((double)radiusX*radiusX)
+                 +(double)dz*dz/((double)radiusZ*radiusZ);
+         if(r>1.0)continue;
+         int x=centerX+dx,z=centerZ+dz;
+         if(this.inOuterCity(x,z))return "city";
+         if(this.water.baseKindAt(x,z)!=WaterField.Kind.NONE)return "water";
+         if(this.plannedCreekAt(x,z))return "creek";
+         if(highwayMask.at(x,z))return "highway";
+      }
+      return "unknown";
    }
 
    /** The exclusion is exactly the feature footprint; no extra empty buffer is reserved. */
