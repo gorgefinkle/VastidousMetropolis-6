@@ -67,7 +67,7 @@ public final class StreamWaterProfile {
       for(int i=0;i<n;i++){x[i]=px.get(i);z[i]=pz.get(i);}
 
       int drop=sourceY-receiverY;
-      int cascadeCount=drop>=6&&totalLength>=72.0
+      int cascadeCount=drop>=12&&totalLength>=72.0
               ?Math.min(5,Math.max(1,drop/4)):0;
       double[] centers=new double[cascadeCount];
       Noise2D noise=new Noise2D(seed^0x4341534341444553L);
