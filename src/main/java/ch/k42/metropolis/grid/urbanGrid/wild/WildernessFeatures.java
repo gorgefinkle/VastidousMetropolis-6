@@ -818,19 +818,9 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       // planning strongly avoids climbing into ridges or massifs. The long
       // pool/cascade profile controls the water levels only after a plausible
       // downhill valley route has been selected.
-      int rise=toY-fromY;
-      int uphill=Math.max(0,rise);
-      int uphillPenalty=uphill*7+Math.max(0,uphill-1)*2;
-      int downhill=Math.max(0,-rise);
-      int downhillReward=Math.min(6,downhill);
-      int valleyPenalty=0;
-      if(land) {
-         int mean=(routeSurfaceY(x-1,z,cache)+routeSurfaceY(x+1,z,cache)
-                 +routeSurfaceY(x,z-1,cache)+routeSurfaceY(x,z+1,cache))/4;
-         int ridgeAboveValley=Math.max(0,toY-mean);
-         valleyPenalty=Math.min(18,ridgeAboveValley*2);
-      }
-      return Math.max(0,Math.min(48,uphillPenalty+valleyPenalty-downhillReward));
+      int mean=land?(routeSurfaceY(x-1,z,cache)+routeSurfaceY(x+1,z,cache)
+              +routeSurfaceY(x,z-1,cache)+routeSurfaceY(x,z+1,cache))/4:toY;
+      return WildernessDrainageCost.movementCost(fromY,toY,mean,land);
    }
 
    private static int heuristic(int x, int z, List<WaterTarget> targets) {
