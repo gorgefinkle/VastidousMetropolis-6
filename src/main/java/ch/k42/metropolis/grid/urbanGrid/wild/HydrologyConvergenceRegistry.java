@@ -53,7 +53,9 @@ public final class HydrologyConvergenceRegistry {
            HydrologyConvergenceKey.Receiver receiver,int chunkX,int chunkZ) {
       if(receiver==null)return null;
       TreeSet<HydrologyConvergenceKey> keys=byCell.get(new CellIdentity(receiver,chunkX,chunkZ));
-      return keys==null||keys.isEmpty()?null:keys.first();
+      if(keys==null||keys.isEmpty())return null;
+      // A live receiver lookup also refreshes this endpoint's LRU lifetime.
+      return endpoints.get(new Identity(keys.first()));
    }
 
    private static final class CellIdentity {
