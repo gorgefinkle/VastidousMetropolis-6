@@ -214,6 +214,7 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
    private FeatureCell buildCell(int gx, int gz) {
       long h = cellHash(gx, gz);
       int kind = (int)Math.floor(unit(h) * 100.0);
+      if (kind >= LAKE_THRESHOLD) return FeatureCell.EMPTY;
 
 
       int idealX = gx * this.cellSize + this.cellSize / 2;
