@@ -21,11 +21,10 @@ public final class WildernessDrainageCostProbe {
       StreamWaterProfile.Profile highLake=StreamWaterProfile.create(
               new double[]{0,900},new double[]{0,0},160,72,0x484947484C414B45L,(x,z)->130);
       if(highLake.waterY()[0]!=160||highLake.waterY()[highLake.pointCount()-1]!=72
-              ||highLake.cascadeCount()<1)
-         throw new AssertionError("High lake source was not allowed to descend through cascades");
+              ||highLake.totalDrop()!=88.0||highLake.waterY()[1]>=160.0)
+         throw new AssertionError("High lake source was not allowed to descend continuously");
       System.out.printf(java.util.Locale.ROOT,
-              "WildernessDrainageCostProbe PASS gentle=%d shoulder=%d massif=%d ridge=%d highLake=%d->%d cascades=%d%n",
-              gentle,shoulder,massif,ridge,highLake.waterY()[0],highLake.waterY()[highLake.pointCount()-1],
-              highLake.cascadeCount());
+              "WildernessDrainageCostProbe PASS gentle=%d shoulder=%d massif=%d ridge=%d highLake=%d->%d%n",
+              gentle,shoulder,massif,ridge,highLake.waterY()[0],highLake.waterY()[highLake.pointCount()-1]);
    }
 }
