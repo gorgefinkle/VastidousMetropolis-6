@@ -552,30 +552,98 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
 
    private WildernessStreamCourse buildOutlet(LakeSite lake,long featureHash,List<WaterTarget> targets) {
       if(targets.isEmpty())return null;
-      WaterTarget nearest=targets.get(0);
-      double dx=nearest.x-lake.centerX/16.0,dz=nearest.z-lake.centerZ/16.0;
-      double length=Math.max(1.0,Math.hypot(dx,dz)),inset=Math.min(lake.radiusX,lake.radiusZ)/16.0*.62;
-      int startX=(int)Math.floor(lake.centerX/16.0+dx/length*inset);
-      int startZ=(int)Math.floor(lake.centerZ/16.0+dz/length*inset);
-      if(lake.distanceInsideShoreBlock(startX*16.0+8.0,startZ*16.0+8.0)<12.0) {
-         for(double factor:new double[]{.52,.42,.32,.22}) {
-            int sx=(int)Math.floor(lake.centerX/16.0+dx/length*Math.min(lake.radiusX,lake.radiusZ)/16.0*factor);
-            int sz=(int)Math.floor(lake.centerZ/16.0+dz/length*Math.min(lake.radiusX,lake.radiusZ)/16.0*factor);
-            if(lake.distanceInsideShoreBlock(sx*16.0+8.0,sz*16.0+8.0)>=12.0){startX=sx;startZ=sz;break;}
+      // A lake only drains into a receiver at the same or a lower water level.
+      // Otherwise the planner would manufacture an uphill stream or a waterfall
+      // at the junction. Closed lakes with no lower receiver remain endorheic.
+      List<WaterTarget> drainingTargets=new ArrayList<>();
+      for(WaterTarget target:targets)
+         if(receiverWaterY(target.key)<=lake.waterY)drainingTargets.add(target);
+      if(drainingTargets.isEmpty())return null;
+
+      // Start inside the lake, aligned to its lowest naturally enclosed rim
+      // saddle. This places the outlet at the basin's spillway rather than on
+      // whichever side happens to face the nearest receiver.
+      double spillX=lake.centerX,spillZ=lake.centerZ;
+      WildernessTerrainProfile.BasinFit fit=lake.basinFit();
+      if(fit!=null){spillX=fit.spillBlockX;spillZ=fit.spillBlockZ;}
+      double dx=spillX-lake.centerX,dz=spillZ-lake.centerZ;
+      double length=Math.max(1.0,Math.hypot(dx,dz));
+      double inset=0.76;
+      int startX=(int)Math.floor((lake.centerX+dx*inset)/16.0);
+      int startZ=(int)Math.floor((lake.centerZ+dz*inset)/16.0);
+      if(lake.distanceInsideShoreBlock(startX*16.0+8.0,startZ*16.0+8.0)<10.0) {
+         for(double factor:new double[]{.68,.58,.48,.38,.28,.18}) {
+            int sx=(int)Math.floor((lake.centerX+dx*factor)/16.0);
+            int sz=(int)Math.floor((lake.centerZ+dz*factor)/16.0);
+            if(lake.distanceInsideShoreBlock(sx*16.0+8.0,sz*16.0+8.0)>=10.0){startX=sx;startZ=sz;break;}
          }
       }
-      RouteResult routed=route(startX,startZ,targets);
+
+      RouteResult routed=route(startX,startZ,drainingTargets);
       if(routed==null||routed.path.size()<2)return null;
       // Only the selected receiver is retained. Candidate targets are transient
       // A* inputs and must not fill the world registry with unused endpoints.
       HydrologyConvergenceKey confluence=this.convergenceRegistry.register(routed.target.key);
-      double[] blockX=new double[routed.path.size()],blockZ=new double[routed.path.size()];
-      for(int i=0;i<routed.path.size();i++){blockX[i]=routed.path.get(i)[0]*16.0+8.0;blockZ[i]=routed.path.get(i)[1]*16.0+8.0;}
-      int last=blockX.length-1;
-      blockX[last]=confluence.blockX();blockZ[last]=confluence.blockZ();
+      double[][] smoothed=smoothRoute(routed.path,confluence);
+      double[] blockX=new double[smoothed.length],blockZ=new double[smoothed.length];
+      for(int i=0;i<smoothed.length;i++){blockX[i]=smoothed[i][0];blockZ[i]=smoothed[i][1];}
+      double[] waterYs=downstreamWaterProfile(blockX,blockZ,lake.waterY,receiverWaterY(confluence));
       long streamSeed=mix(featureHash^0x53545245414D4C4BL);
       double width=10.0+unit(mix(streamSeed))*2.0,bank=7.0+unit(mix(streamSeed^0x42414E4BL))*3.0;
-      return new WildernessStreamCourse(streamSeed,blockX,blockZ,width,bank,confluence);
+      return new WildernessStreamCourse(streamSeed,blockX,blockZ,waterYs,width,bank,confluence);
+   }
+
+   private int receiverWaterY(HydrologyConvergenceKey key) {
+      return switch(key.receiver()) {
+         case OCEAN -> OceanConfig.getOceanBuildHeight();
+         case RIVER,CREEK -> RiverConfig.getRiverBuildHeight();
+      };
+   }
+
+   /** Remove grid-collinear nodes and bevel real bends without changing legal route endpoints. */
+   private static double[][] smoothRoute(List<int[]> route,HydrologyConvergenceKey endpoint) {
+      List<double[]> corners=new ArrayList<>();
+      int[] first=route.get(0);
+      corners.add(new double[]{first[0]*16.0+8.0,first[1]*16.0+8.0});
+      for(int i=1;i<route.size()-1;i++) {
+         int[] a=route.get(i-1),b=route.get(i),c=route.get(i+1);
+         int ax=Integer.compare(b[0],a[0]),az=Integer.compare(b[1],a[1]);
+         int bx=Integer.compare(c[0],b[0]),bz=Integer.compare(c[1],b[1]);
+         if(ax!=bx||az!=bz)corners.add(new double[]{b[0]*16.0+8.0,b[1]*16.0+8.0});
+      }
+      int[] last=route.get(route.size()-1);
+      corners.add(new double[]{last[0]*16.0+8.0,last[1]*16.0+8.0});
+      if(corners.size()<3)return new double[][]{
+              corners.get(0),new double[]{endpoint.blockX(),endpoint.blockZ()}};
+      List<double[]> smooth=new ArrayList<>();
+      smooth.add(corners.get(0));
+      for(int i=0;i<corners.size()-1;i++) {
+         double[] a=corners.get(i),b=corners.get(i+1);
+         smooth.add(new double[]{a[0]*0.72+b[0]*0.28,a[1]*0.72+b[1]*0.28});
+         smooth.add(new double[]{a[0]*0.28+b[0]*0.72,a[1]*0.28+b[1]*0.72});
+      }
+      smooth.add(corners.get(corners.size()-1));
+      smooth.set(smooth.size()-1,new double[]{endpoint.blockX(),endpoint.blockZ()});
+      return smooth.toArray(double[][]::new);
+   }
+
+   /** Smoothly lower the water surface from the source lake to its receiver. */
+   private static double[] downstreamWaterProfile(double[] xs,double[] zs,int sourceY,int receiverY) {
+      double[] profile=new double[xs.length];
+      double total=0.0;
+      double[] cumulative=new double[xs.length];
+      for(int i=1;i<xs.length;i++) {
+         total+=Math.hypot(xs[i]-xs[i-1],zs[i]-zs[i-1]);
+         cumulative[i]=total;
+      }
+      double drop=Math.max(0,sourceY-receiverY);
+      for(int i=0;i<profile.length;i++) {
+         double t=total<=1.0e-9?1.0:(cumulative[i]/total);
+         profile[i]=sourceY-drop*t;
+      }
+      profile[0]=sourceY;
+      profile[profile.length-1]=receiverY;
+      return profile;
    }
 
    private List<WaterTarget> findTargets(int startX,int startZ) {
@@ -675,6 +743,7 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       StreamMeanderGuide meanderGuide=new StreamMeanderGuide(guideSeed,startX,startZ,
               guideTarget.x,guideTarget.z);
       Map<Long,Byte> highwayAxes=highwayAxes(minX,minZ,maxX,maxZ);
+      Map<Long,Integer> routeHeights=new HashMap<>();
       PriorityQueue<RouteNode> open=new PriorityQueue<>(Comparator.comparingInt((RouteNode n)->n.score)
               .thenComparingInt(n->n.cost).thenComparingLong(n->n.key));
       Map<Long,Integer> best=new HashMap<>();Map<Long,Long> previous=new HashMap<>();
@@ -705,9 +774,12 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
             if(axes!=0&&(axes&moveAxis)!=0){highwayParallelBlocks++;continue;}
             if(node.highwayRun>0&&direction!=node.direction){highwayTurnBlocks++;continue;}
             int run=axes==0?0:node.highwayRun+1;if(run>MAX_HIGHWAY_CROSSING_CHUNKS){highwayWidthBlocks++;continue;}
+            int currentY=routeSurfaceY(node.x,node.z,routeHeights);
+            int nextY=proposed==null?routeSurfaceY(nx,nz,routeHeights):receiverWaterY(proposed.key);
+            int flowCost=terrainFlowCost(currentY,nextY,nx,nz,proposed==null,routeHeights);
             int cost=node.cost+10+(axes==0?0:9)
                     +(node.direction!=4&&node.direction!=direction?5:0)
-                    +meanderGuide.stepCost(nx,nz);
+                    +flowCost+meanderGuide.stepCost(nx,nz);
             long next=routeKey(nx,nz,direction,run);Integer old=best.get(next);if(old!=null&&old<=cost)continue;
             best.put(next,cost);previous.put(next,node.key);
             open.add(new RouteNode(next,nx,nz,direction,run,cost,cost+heuristic(nx,nz,targets)*10));
@@ -722,6 +794,38 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       while(cursor!=startKey){reversed.add(decodeCell(cursor));Long parent=previous.get(cursor);if(parent==null)return null;cursor=parent;}
       reversed.add(new int[]{startX,startZ});java.util.Collections.reverse(reversed);
       return new RouteResult(reversed,reached);
+   }
+
+   /** Cached wilderness surface height at a chunk centre, before any water carving. */
+   private int routeSurfaceY(int chunkX,int chunkZ,Map<Long,Integer> cache) {
+      long key=cellKey(chunkX,chunkZ);
+      Integer saved=cache.get(key);
+      if(saved!=null)return saved;
+      int y=this.terrainProfile.surfaceHeight(chunkX*16+8,chunkZ*16+8);
+      cache.put(key,y);
+      return y;
+   }
+
+   /**
+    * Prefer downhill moves and the bottoms of broad valleys. Steep uphill
+    * crossings are expensive, while downhill and locally sheltered terrain
+    * receive a modest preference. Every edge remains non-negative for A*.
+    */
+   private int terrainFlowCost(int fromY,int toY,int x,int z,boolean land,
+                               Map<Long,Integer> cache) {
+      int rise=toY-fromY;
+      int uphill=Math.max(0,rise);
+      int uphillPenalty=uphill*7+Math.max(0,uphill-1)*2;
+      int downhill=Math.max(0,-rise);
+      int downhillReward=Math.min(6,downhill);
+      int valleyPenalty=0;
+      if(land) {
+         int mean=(routeSurfaceY(x-1,z,cache)+routeSurfaceY(x+1,z,cache)
+                 +routeSurfaceY(x,z-1,cache)+routeSurfaceY(x,z+1,cache))/4;
+         int ridgeAboveValley=Math.max(0,toY-mean);
+         valleyPenalty=Math.min(18,ridgeAboveValley*2);
+      }
+      return Math.max(0,Math.min(48,uphillPenalty+valleyPenalty-downhillReward));
    }
 
    private static int heuristic(int x, int z, List<WaterTarget> targets) {
