@@ -557,9 +557,9 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
 
    private WildernessStreamCourse buildOutlet(LakeSite lake,long featureHash,List<WaterTarget> targets) {
       if(targets.isEmpty())return null;
-      // A lake only drains into a receiver at the same or a lower water level.
-      // Otherwise the planner would manufacture an uphill stream or a waterfall
-      // at the junction. Closed lakes with no lower receiver remain endorheic.
+      // Higher lakes may feed lower receivers through multi-level cascades.
+      // No upstream rise is permitted at the final junction; lakes without a
+      // same-height or lower receiver remain closed endorheic basins.
       List<WaterTarget> drainingTargets=new ArrayList<>();
       for(WaterTarget target:targets)
          if(receiverWaterY(target.key)<=lake.waterY)drainingTargets.add(target);
