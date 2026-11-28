@@ -19,8 +19,8 @@ public final class StreamMeanderGuide {
       this.unitZ=dz/this.length;
       this.normalX=-this.unitZ;
       this.normalZ=this.unitX;
-      this.amplitude=Math.min(14.0,Math.max(2.5,this.length*0.045));
-      this.waves=Math.min(6.5,Math.max(1.6,this.length/46.0));
+      this.amplitude=Math.min(9.0,Math.max(3.0,this.length*0.035));
+      this.waves=Math.min(7.0,Math.max(2.0,this.length/56.0));
       this.noise=new Noise2D(seed);
       long phaseBits=Noise2D.mix(seed^0x4D45414E44455231L);
       this.phase=((phaseBits>>>11)*0x1.0p-53)*240.0-120.0;
@@ -53,7 +53,7 @@ public final class StreamMeanderGuide {
     */
    public int stepCost(int chunkX,int chunkZ) {
       double deviation=Math.max(0.0,Math.abs(lateralErrorChunks(chunkX,chunkZ))-0.8);
-      return (int)Math.min(28.0,Math.round(deviation*2.0));
+      return (int)Math.min(5.0,Math.round(deviation*0.55));
    }
 
    public double centerXAt(double progress) {
