@@ -587,7 +587,7 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       double[][] smoothed=smoothRoute(routed.path,confluence);
       double[] blockX=new double[smoothed.length],blockZ=new double[smoothed.length];
       for(int i=0;i<smoothed.length;i++){blockX[i]=smoothed[i][0];blockZ[i]=smoothed[i][1];}
-      double[] waterYs=downstreamWaterProfile(blockX,blockZ,lake.waterY,receiverWaterY(confluence));
+      double[] waterYs=downstreamWaterProfile(blockX,blockZ,lake.waterY,receiverWaterY(confluence),streamSeed,this.terrainProfile);
       long streamSeed=mix(featureHash^0x53545245414D4C4BL);
       double width=10.0+unit(mix(streamSeed))*2.0,bank=7.0+unit(mix(streamSeed^0x42414E4BL))*3.0;
       return new WildernessStreamCourse(streamSeed,blockX,blockZ,waterYs,width,bank,confluence);
@@ -627,21 +627,44 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       return smooth.toArray(double[][]::new);
    }
 
-   /** Smoothly lower the water surface from the source lake to its receiver. */
-   private static double[] downstreamWaterProfile(double[] xs,double[] zs,int sourceY,int receiverY) {
+   /**
+    * A monotonic downstream grade with gentle natural variation. The profile
+    * is not sampled from every existing terrain height: water cuts its channel.
+    * Low-frequency terrain and flow noise only modulate where the grade drops
+    * faster or slower, while exact source/receiver levels remain authoritative.
+    */
+   private static double[] downstreamWaterProfile(double[] xs,double[] zs,int sourceY,int receiverY,
+                                                   long seed,WildernessTerrainProfile terrain) {
       double[] profile=new double[xs.length];
-      double total=0.0;
-      double[] cumulative=new double[xs.length];
-      for(int i=1;i<xs.length;i++) {
-         total+=Math.hypot(xs[i]-xs[i-1],zs[i]-zs[i-1]);
-         cumulative[i]=total;
-      }
+      if(xs.length==0)return profile;
+      if(xs.length==1){profile[0]=sourceY;return profile;}
       double drop=Math.max(0,sourceY-receiverY);
+      double[] weights=new double[xs.length-1],cumulative=new double[xs.length];
+      Noise2D gradeNoise=new Noise2D(seed^0x475241444550524FL);
+      double totalWeight=0.0;
+      for(int i=0;i<weights.length;i++) {
+         double mx=(xs[i]+xs[i+1])*0.5,mz=(zs[i]+zs[i+1])*0.5;
+         double distance=Math.max(1.0,Math.hypot(xs[i+1]-xs[i],zs[i+1]-zs[i]));
+         double broad=gradeNoise.noise(mx/2100.0+0.37,mz/2100.0-0.61);
+         double riffle=gradeNoise.noise(mx/520.0-1.13,mz/520.0+0.79);
+         int tx=(int)Math.floor(mx),tz=(int)Math.floor(mz);
+         int ty=terrain.surfaceHeight(tx,tz);
+         int nextY=terrain.surfaceHeight((int)Math.floor(xs[i+1]),(int)Math.floor(zs[i+1]));
+         double gentleTerrainCue=Math.max(-1.0,Math.min(1.0,(nextY-ty)/8.0));
+         double modulation=1.0+0.16*broad+0.07*riffle+0.06*gentleTerrainCue;
+         weights[i]=distance*Math.max(0.65,Math.min(1.35,modulation));
+         totalWeight+=weights[i];
+         cumulative[i+1]=totalWeight;
+      }
       for(int i=0;i<profile.length;i++) {
-         double t=total<=1.0e-9?1.0:(cumulative[i]/total);
+         double t=totalWeight<=1.0e-9?i/(double)(profile.length-1):cumulative[i]/totalWeight;
          profile[i]=sourceY-drop*t;
       }
       profile[0]=sourceY;
+      profile[profile.length-1]=receiverY;
+      // Rounded block levels are explicitly clamped monotonic to avoid a
+      // one-block uphill ripple after interpolation.
+      for(int i=1;i<profile.length;i++)profile[i]=Math.min(profile[i],profile[i-1]);
       profile[profile.length-1]=receiverY;
       return profile;
    }
@@ -813,19 +836,22 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
     */
    private int terrainFlowCost(int fromY,int toY,int x,int z,boolean land,
                                Map<Long,Integer> cache) {
+      // Existing topography informs the broad drainage direction, but it is
+      // not a hard riverbed constraint. A real stream can cut through a low
+      // ridge or shoulder; the channel and bank painter establish its own
+      // smooth grade. Keep this term deliberately weaker than the meander
+      // guide and the base route cost.
       int rise=toY-fromY;
-      int uphill=Math.max(0,rise);
-      int uphillPenalty=uphill*7+Math.max(0,uphill-1)*2;
-      int downhill=Math.max(0,-rise);
-      int downhillReward=Math.min(6,downhill);
-      int valleyPenalty=0;
+      int uphillPenalty=(int)Math.round(Math.max(0,rise-2)*0.38);
+      int downhillReward=(int)Math.round(Math.min(2.0,Math.max(0,-rise)*0.10));
+      int gentleValleyPreference=0;
       if(land) {
-         int mean=(routeSurfaceY(x-1,z,cache)+routeSurfaceY(x+1,z,cache)
-                 +routeSurfaceY(x,z-1,cache)+routeSurfaceY(x,z+1,cache))/4;
-         int ridgeAboveValley=Math.max(0,toY-mean);
-         valleyPenalty=Math.min(18,ridgeAboveValley*2);
+         int mean=(routeSurfaceY(x-2,z,cache)+routeSurfaceY(x+2,z,cache)
+                 +routeSurfaceY(x,z-2,cache)+routeSurfaceY(x,z+2,cache))/4;
+         int shoulder=Math.max(0,toY-mean-3);
+         gentleValleyPreference=(int)Math.round(Math.min(1.5,shoulder*0.12));
       }
-      return Math.max(0,Math.min(48,uphillPenalty+valleyPenalty-downhillReward));
+      return Math.max(0,Math.min(3,uphillPenalty+gentleValleyPreference-downhillReward));
    }
 
    private static int heuristic(int x, int z, List<WaterTarget> targets) {
