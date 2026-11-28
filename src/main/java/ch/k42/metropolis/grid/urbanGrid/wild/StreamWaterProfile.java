@@ -77,13 +77,15 @@ public final class StreamWaterProfile {
          centers[c]=Math.max(0.12,Math.min(0.88,base+jitter));
       }
 
-      double[] weights=new double[n-1],cumulative=new double[n];
+      double[] weights=new double[n-1],cumulative=new double[n],distanceAlong=new double[n];
+      for(int i=1;i<n;i++)
+         distanceAlong[i]=distanceAlong[i-1]+Math.hypot(x[i]-x[i-1],z[i]-z[i-1]);
       double totalWeight=0.0;
       for(int i=0;i<n-1;i++) {
          double mx=(x[i]+x[i+1])*0.5,mz=(z[i]+z[i+1])*0.5;
          double length=Math.max(1.0,Math.hypot(x[i+1]-x[i],z[i+1]-z[i]));
          double progress=totalLength<=1.0e-9?0.0:
-                 (cumulativeDistance(x,z,i)+length*0.5)/totalLength;
+                 (distanceAlong[i]+length*0.5)/totalLength;
          double broad=noise.noise(mx/1750.0+0.37,mz/1750.0-0.61);
          double riffle=noise.noise(mx/430.0-1.13,mz/430.0+0.79);
          double terrainCue=0.0;
@@ -130,9 +132,4 @@ public final class StreamWaterProfile {
       return new Profile(x,z,levels,actualCascades,totalLength);
    }
 
-   private static double cumulativeDistance(double[] x,double[] z,int throughSegment) {
-      double result=0.0;
-      for(int i=1;i<=throughSegment;i++)result+=Math.hypot(x[i]-x[i-1],z[i]-z[i-1]);
-      return result;
-   }
 }
