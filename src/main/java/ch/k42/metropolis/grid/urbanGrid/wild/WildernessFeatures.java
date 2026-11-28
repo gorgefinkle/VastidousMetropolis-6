@@ -220,8 +220,8 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       int idealZ = gz * this.cellSize + this.cellSize / 2;
       int mountainAttempts = 4;
       // Inland seas have a larger but bounded envelope, leaving open wilderness between basins.
-      int lakeReach = Math.max(24, this.cellSize / 2 - 44);
-      int maskReach = lakeReach + 52;
+      int lakeReach = Math.max(12, this.cellSize / 8);
+      int maskReach = lakeReach + 24;
       HighwayNetwork.Snapshot highwayMask = this.highways.snapshot(
               idealX - maskReach, idealZ - maskReach, idealX + maskReach, idealZ + maskReach);
 
