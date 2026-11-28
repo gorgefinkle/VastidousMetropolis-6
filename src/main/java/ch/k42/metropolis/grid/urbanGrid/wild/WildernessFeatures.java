@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Seed-stable wilderness landmarks. A rare alpine massif and named lakes are
@@ -76,15 +75,6 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
    private final CityRingField cities;
    private final WildernessTerrainProfile terrainProfile;
    private final HydrologyConvergenceRegistry convergenceRegistry=new HydrologyConvergenceRegistry();
-   private final AtomicLong lakeCellsConsidered=new AtomicLong();
-   private final AtomicLong lakeRandomSkips=new AtomicLong();
-   private final AtomicLong lakeBasinCandidates=new AtomicLong();
-   private final AtomicLong lakeFootprintRejects=new AtomicLong();
-   private final AtomicLong lakeCityRejects=new AtomicLong();
-   private final AtomicLong lakeWaterRejects=new AtomicLong();
-   private final AtomicLong lakeCreekRejects=new AtomicLong();
-   private final AtomicLong lakeHighwayRejects=new AtomicLong();
-   private final AtomicLong lakeAccepted=new AtomicLong();
    private final Map<Long, FeatureCell> featureCells =
            new LinkedHashMap<Long, FeatureCell>(96, 0.75f, true) {
               @Override protected boolean removeEldestEntry(Map.Entry<Long, FeatureCell> eldest) {
@@ -219,27 +209,12 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       synchronized (this) { return this.featureCells.size(); }
    }
    int registeredConvergenceEndpointCountForProbe(){return this.convergenceRegistry.size();}
-   String lakePlacementDiagnosticsForProbe() {
-      return "lakeCellsConsidered="+this.lakeCellsConsidered.get()
-              +" randomSkips="+this.lakeRandomSkips.get()
-              +" basinCandidates="+this.lakeBasinCandidates.get()
-              +" footprintRejects="+this.lakeFootprintRejects.get()
-              +" blockers={city:"+this.lakeCityRejects.get()
-              +",water:"+this.lakeWaterRejects.get()
-              +",creek:"+this.lakeCreekRejects.get()
-              +",highway:"+this.lakeHighwayRejects.get()+"}"
-              +" accepted="+this.lakeAccepted.get()
-              +" latestSearch={"+this.terrainProfile.lastSearchDiagnostic()+"}";
-   }
    String basinSearchDiagnosticForProbe(){return this.terrainProfile.lastSearchDiagnostic();}
 
    private FeatureCell buildCell(int gx, int gz) {
       long h = cellHash(gx, gz);
       int kind = (int)Math.floor(unit(h) * 100.0);
-      if (kind >= LAKE_THRESHOLD) {
-         this.lakeRandomSkips.incrementAndGet();
-         return FeatureCell.EMPTY;
-      }
+
 
       int idealX = gx * this.cellSize + this.cellSize / 2;
       int idealZ = gz * this.cellSize + this.cellSize / 2;
@@ -266,7 +241,6 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          return FeatureCell.EMPTY;
       }
 
-      this.lakeCellsConsidered.incrementAndGet();
       // 4-8 chunk major-axis radii fit compact natural hollows without forcing their scale.
       // Placement reserves the noisy coast and its full finite natural bank.
       int radius = 4 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
@@ -280,7 +254,6 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       List<WildernessTerrainProfile.BasinCandidate> basins=this.terrainProfile.findNearbyBasins(
               idealX*16.0+8.0,idealZ*16.0+8.0,lakeReach*16.0,
               radiusX,radiusZ,angle,24);
-      this.lakeBasinCandidates.addAndGet(basins.size());
       for(WildernessTerrainProfile.BasinCandidate candidate:basins) {
          // Reserve the actual accepted basin contour and its rendered bank.
          // Candidate radii are already scaled to the natural closed rim; using
@@ -288,18 +261,7 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          int footprint=(int)Math.ceil((Math.max(candidate.radiusX,candidate.radiusZ)*1.13
                  +LakeSite.SHORE_WIDTH_BLOCKS)/16.0)+1;
          int x=(int)Math.floor(candidate.centerX/16.0),z=(int)Math.floor(candidate.centerZ/16.0);
-         if(!footprintClear(x,z,footprint,footprint,highwayMask,2)) {
-            this.lakeFootprintRejects.incrementAndGet();
-            String blocker=lakeFootprintBlocker(x,z,footprint,footprint,highwayMask,2);
-            switch(blocker) {
-               case "city" -> this.lakeCityRejects.incrementAndGet();
-               case "water" -> this.lakeWaterRejects.incrementAndGet();
-               case "creek" -> this.lakeCreekRejects.incrementAndGet();
-               case "highway" -> this.lakeHighwayRejects.incrementAndGet();
-               default -> { }
-            }
-            continue;
-         }
+
          LakeSite lake=new LakeSite(this.seed,gx,gz,candidate.centerX,candidate.centerZ,
                  candidate.radiusX,candidate.radiusZ,candidate.angle,candidate.fit.waterY,this.terrainProfile,candidate.fit);
          // A basin remains a freshwater lake even when it has no legal outlet.
@@ -308,7 +270,6 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
             List<WaterTarget> targets=findTargets(x,z);
             if(!targets.isEmpty())lake.stream=this.buildOutlet(lake,h,targets);
          }
-         this.lakeAccepted.incrementAndGet();
          return new FeatureCell(null,lake);
       }
       return FeatureCell.EMPTY;
@@ -321,22 +282,6 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          (int)Math.floorMod(a, reach * 2L + 1L) - reach,
          (int)Math.floorMod(b, reach * 2L + 1L) - reach
       };
-   }
-
-   private String lakeFootprintBlocker(int centerX,int centerZ,int radiusX,int radiusZ,
-                                       HighwayNetwork.Snapshot highwayMask,int step) {
-      int extentX=radiusX+1,extentZ=radiusZ+1;
-      for(int dx=-extentX;dx<=extentX;dx+=step)for(int dz=-extentZ;dz<=extentZ;dz+=step) {
-         double r=(double)dx*dx/((double)radiusX*radiusX)
-                 +(double)dz*dz/((double)radiusZ*radiusZ);
-         if(r>1.0)continue;
-         int x=centerX+dx,z=centerZ+dz;
-         if(this.inOuterCity(x,z))return "city";
-         if(this.water.baseKindAt(x,z)!=WaterField.Kind.NONE)return "water";
-         if(this.plannedCreekAt(x,z))return "creek";
-         if(highwayMask.at(x,z))return "highway";
-      }
-      return "unknown";
    }
 
    /** The exclusion is exactly the feature footprint; no extra empty buffer is reserved. */
