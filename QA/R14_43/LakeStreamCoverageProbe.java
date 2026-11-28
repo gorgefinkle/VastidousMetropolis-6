@@ -79,9 +79,9 @@ public final class LakeStreamCoverageProbe {
                         case RIVER -> HydrologySample.Feature.RIVER;
                         case CREEK -> HydrologySample.Feature.CREEK;
                     };
-                    if(course.receiverWaterY()!=receiverSample.waterY())
+                    if(lake.stream.receiverWaterY()!=receiverSample.waterY())
                         throw new AssertionError("Outlet water surface does not meet receiver water level: course="
-                                +course.receiverWaterY()+" receiver="+receiverSample.waterY());
+                                +lake.stream.receiverWaterY()+" receiver="+receiverSample.waterY());
                     if(receiverSample.feature()!=expectedReceiver
                             ||!endpoint.equals(receiverSample.convergenceKey()))
                         throw new AssertionError("Receiver biome layer does not expose the same convergence key: expected="
@@ -101,6 +101,10 @@ public final class LakeStreamCoverageProbe {
                     if(course.sourceWaterY()!=lake.waterY||course.receiverWaterY()>course.sourceWaterY())
                         throw new AssertionError("Outlet water surface does not descend from its source lake: source="
                                 +course.sourceWaterY()+" receiver="+course.receiverWaterY());
+                    if(course.sourceWaterY()-course.receiverWaterY()>=6
+                            &&course.directLengthBlocks()>=72.0&&course.cascadeCount()<1)
+                        throw new AssertionError("Elevated source lake did not create a multi-level cascade: drop="
+                                +(course.sourceWaterY()-course.receiverWaterY())+" cascadeCount="+course.cascadeCount());
                     int previousWaterY=course.sourceWaterY();
                     for(int p=1;p<course.pointCount();p++) {
                         int level=course.waterYAt(course.pointXBlock(p),course.pointZBlock(p));
