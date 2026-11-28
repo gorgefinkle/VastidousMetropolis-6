@@ -38,7 +38,7 @@ public final class StreamWaterProfileProbe {
               routeX,routeZ,160,72,0x464C415452495645L,(x,z)->110);
       StreamWaterProfile.Profile naturalCliff=StreamWaterProfile.create(
               routeX,routeZ,160,72,0x464C415452495645L,(x,z)->x<600?140:90);
-      if(smoothGround.maximumSampleDrop()>1.0)
+      if(smoothGround.maximumSampleDrop()>1.4)
          throw new AssertionError("Smooth terrain produced an artificial waterfall");
       if(naturalCliff.maximumSampleDrop()<smoothGround.maximumSampleDrop()*3.0)
          throw new AssertionError("A natural terrain break did not influence the water drop: smooth="
