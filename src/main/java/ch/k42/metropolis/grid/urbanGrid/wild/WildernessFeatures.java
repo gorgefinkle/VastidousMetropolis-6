@@ -218,7 +218,6 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       int idealX = gx * this.cellSize + this.cellSize / 2;
       int idealZ = gz * this.cellSize + this.cellSize / 2;
       int mountainAttempts = 4;
-      int lakeAttempts = 16;
       // Inland seas have a larger but bounded envelope, leaving open wilderness between basins.
       int lakeReach = Math.max(24, this.cellSize / 2 - 44);
       int maskReach = lakeReach + 52;
@@ -247,28 +246,26 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       double ratio = 0.70 + unit(mix(h ^ 0x454C4C49505345L)) * 0.20;
       double angle = unit(mix(h ^ 0x4C414B45414E474CL)) * Math.PI;
       int footprint = (int)Math.ceil(radius * 1.13 + LakeSite.SHORE_WIDTH_BLOCKS / 16.0 + 3.0);
-      for (int attempt = 0; attempt < lakeAttempts; attempt++) {
-         int[] offset = candidateOffset(h, attempt, lakeReach);
-         int x = idealX + offset[0], z = idealZ + offset[1];
-         if (!footprintClear(x, z, footprint, footprint, highwayMask, 2)) continue;
-         double centerX=x*16.0+8.0,centerZ=z*16.0+8.0;
-         double radiusX=radius*16.0,radiusZ=radius*ratio*16.0;
-         // A lake is legal only when the untouched wilderness terrain already
-         // forms a closed, gently graded basin. No fixed sea-level excavation
-         // is permitted to manufacture one on a flat or unsuitable surface.
-         WildernessTerrainProfile.BasinFit basin=this.terrainProfile.findBasin(
-                 centerX,centerZ,radiusX,radiusZ,angle);
-         if(basin==null)continue;
-         LakeSite lake = new LakeSite(this.seed,gx,gz,centerX,centerZ,radiusX,radiusZ,
-                 angle,basin.waterY,this.terrainProfile,basin);
-         // A basin remains a lake even when no legal outlet route is available.
-         // Where river/ocean receiving water is reachable, attach a continuous
-         // polyline stream; otherwise preserve this as a genuine closed basin.
-         if (RiverConfig.isRiverEnabled()) {
-            List<WaterTarget> targets = findTargets(x, z);
-            if (!targets.isEmpty()) lake.stream = this.buildOutlet(lake, h, targets);
+      double radiusX=radius*16.0,radiusZ=radius*ratio*16.0;
+      // Search the existing wilderness surface for closed depressions rather
+      // than stamping a predetermined ellipse at a random offset. Candidate
+      // basins are returned in deterministic suitability order; city, water,
+      // creek and highway reservations still veto the final footprint.
+      List<WildernessTerrainProfile.BasinCandidate> basins=this.terrainProfile.findNearbyBasins(
+              idealX*16.0+8.0,idealZ*16.0+8.0,lakeReach*16.0,
+              radiusX,radiusZ,angle,24);
+      for(WildernessTerrainProfile.BasinCandidate candidate:basins) {
+         int x=(int)Math.floor(candidate.centerX/16.0),z=(int)Math.floor(candidate.centerZ/16.0);
+         if(!footprintClear(x,z,footprint,footprint,highwayMask,2))continue;
+         LakeSite lake=new LakeSite(this.seed,gx,gz,candidate.centerX,candidate.centerZ,
+                 radiusX,radiusZ,candidate.angle,candidate.fit.waterY,this.terrainProfile,candidate.fit);
+         // A basin remains a freshwater lake even when it has no legal outlet.
+         // Accepted outlets converge through an exact keyed ocean, river or creek endpoint.
+         if(RiverConfig.isRiverEnabled()) {
+            List<WaterTarget> targets=findTargets(x,z);
+            if(!targets.isEmpty())lake.stream=this.buildOutlet(lake,h,targets);
          }
-         return new FeatureCell(null, lake);
+         return new FeatureCell(null,lake);
       }
       return FeatureCell.EMPTY;
    }
