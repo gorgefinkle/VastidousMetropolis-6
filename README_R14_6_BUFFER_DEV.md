@@ -1,5 +1,14 @@
 # Metropolis R14.6 – Bounded disk-backed deferred population (DEV checkpoint)
 
+> **Historical checkpoint note — not the current combined R14.6 release specification.**
+> This file records the earlier disk-deferred-population-only R14.6 experiment.
+> The current branch combines that integrated disk queue with the R14.51
+> backpressure work and the compact branch-growth/readiness changes. For the
+> current scope, validation and limitations, use
+> [README_R14_6_COMPACT_BRANCH_GROWTH.md](README_R14_6_COMPACT_BRANCH_GROWTH.md).
+> The disk-queue details below remain useful background, but the old baseline
+> and "only production changes" statements describe that earlier checkpoint.
+
 ## Baseline and scope
 
 Branched from the independently tested R14.5 road-corner-ordering source. The

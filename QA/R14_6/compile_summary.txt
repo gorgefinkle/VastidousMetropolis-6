@@ -1,2 +1,5 @@
+# Historical compile summary from the earlier disk-queue-only R14.6 checkpoint.
+# Its JAR hash does not identify the current combined R14.6 delivery.
+# Verify the current delivered JAR and source with SHA256SUMS.txt in the delivery ZIP.
 sources=254 classes=534
 abf09225c405ee052bc8dca40ddd154ec1e68c48944dd89e2ee8241e3f5b55f7  /mnt/data/r14_6/Metropolis_R14_6_DiskBackpressure_DEV.jar
