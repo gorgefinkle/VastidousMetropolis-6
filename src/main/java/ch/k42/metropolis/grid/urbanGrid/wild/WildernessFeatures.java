@@ -241,9 +241,9 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          return FeatureCell.EMPTY;
       }
 
-      // 24-31 chunk major-axis radii create broad inland seas, smaller than the world ocean.
+      // 8-15 chunk major-axis radii let freshwater basins fit into local wilderness landforms.
       // Placement reserves the noisy coast and its full finite natural bank.
-      int radius = 24 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
+      int radius = 8 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
       double ratio = 0.70 + unit(mix(h ^ 0x454C4C49505345L)) * 0.20;
       double angle = unit(mix(h ^ 0x4C414B45414E474CL)) * Math.PI;
       int footprint = (int)Math.ceil(radius * 1.13 + LakeSite.SHORE_WIDTH_BLOCKS / 16.0 + 3.0);
