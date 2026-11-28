@@ -1,4 +1,4 @@
-name: R14.48 Hydrology Networks
+name: R14.49 Terrain Hydrology Networks
 
 on:
   push:
@@ -117,7 +117,7 @@ jobs:
           assert "enforceNeighbourRules ? this.lowerSites" in source
           print("LandmarkNonRecursiveProbe PASS: accepted plans use memoized, one-hop raw neighbor proposals; no recursive siteOf edge")
           PY
-      - name: Probe convergence-key identity and conflict rejection
+      - name: Probe convergence-key identity, spatial lookup and LRU eviction
         run: |
           mkdir -p qa-out
           javac -d qa-out \
@@ -163,21 +163,21 @@ jobs:
           ! grep -Fq 'getDeclaredField("coneSeed")' src/main/java/ch/k42/metropolis/grid/urbanGrid/forest/BiomeEcology.java
       - name: Verify embedded plugin version
         run: |
-          expected='0.1.24-R14.48-Hydrology-Networks-DEV'
-          actual="$(unzip -p target/Metropolis_R14_48_Hydrology_Networks_DEV.jar plugin.yml | sed -n 's/^version: //p')"
+          expected='0.1.25-R14.49-Hydrology-Networks-DEV'
+          actual="$(unzip -p target/Metropolis_R14_49_Hydrology_Networks_DEV.jar plugin.yml | sed -n 's/^version: //p')"
           test "$actual" = "$expected"
           echo "Embedded plugin version: $actual"
       - name: Assemble test delivery
         run: |
           mkdir -p delivery
           cp target/Metropolis_R14_48_Hydrology_Networks_DEV.jar delivery/
-          zip -qr delivery/Metropolis_R14_48_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
+          zip -qr delivery/Metropolis_R14_49_FullSource.zip pom.xml src QA README_*.md DESIGN_R14_42_MISSILE_SILO_COMPLEX.md .github .gitattributes .gitignore
           (cd delivery && sha256sum *.jar *.zip > SHA256SUMS.txt)
           ls -lh delivery
       - name: Upload JAR and full source
         uses: actions/upload-artifact@v4
         with:
-          name: Metropolis_R14_47_Inland_Seas
+          name: Metropolis_R14_49_Terrain_Hydrology
           path: delivery/*
           if-no-files-found: error
           retention-days: 14
