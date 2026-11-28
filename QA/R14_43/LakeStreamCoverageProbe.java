@@ -101,8 +101,10 @@ public final class LakeStreamCoverageProbe {
                     streamCount++;
                 }
             }
-            if(lakeCount==0)
+            if(lakeCount==0) {
+                System.out.println("BASIN-SEARCH-DIAG seed="+seed+" "+features.basinSearchDiagnosticForProbe());
                 throw new AssertionError("No planned lake basin appears in the 5x5 nearest feature-cell window for seed "+seed);
+            }
             if(nearestLakeBlocks>8000.0)
                 throw new AssertionError("Nearest planned lake is too remote for ordinary exploration: seed="+seed
                         +" distance="+Math.round(nearestLakeBlocks)+" blocks");
