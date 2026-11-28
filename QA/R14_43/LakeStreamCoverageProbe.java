@@ -79,6 +79,9 @@ public final class LakeStreamCoverageProbe {
                         case RIVER -> HydrologySample.Feature.RIVER;
                         case CREEK -> HydrologySample.Feature.CREEK;
                     };
+                    if(course.receiverWaterY()!=receiverSample.waterY())
+                        throw new AssertionError("Outlet water surface does not meet receiver water level: course="
+                                +course.receiverWaterY()+" receiver="+receiverSample.waterY());
                     if(receiverSample.feature()!=expectedReceiver
                             ||!endpoint.equals(receiverSample.convergenceKey()))
                         throw new AssertionError("Receiver biome layer does not expose the same convergence key: expected="
@@ -90,6 +93,21 @@ public final class LakeStreamCoverageProbe {
                         throw new AssertionError("WaterField stream lookup lazily resolved more feature cells");
                     if(!(carrier instanceof WildernessStreamCourse))
                         throw new AssertionError("Shared feature plan lost its continuous stream carrier");
+                    WildernessStreamCourse course=(WildernessStreamCourse)carrier;
+                    double sinuosity=course.lengthBlocks()/Math.max(1.0,course.directLengthBlocks());
+                    if(course.pointCount()<4||sinuosity<1.005)
+                        throw new AssertionError("Outlet is too straight for a natural wilderness stream: points="
+                                +course.pointCount()+" sinuosity="+sinuosity);
+                    if(course.sourceWaterY()!=lake.waterY||course.receiverWaterY()>course.sourceWaterY())
+                        throw new AssertionError("Outlet water surface does not descend from its source lake: source="
+                                +course.sourceWaterY()+" receiver="+course.receiverWaterY());
+                    int previousWaterY=course.sourceWaterY();
+                    for(int p=1;p<course.pointCount();p++) {
+                        int level=course.waterYAt(course.pointXBlock(p),course.pointZBlock(p));
+                        if(level>previousWaterY)
+                            throw new AssertionError("Stream water surface rises downstream at course point "+p);
+                        previousWaterY=level;
+                    }
                     if(!water.isStream(sx,sz) || water.streamCarrierAt(sx,sz)==null)
                         throw new AssertionError("Shared WaterField does not expose the outlet as STREAM");
                     boolean hasLayerOwnedStreamSample=false;
