@@ -71,9 +71,7 @@ public final class StreamWaterProfile {
       double[] x=new double[n],z=new double[n];
       for(int i=0;i<n;i++){x[i]=px.get(i);z[i]=pz.get(i);}
 
-      double[] distanceAlong=new double[n],weights=new double[n-1],cumulative=new double[n];
-      for(int i=1;i<n;i++)
-         distanceAlong[i]=distanceAlong[i-1]+Math.hypot(x[i]-x[i-1],z[i]-z[i-1]);
+      double[] weights=new double[n-1],cumulative=new double[n];
 
       Noise2D gradeNoise=new Noise2D(seed^0x475241444550524FL);
       double[] naturalBreak=new double[n-1];
@@ -99,15 +97,15 @@ public final class StreamWaterProfile {
       for(int i=0;i<n-1;i++) {
          double mx=(x[i]+x[i+1])*0.5,mz=(z[i]+z[i+1])*0.5;
          double segmentLength=Math.max(1.0,Math.hypot(x[i+1]-x[i],z[i+1]-z[i]));
-         double broad=gradeNoise.noise(mx/1750.0+0.37,mz/1750.0-0.61);
-         double local=gradeNoise.noise(mx/520.0-1.13,mz/520.0+0.79);
+         double broad=gradeNoise.noise(mx/520.0+0.37,mz/520.0-0.61);
+         double local=gradeNoise.noise(mx/145.0-1.13,mz/145.0+0.79);
          double terrainCue=0.0;
          if(terrain!=null) {
             int here=terrain.at((int)Math.floor(mx),(int)Math.floor(mz));
             int next=terrain.at((int)Math.floor(x[i+1]),(int)Math.floor(z[i+1]));
             terrainCue=Math.max(-1.0,Math.min(1.0,(next-here)/16.0));
          }
-         double modulation=1.0+0.10*broad+0.05*local+0.03*terrainCue;
+         double modulation=1.0+0.22*broad+0.16*local+0.05*terrainCue;
          // Spread only a naturally detected terrain break into a short nearby
          // reach, producing a steep fall without imposing one on smooth ground.
          double fallAffinity=0.0;
