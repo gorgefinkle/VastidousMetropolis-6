@@ -557,9 +557,9 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
 
    private WildernessStreamCourse buildOutlet(LakeSite lake,long featureHash,List<WaterTarget> targets) {
       if(targets.isEmpty())return null;
-      // Higher lakes may feed lower receivers through multi-level cascades.
-      // No upstream rise is permitted at the final junction; lakes without a
-      // same-height or lower receiver remain closed endorheic basins.
+      // Higher lakes may feed lower receivers. Their water surface starts at
+      // the lake level and descends continuously; no uphill outlet is allowed.
+      // Lakes without a same-height or lower receiver remain endorheic basins.
       List<WaterTarget> drainingTargets=new ArrayList<>();
       for(WaterTarget target:targets)
          if(receiverWaterY(target.key)<=lake.waterY)drainingTargets.add(target);
@@ -815,9 +815,8 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
                                Map<Long,Integer> cache) {
       // Major relief is a real drainage barrier. Streams may carve their own
       // channel and banks through ordinary surface variation, but route
-      // planning strongly avoids climbing into ridges or massifs. The long
-      // pool/cascade profile controls the water levels only after a plausible
-      // downhill valley route has been selected.
+      // planning strongly avoids climbing into ridges or massifs. The stream
+      // water profile then descends continuously from lake to receiver.
       int mean=land?(routeSurfaceY(x-1,z,cache)+routeSurfaceY(x+1,z,cache)
               +routeSurfaceY(x,z-1,cache)+routeSurfaceY(x,z+1,cache))/4:toY;
       return WildernessDrainageCost.movementCost(fromY,toY,mean,land);
