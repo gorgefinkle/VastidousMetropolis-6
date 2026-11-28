@@ -259,7 +259,7 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          int x=(int)Math.floor(candidate.centerX/16.0),z=(int)Math.floor(candidate.centerZ/16.0);
          if(!footprintClear(x,z,footprint,footprint,highwayMask,2))continue;
          LakeSite lake=new LakeSite(this.seed,gx,gz,candidate.centerX,candidate.centerZ,
-                 radiusX,radiusZ,candidate.angle,candidate.fit.waterY,this.terrainProfile,candidate.fit);
+                 candidate.radiusX,candidate.radiusZ,candidate.angle,candidate.fit.waterY,this.terrainProfile,candidate.fit);
          // A basin remains a freshwater lake even when it has no legal outlet.
          // Accepted outlets converge through an exact keyed ocean, river or creek endpoint.
          if(RiverConfig.isRiverEnabled()) {
