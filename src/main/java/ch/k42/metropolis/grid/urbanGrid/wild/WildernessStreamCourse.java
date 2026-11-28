@@ -55,8 +55,13 @@ public final class WildernessStreamCourse extends RiverProvider {
       this.zs = zs;
       if(waterYs!=null&&waterYs.length!=xs.length)
          throw new IllegalArgumentException("A stream water profile needs one level per path point");
-      if(waterYs!=null)for(double y:waterYs)if(!Double.isFinite(y))
-         throw new IllegalArgumentException("Stream water levels must be finite");
+      if(waterYs!=null) {
+         for(double y:waterYs)if(!Double.isFinite(y))
+            throw new IllegalArgumentException("Stream water levels must be finite");
+         for(int i=1;i<waterYs.length;i++)
+            if(waterYs[i]>waterYs[i-1]+1.0e-9)
+               throw new IllegalArgumentException("Stream water level rises downstream at point "+i);
+      }
       this.waterYs=waterYs;
       this.widthBlocks = widthBlocks;
       this.bankMarginBlocks = bankMarginBlocks;
