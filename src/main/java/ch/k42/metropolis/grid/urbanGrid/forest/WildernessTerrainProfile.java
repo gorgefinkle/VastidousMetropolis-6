@@ -92,9 +92,9 @@ public final class WildernessTerrainProfile {
       // The exact candidate centre must itself be submerged. A mean over the
       // floor ring can otherwise select a level that leaves the lake's named
       // centre column dry even though its surrounding low points are wet.
-      double desiredWaterline=Math.max(coreMean+Math.max(1.25,Math.min(3.5,rise*.45)),core[0]+1.0);
+      double desiredWaterline=Math.max(coreMean+Math.max(1.25,Math.min(3.5,rise*.45)),core[0]+2.0);
       int waterY=(int)Math.floor(Math.min(desiredWaterline,rimMin-1.0));
-      if(waterY<core[0]+1 || waterY>=rimMin) { this.lastBasinReject="waterline-not-contained";return null; }
+      if(waterY<core[0]+2 || waterY>=rimMin) { this.lastBasinReject="waterline-not-contained";return null; }
 
       int submerged=0;
       for(double radius:new double[]{0.22,0.42,0.58}) {
