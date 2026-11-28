@@ -17,6 +17,8 @@ public final class WildernessTerrainProfile {
    private final ForestGenerator.WildField wild;
    private final int baseline;
    private final ConcurrentHashMap<Long,Integer> heightCache=new ConcurrentHashMap<>();
+   private String lastBasinReject="not-evaluated";
+   private volatile String lastSearchSummary="no basin search yet";
 
    public WildernessTerrainProfile(long worldSeed) {
       this.terrain=new ForestTerrain(worldSeed);
@@ -54,8 +56,9 @@ public final class WildernessTerrainProfile {
     * lowest surrounding rim; no terrain is lowered to manufacture a basin.
     */
    public BasinFit findBasin(double centerX,double centerZ,double radiusX,double radiusZ,double angle) {
-      if(!(radiusX>=112.0&&radiusZ>=72.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ))
-         return null;
+      if(!(radiusX>=112.0&&radiusZ>=72.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ)) {
+         this.lastBasinReject="invalid-footprint";return null;
+      }
       double c=Math.cos(angle),s=Math.sin(angle);
       int[] core={surfaceHeight((int)Math.round(centerX),(int)Math.round(centerZ))};
       double coreSum=core[0],coreMin=core[0],coreMax=core[0];
@@ -85,9 +88,9 @@ public final class WildernessTerrainProfile {
       double rimMean=rimSum/rimCount;
       double rise=rimMean-coreMean;
       // A flat plateau or a shallow noise dimple is not a lake basin.
-      if(rise<1.5 || rimMax-rimMin>34.0) return null;
+      if(rise<1.5 || rimMax-rimMin>34.0) { this.lastBasinReject=rise<1.5?"insufficient-rise":"uneven-rim";return null; }
       int waterY=(int)Math.floor(Math.min(coreMean+Math.max(1.25,Math.min(3.5,rise*.45)),rimMin-1.0));
-      if(waterY<coreMin+1 || waterY>=rimMin) return null;
+      if(waterY<coreMin+1 || waterY>=rimMin) { this.lastBasinReject="waterline-not-contained";return null; }
 
       int submerged=0;
       for(double radius:new double[]{0.22,0.42,0.58}) {
@@ -100,7 +103,7 @@ public final class WildernessTerrainProfile {
             if(surfaceHeight(x,z)<=waterY+1)submerged++;
          }
       }
-      if(submerged<Math.ceil(44.0*0.60)) return null;
+      if(submerged<Math.ceil(44.0*0.60)) { this.lastBasinReject="insufficient-submerged-area";return null; }
 
       int rimAbove=0;
       for(int i=0;i<40;i++) {
@@ -110,7 +113,7 @@ public final class WildernessTerrainProfile {
          int z=(int)Math.round(centerZ+s*radiusX*u+c*radiusZ*v);
          if(surfaceHeight(x,z)>=waterY+1)rimAbove++;
       }
-      if(rimAbove<28) return null;
+      if(rimAbove<28) { this.lastBasinReject="open-rim";return null; }
 
       // Refuse escarpments that would require a vertical cut at the shore.
       int maxEdgeStep=0;
@@ -122,7 +125,8 @@ public final class WildernessTerrainProfile {
          int oz=(int)Math.round(centerZ+s*radiusX*u*1.08+c*radiusZ*v*1.08);
          maxEdgeStep=Math.max(maxEdgeStep,Math.abs(surfaceHeight(ix,iz)-surfaceHeight(ox,oz)));
       }
-      if(maxEdgeStep>15) return null;
+      if(maxEdgeStep>15) { this.lastBasinReject="steep-shore";return null; }
+      this.lastBasinReject="accepted";
       return new BasinFit(waterY,coreMean,rimMean,coreMin,rimMin,rise,maxEdgeStep);
    }
 
@@ -142,6 +146,9 @@ public final class WildernessTerrainProfile {
       }
       List<Scored> scored=new ArrayList<>();
       int side=13;
+      double bestRise=Double.NEGATIVE_INFINITY,bestSpread=Double.POSITIVE_INFINITY;
+      int coarseRejected=0,fullTested=0,accepted=0;
+      java.util.Map<String,Integer> rejectionCounts=new java.util.TreeMap<>();
       double step=side<=1?0.0:(searchRadiusBlocks*2.0)/(side-1);
       double c=Math.cos(preferredAngle),sn=Math.sin(preferredAngle);
       for(int ix=0;ix<side;ix++)for(int iz=0;iz<side;iz++) {
@@ -161,9 +168,10 @@ public final class WildernessTerrainProfile {
          }
          double rise=sum/count-center;
          double spread=max-min;
+         if(rise>bestRise){bestRise=rise;bestSpread=spread;}
          // Cheap coarse rejection. Full closure, waterline and shoreline-grade
          // tests are applied to the best candidates below.
-         if(rise<1.0||above<9||spread>42.0)continue;
+         if(rise<1.0||above<9||spread>42.0){coarseRejected++;continue;}
          double score=rise+0.18*(min-center)-0.035*spread;
          scored.add(new Scored(x,z,score));
       }
@@ -171,13 +179,25 @@ public final class WildernessTerrainProfile {
               .thenComparingDouble(candidate->candidate.x).thenComparingDouble(candidate->candidate.z));
       List<BasinCandidate> result=new ArrayList<>();
       for(Scored candidate:scored) {
+         fullTested++;
          BasinFit fit=findBasin(candidate.x,candidate.z,radiusX,radiusZ,preferredAngle);
-         if(fit==null)continue;
+         if(fit==null) {
+            rejectionCounts.merge(this.lastBasinReject,1,Integer::sum);
+            continue;
+         }
+         accepted++;
          result.add(new BasinCandidate(candidate.x,candidate.z,preferredAngle,fit,candidate.score));
          if(result.size()>=maximum)break;
       }
+      this.lastSearchSummary="sampled="+(side*side)+" coarseAccepted="+scored.size()
+              +" coarseRejected="+coarseRejected+" fullTested="+fullTested
+              +" accepted="+accepted+" bestRise="+String.format(java.util.Locale.ROOT,"%.2f",bestRise)
+              +" bestRimSpread="+String.format(java.util.Locale.ROOT,"%.2f",bestSpread)
+              +" rejects="+rejectionCounts;
       return java.util.Collections.unmodifiableList(result);
    }
+
+   public String lastSearchDiagnostic(){return this.lastSearchSummary;}
 
    public static final class BasinCandidate {
       public final double centerX,centerZ,angle,score;
