@@ -1415,7 +1415,7 @@ public final class ForestGenerator {
             biome == WildBiome.DECIDUOUS ? BiomeNames.deciduous() :
             biome == WildBiome.COASTAL_DUNES ? BiomeNames.dunes() :
             biome == WildBiome.VOLCANIC_BARRENS ? BiomeNames.volcanic() :
-            biome.dryness() >= 0.5 ? BiomeNames.dryForest() : ForestTerrain.dominant(w).biome);
+            biome.dryness() >= 0.5 ? BiomeNames.dryForest() : ForestTerrain.dominant(w).biome());
       }
       if (surface == Ctx.SURFACE_GROUND && cover && ForestTerrain.unit(ForestTerrain.hash(seed, x, z, 15)) * 100.0 < coverPercent) {
          if (biome != WildBiome.COASTAL_DUNES && biome != WildBiome.VOLCANIC_BARRENS && biome != WildBiome.WETLANDS && biome != WildBiome.OLD_GROWTH)
@@ -1849,7 +1849,7 @@ public final class ForestGenerator {
       if (biome.is(WildBiome.DESERT)) return BiomeNames.desert();
       if (biome.is(WildBiome.MESA)) return BiomeNames.mesa();
       if (biome.is(WildBiome.MOUNTAINS)) return BiomeNames.mountains();
-      return biome.dryness() >= 0.5 ? BiomeNames.dryForest() : ForestTerrain.dominant(weights).biome;
+      return biome.dryness() >= 0.5 ? BiomeNames.dryForest() : ForestTerrain.dominant(weights).biome();
    }
 
    private static void setShoreBiome(World world, int x, int z, Biome biome) {
@@ -2111,7 +2111,7 @@ public final class ForestGenerator {
             return BiomeNames.mountains();
          }
       }
-      return ForestTerrain.dominant(w).biome;
+      return ForestTerrain.dominant(w).biome();
    }
 
    /** Ground plants. Trees are drawn afterwards and may replace them. */
