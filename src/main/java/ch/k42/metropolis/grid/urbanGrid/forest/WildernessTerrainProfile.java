@@ -56,7 +56,7 @@ public final class WildernessTerrainProfile {
     * lowest surrounding rim; no terrain is lowered to manufacture a basin.
     */
    public BasinFit findBasin(double centerX,double centerZ,double radiusX,double radiusZ,double angle) {
-      if(!(radiusX>=112.0&&radiusZ>=72.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ)) {
+      if(!(radiusX>=64.0&&radiusZ>=44.0)||!Double.isFinite(centerX)||!Double.isFinite(centerZ)) {
          this.lastBasinReject="invalid-footprint";return null;
       }
       double c=Math.cos(angle),s=Math.sin(angle);
@@ -145,7 +145,7 @@ public final class WildernessTerrainProfile {
          Scored(double x,double z,double score){this.x=x;this.z=z;this.score=score;}
       }
       List<Scored> scored=new ArrayList<>();
-      int side=13;
+      int side=21;
       double bestRise=Double.NEGATIVE_INFINITY,bestSpread=Double.POSITIVE_INFINITY;
       int coarseRejected=0,fullTested=0,accepted=0;
       java.util.Map<String,Integer> rejectionCounts=new java.util.TreeMap<>();
