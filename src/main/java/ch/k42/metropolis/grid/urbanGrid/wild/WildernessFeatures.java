@@ -559,13 +559,16 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       }
       RouteResult routed=route(startX,startZ,targets);
       if(routed==null||routed.path.size()<2)return null;
+      // Only the selected receiver is retained. Candidate targets are transient
+      // A* inputs and must not fill the world registry with unused endpoints.
+      HydrologyConvergenceKey confluence=this.convergenceRegistry.register(routed.target.key);
       double[] blockX=new double[routed.path.size()],blockZ=new double[routed.path.size()];
       for(int i=0;i<routed.path.size();i++){blockX[i]=routed.path.get(i)[0]*16.0+8.0;blockZ[i]=routed.path.get(i)[1]*16.0+8.0;}
       int last=blockX.length-1;
-      blockX[last]=routed.target.key.blockX();blockZ[last]=routed.target.key.blockZ();
+      blockX[last]=confluence.blockX();blockZ[last]=confluence.blockZ();
       long streamSeed=mix(featureHash^0x53545245414D4C4BL);
       double width=10.0+unit(mix(streamSeed))*2.0,bank=7.0+unit(mix(streamSeed^0x42414E4BL))*3.0;
-      return new WildernessStreamCourse(streamSeed,blockX,blockZ,width,bank,routed.target.key);
+      return new WildernessStreamCourse(streamSeed,blockX,blockZ,width,bank,confluence);
    }
 
    private List<WaterTarget> findTargets(int startX,int startZ) {
@@ -582,8 +585,7 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          List<HydrologyConvergenceKey> endpoints=source.convergenceEndpoints(
                  Math.max(minX,startX-creekRadius),Math.max(minZ,startZ-creekRadius),
                  Math.min(maxX,startX+creekRadius),Math.min(maxZ,startZ+creekRadius));
-         for(HydrologyConvergenceKey raw:endpoints) {
-            HydrologyConvergenceKey key=this.convergenceRegistry.register(raw);
+         for(HydrologyConvergenceKey key:endpoints) {
             int x=key.chunkX(),z=key.chunkZ();
             if(!this.inOuterCity(x,z))unique.putIfAbsent(key,new WaterTarget(key,startX,startZ));
          }
@@ -616,9 +618,9 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
             double bx=x*16.0+8.0,bz=z*16.0+8.0;
             double inside=this.water.ocean().distanceInsideShoreBlock(bx,bz);
             if(!Double.isFinite(inside)||inside<=0.0)continue;
-            HydrologyConvergenceKey key=this.convergenceRegistry.register(
-                    new HydrologyConvergenceKey(HydrologyConvergenceKey.Receiver.OCEAN,network,
-                            HydrologyConvergenceKey.chunkEndpointId(x,z),bx,bz));
+            HydrologyConvergenceKey key=new HydrologyConvergenceKey(
+                    HydrologyConvergenceKey.Receiver.OCEAN,network,
+                    HydrologyConvergenceKey.chunkEndpointId(x,z),bx,bz);
             targets.putIfAbsent(key,new WaterTarget(key,startX,startZ));
          }
       }
@@ -640,8 +642,8 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          if(!river.isRiver(cx,cz)||this.water.baseKindAt(cx,cz)==WaterField.Kind.OCEAN)continue;
          double distance=river.distanceFromCenterBlock(bx,bz),width=river.widthAtBlock(zBound?bz:bx);
          if(!Double.isFinite(distance)||!Double.isFinite(width)||Math.abs(distance)>width*.5)continue;
-         HydrologyConvergenceKey key=this.convergenceRegistry.register(
-                 new HydrologyConvergenceKey(HydrologyConvergenceKey.Receiver.RIVER,network,along,bx,bz));
+         HydrologyConvergenceKey key=new HydrologyConvergenceKey(
+                 HydrologyConvergenceKey.Receiver.RIVER,network,along,bx,bz);
          targets.putIfAbsent(key,new WaterTarget(key,startX,startZ));
       }
    }
