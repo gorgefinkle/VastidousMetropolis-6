@@ -76,6 +76,25 @@ public final class StreamWaterProfile {
          distanceAlong[i]=distanceAlong[i-1]+Math.hypot(x[i]-x[i-1],z[i]-z[i-1]);
 
       Noise2D gradeNoise=new Noise2D(seed^0x475241444550524FL);
+      double[] naturalBreak=new double[n-1];
+      if(terrain!=null) {
+         // A waterfall is eligible only where the existing terrain has a sharp
+         // local drop relative to its wider upstream/downstream neighbourhood.
+         // A steady hillside grade does not qualify as a fall.
+         for(int i=0;i<n-1;i++) {
+            double dx=x[i+1]-x[i],dz=z[i+1]-z[i];
+            double segmentLength=Math.max(1.0,Math.hypot(dx,dz));
+            double ux=dx/segmentLength,uz=dz/segmentLength;
+            int from=terrain.at((int)Math.floor(x[i]),(int)Math.floor(z[i]));
+            int to=terrain.at((int)Math.floor(x[i+1]),(int)Math.floor(z[i+1]));
+            int before=terrain.at((int)Math.floor(x[i]-24.0*ux),(int)Math.floor(z[i]-24.0*uz));
+            int after=terrain.at((int)Math.floor(x[i+1]+24.0*ux),(int)Math.floor(z[i+1]+24.0*uz));
+            double naturalDrop=from-to;
+            double neighbourhoodDrop=(before-after)*(segmentLength/60.0);
+            double abruptDrop=Math.max(0.0,naturalDrop-Math.max(1.5,neighbourhoodDrop*1.65));
+            naturalBreak[i]=Math.min(16.0,abruptDrop*0.70);
+         }
+      }
       double totalWeight=0.0;
       for(int i=0;i<n-1;i++) {
          double mx=(x[i]+x[i+1])*0.5,mz=(z[i]+z[i+1])*0.5;
@@ -88,9 +107,19 @@ public final class StreamWaterProfile {
             int next=terrain.at((int)Math.floor(x[i+1]),(int)Math.floor(z[i+1]));
             terrainCue=Math.max(-1.0,Math.min(1.0,(next-here)/16.0));
          }
-         // Gentle modulation only: no forced waterfall, cascade or pool spacing.
-         double modulation=1.0+0.12*broad+0.06*local+0.05*terrainCue;
-         weights[i]=segmentLength*Math.max(0.78,Math.min(1.22,modulation));
+         double modulation=1.0+0.10*broad+0.05*local+0.03*terrainCue;
+         // Spread only a naturally detected terrain break into a short nearby
+         // reach, producing a steep fall without imposing one on smooth ground.
+         double fallAffinity=0.0;
+         for(int j=Math.max(0,i-3);j<=Math.min(n-2,i+3);j++) {
+            if(naturalBreak[j]<=0.0)continue;
+            double distance=Math.abs((distanceAlong[i]+segmentLength*0.5)
+                    -(distanceAlong[j]+Math.hypot(x[j+1]-x[j],z[j+1]-z[j])*0.5));
+            double fade=Math.exp(-(distance*distance)/(2.0*28.0*28.0));
+            fallAffinity=Math.max(fallAffinity,naturalBreak[j]*fade);
+         }
+         double waterfallBias=1.0+fallAffinity;
+         weights[i]=segmentLength*Math.max(0.72,Math.min(18.0,modulation*waterfallBias));
          totalWeight+=weights[i];
          cumulative[i+1]=totalWeight;
       }
