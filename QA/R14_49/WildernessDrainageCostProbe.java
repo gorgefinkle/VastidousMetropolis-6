@@ -24,7 +24,7 @@ public final class WildernessDrainageCostProbe {
               ||highLake.totalDrop()!=88.0||highLake.waterY()[1]>=160.0)
          throw new AssertionError("High lake source was not allowed to descend continuously");
       System.out.printf(java.util.Locale.ROOT,
-              "WildernessDrainageCostProbe PASS gentle=%d shoulder=%d massif=%d ridge=%d highLake=%d->%d%n",
+              "WildernessDrainageCostProbe PASS gentle=%d shoulder=%d massif=%d ridge=%d highLake=%.1f->%.1f%n",
               gentle,shoulder,massif,ridge,highLake.waterY()[0],highLake.waterY()[highLake.pointCount()-1]);
    }
 }
