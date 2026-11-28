@@ -272,7 +272,6 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
       int radius = 4 + (int)(mix(h ^ 0x4C414B4553495A45L) >>> 61);
       double ratio = 0.70 + unit(mix(h ^ 0x454C4C49505345L)) * 0.20;
       double angle = unit(mix(h ^ 0x4C414B45414E474CL)) * Math.PI;
-      int footprint = (int)Math.ceil(radius * 1.13 + LakeSite.SHORE_WIDTH_BLOCKS / 16.0 + 3.0);
       double radiusX=radius*16.0,radiusZ=radius*ratio*16.0;
       // Search the existing wilderness surface for closed depressions rather
       // than stamping a predetermined ellipse at a random offset. Candidate
@@ -283,6 +282,11 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
               radiusX,radiusZ,angle,24);
       this.lakeBasinCandidates.addAndGet(basins.size());
       for(WildernessTerrainProfile.BasinCandidate candidate:basins) {
+         // Reserve the actual accepted basin contour and its rendered bank.
+         // Candidate radii are already scaled to the natural closed rim; using
+         // the larger search radius here was vetoing otherwise valid locations.
+         int footprint=(int)Math.ceil((Math.max(candidate.radiusX,candidate.radiusZ)*1.13
+                 +LakeSite.SHORE_WIDTH_BLOCKS)/16.0)+1;
          int x=(int)Math.floor(candidate.centerX/16.0),z=(int)Math.floor(candidate.centerZ/16.0);
          if(!footprintClear(x,z,footprint,footprint,highwayMask,2)) {
             this.lakeFootprintRejects.incrementAndGet();
