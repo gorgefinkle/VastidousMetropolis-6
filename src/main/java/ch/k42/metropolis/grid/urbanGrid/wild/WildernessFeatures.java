@@ -813,22 +813,24 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
     */
    private int terrainFlowCost(int fromY,int toY,int x,int z,boolean land,
                                Map<Long,Integer> cache) {
-      // Existing topography informs the broad drainage direction, but it is
-      // not a hard riverbed constraint. A real stream can cut through a low
-      // ridge or shoulder; the channel and bank painter establish its own
-      // smooth grade. Keep this term deliberately weaker than the meander
-      // guide and the base route cost.
+      // Major relief is a real drainage barrier. Streams may carve their own
+      // channel and banks through ordinary surface variation, but route
+      // planning strongly avoids climbing into ridges or massifs. The long
+      // pool/cascade profile controls the water levels only after a plausible
+      // downhill valley route has been selected.
       int rise=toY-fromY;
-      int uphillPenalty=(int)Math.round(Math.max(0,rise-2)*0.38);
-      int downhillReward=(int)Math.round(Math.min(2.0,Math.max(0,-rise)*0.10));
-      int gentleValleyPreference=0;
+      int uphill=Math.max(0,rise);
+      int uphillPenalty=uphill*7+Math.max(0,uphill-1)*2;
+      int downhill=Math.max(0,-rise);
+      int downhillReward=Math.min(6,downhill);
+      int valleyPenalty=0;
       if(land) {
-         int mean=(routeSurfaceY(x-2,z,cache)+routeSurfaceY(x+2,z,cache)
-                 +routeSurfaceY(x,z-2,cache)+routeSurfaceY(x,z+2,cache))/4;
-         int shoulder=Math.max(0,toY-mean-3);
-         gentleValleyPreference=(int)Math.round(Math.min(1.5,shoulder*0.12));
+         int mean=(routeSurfaceY(x-1,z,cache)+routeSurfaceY(x+1,z,cache)
+                 +routeSurfaceY(x,z-1,cache)+routeSurfaceY(x,z+1,cache))/4;
+         int ridgeAboveValley=Math.max(0,toY-mean);
+         valleyPenalty=Math.min(18,ridgeAboveValley*2);
       }
-      return Math.max(0,Math.min(3,uphillPenalty+gentleValleyPreference-downhillReward));
+      return Math.max(0,Math.min(48,uphillPenalty+valleyPenalty-downhillReward));
    }
 
    private static int heuristic(int x, int z, List<WaterTarget> targets) {
