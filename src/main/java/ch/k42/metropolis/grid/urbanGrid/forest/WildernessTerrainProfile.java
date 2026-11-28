@@ -141,7 +141,7 @@ public final class WildernessTerrainProfile {
          Scored(double x,double z,double score){this.x=x;this.z=z;this.score=score;}
       }
       List<Scored> scored=new ArrayList<>();
-      int side=17;
+      int side=13;
       double step=side<=1?0.0:(searchRadiusBlocks*2.0)/(side-1);
       double c=Math.cos(preferredAngle),sn=Math.sin(preferredAngle);
       for(int ix=0;ix<side;ix++)for(int iz=0;iz<side;iz++) {
