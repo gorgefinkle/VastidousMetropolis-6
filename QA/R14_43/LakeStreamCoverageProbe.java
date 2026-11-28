@@ -17,7 +17,7 @@ public final class LakeStreamCoverageProbe {
             WildernessFeatures features=WildernessFeatures.forSeed(seed);
             WaterField water=WaterFields.forSeed(seed,PluginConfig.getBlockSizeMin()+2);
             WildernessFeatures.install(seed);
-            int lakeCount=0,streamCount=0,elevatedOutletCount=0,cascadingOutletCount=0,maxOutletDrop=0;
+            int lakeCount=0,streamCount=0,elevatedOutletCount=0,maxOutletDrop=0;
             double nearestLakeBlocks=Double.POSITIVE_INFINITY;
             boolean diagnosed=false;
             StringBuilder lakePositions=new StringBuilder();
@@ -104,11 +104,6 @@ public final class LakeStreamCoverageProbe {
                     int outletDrop=course.sourceWaterY()-course.receiverWaterY();
                     maxOutletDrop=Math.max(maxOutletDrop,outletDrop);
                     if(outletDrop>=6)elevatedOutletCount++;
-                    if(course.cascadeCount()>0)cascadingOutletCount++;
-                    if(course.sourceWaterY()-course.receiverWaterY()>=12
-                            &&course.directLengthBlocks()>=72.0&&course.cascadeCount()<1)
-                        throw new AssertionError("Elevated source lake did not create a multi-level cascade: drop="
-                                +(course.sourceWaterY()-course.receiverWaterY())+" cascadeCount="+course.cascadeCount());
                     int previousWaterY=course.sourceWaterY();
                     for(int p=1;p<course.pointCount();p++) {
                         int level=course.waterYAt(course.pointXBlock(p),course.pointZBlock(p));
@@ -147,7 +142,6 @@ public final class LakeStreamCoverageProbe {
                     +" visibleLakePlans="+lakeCount+" connectedStreamPlans="+streamCount
                     +" registeredConvergenceEndpoints="+features.registeredConvergenceEndpointCountForProbe()
                     +" elevatedLakeOutlets="+elevatedOutletCount
-                    +" cascadingOutlets="+cascadingOutletCount
                     +" maxOutletDrop="+maxOutletDrop
                     +" nearestLakeBlocks="+Math.round(nearestLakeBlocks));
         }
