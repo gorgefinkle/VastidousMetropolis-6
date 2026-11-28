@@ -45,7 +45,7 @@ jobs:
           grep -F 'double summitCore = 1.0 - smoothStep(0.025, 0.18, r)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
           grep -F 'LAKE_THRESHOLD = 60' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
           grep -F 'this.cellSize = 192' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
-          grep -F 'return new FeatureCell(null, lake)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
+          grep -F 'return new FeatureCell(null,lake)' src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/WildernessFeatures.java
           grep -F 'nearestLake(originX, originZ)' src/main/java/ch/k42/metropolis/commands/CommandMetropolisLake.java
           grep -F 'nearestMountain(originX, originZ)' src/main/java/ch/k42/metropolis/commands/CommandMetropolisMassif.java
           grep -F 'installCreeks(generator);' src/main/java/ch/k42/metropolis/grid/urbanGrid/UrbanGrid.java
