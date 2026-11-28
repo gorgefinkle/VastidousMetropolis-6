@@ -495,8 +495,10 @@ public final class WildernessFeatures implements WaterField.HydrologyLayer {
          HydrologyConvergenceKey key=stream instanceof WildernessStreamCourse course
                  ?course.convergenceKey():null;
          boolean open=Double.isFinite(signed)&&Math.abs(signed)<=stream.getHalfWidthBlocks();
+         int streamWaterY=stream instanceof WildernessStreamCourse course
+                 ?course.waterYAt(px,pz):RiverConfig.getRiverBuildHeight();
          return new HydrologySample(blockX,blockZ,WaterField.Kind.STREAM,
-                 HydrologySample.Feature.STREAM,open,signed,RiverConfig.getRiverBuildHeight(),0,stream,key);
+                 HydrologySample.Feature.STREAM,open,signed,streamWaterY,0,stream,key);
       }
       return HydrologySample.none(blockX,blockZ);
    }
