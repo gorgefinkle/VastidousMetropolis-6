@@ -139,7 +139,7 @@ final class DecayProviderBranch {
         // that lost that earlier competition would already be invisible by
         // the time components are built, making the "fairness" downstream
         // meaningless for it.
-        List<GNode> rawCandidatePoints = this.collectRawGrowthCandidates(ctx);
+        List<GNode> rawCandidatePoints = this.collectRawGrowthCandidates(world, ctx);
         if (rawCandidatePoints.isEmpty()) {
             return;
         }
@@ -430,7 +430,7 @@ final class DecayProviderBranch {
         return false;
     }
 
-    private List<GNode> collectRawGrowthCandidates(Ctx ctx) {
+    private List<GNode> collectRawGrowthCandidates(World world, Ctx ctx) {
         // Every exposed, empty neighbour of every qualifying support hit,
         // completely unsampled. This is the SAME set of Block queries
         // collectGrowthCandidates() used to make while sampling inline --
