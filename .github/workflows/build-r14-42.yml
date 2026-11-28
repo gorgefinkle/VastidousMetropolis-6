@@ -125,6 +125,14 @@ jobs:
             src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/StreamMeanderGuide.java \
             QA/R14_49/StreamMeanderGuideProbe.java
           java -cp qa-out ch.k42.metropolis.grid.urbanGrid.wild.StreamMeanderGuideProbe
+      - name: Probe multi-level stream cascades and elevated lake outlets
+        run: |
+          mkdir -p qa-out
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/Noise2D.java \
+            src/main/java/ch/k42/metropolis/grid/urbanGrid/wild/StreamWaterProfile.java \
+            QA/R14_49/StreamWaterProfileProbe.java
+          java -cp qa-out ch.k42.metropolis.grid.urbanGrid.wild.StreamWaterProfileProbe
       - name: Probe convergence-key identity, spatial lookup and LRU eviction
         run: |
           mkdir -p qa-out
