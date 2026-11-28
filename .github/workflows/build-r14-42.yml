@@ -220,12 +220,21 @@ jobs:
             QA/R14_6/BranchGrowthWaitIndexProbe.java
           java -cp qa-out ch.k42.metropolis.grid.urbanGrid.provider.BranchSupportBufferProbe
           java -cp qa-out ch.k42.metropolis.grid.urbanGrid.provider.BranchGrowthWaitIndexProbe
+          # The durable deferred-population queue is independent of Bukkit;
+          # exercise crash/restart semantics and its bounded RAM window directly.
+          javac -d qa-out \
+            src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java \
+            QA/R14_6/DiskDeferredChunkQueueProbe.java
+          java -Xmx160m -cp qa-out DiskDeferredChunkQueueProbe
           python3 - <<'PY'
           from pathlib import Path
           normal = Path("src/main/java/ch/k42/metropolis/grid/urbanGrid/provider/DecayProviderNormal.java").read_text()
           branch = Path("src/main/java/ch/k42/metropolis/grid/urbanGrid/provider/DecayProviderBranch.java").read_text()
           drain = Path("src/main/java/ch/k42/metropolis/grid/urbanGrid/provider/BranchGrowthDrain.java").read_text()
           valve = Path("src/main/java/ch/k42/metropolis/generator/ChunkyMemoryValve.java").read_text()
+          generator = Path("src/main/java/ch/k42/metropolis/generator/MetropolisGenerator.java").read_text()
+          plugin = Path("src/main/java/ch/k42/metropolis/plugin/MetropolisPlugin.java").read_text()
+          disk_queue = Path("src/main/java/ch/k42/metropolis/generator/DiskDeferredChunkQueue.java").read_text()
           checks = {
               "packed candidate buffer": "BranchSupportBuffer supportHits" in normal,
               "no retained SupportHit objects": "class SupportHit" not in normal and "SupportHit" not in branch,
@@ -240,6 +249,11 @@ jobs:
               "async completion wakes drain": "completedLoadSignals.add(job)" in drain and "wakeCompletedLoads();" in drain,
               "drain retry delay enforced": "if (tick < job.retryAt)" in drain,
               "staging expiry does not retain completed jobs": "WeakReference<Job>" in drain,
+              "deferred population queue is disk-first": "new DiskDeferredChunkQueue(" in generator and "deferred.enqueue(" in generator,
+              "deferred population stages existing chunks asynchronously": "getChunkAtAsync(staged.x(), staged.z(), false, false)" in generator,
+              "deferred jobs acknowledged only after full population": "if (finished) this.deferred.complete()" in generator,
+              "deferred queue closes on plugin shutdown": "generator.saveDeferredQueue()" in plugin,
+              "disk queue has bounded memory window": "MAX_IN_MEMORY = 128" in disk_queue,
           }
           for name, ok in checks.items():
               print(("PASS" if ok else "FAIL") + ": " + name)

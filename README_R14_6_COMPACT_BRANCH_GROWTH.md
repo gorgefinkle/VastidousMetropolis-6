@@ -1,5 +1,15 @@
 # R14.6 — Compact Branch Growth
 
+## Two separate memory-pressure paths
+
+R14.6 contains **two distinct deferred-work mechanisms**; do not conflate them:
+
+1. **Deferred chunk population is disk-backed.** `DiskDeferredChunkQueue` is integrated into `MetropolisGenerator`'s BlockPopulator. Outstanding chunk coordinates are durable marker files, with a 128-entry in-memory ready window, retry hints, legacy TSV migration, async loading of already-generated chunks, and acknowledgement only after the full population/post-population/city/LOD path returns successfully. The plugin resumes it on enable/world-load and closes it on shutdown. This queue is at-least-once, not exactly-once, and its new restart/retry/migration probe is part of CI.
+2. **Pending branch-growth candidates remain in RAM.** R14.6 packs each support hit into an eight-byte primitive record and removes per-candidate Bukkit `Block` wrappers and `SupportHit` objects. It does not spool these branch candidate arrays to disk. Their retained-byte metric is reported separately from deferred population queue depth.
+
+The disk-backed chunk queue prevents the deferred populate backlog itself from consuming one object per outstanding chunk. The compact branch buffer reduces the memory cost of the separate tree/branch growth backlog. Neither should be treated as a substitute for profiling the remaining world-plan, parcel, highway, or schematic metadata caches.
+
+
 **Version:** `0.1.28-R14.6-Compact-Branch-Growth-DEV`  
 **Target:** Paper 26.2 / Java 25  
 **Parent:** R14.51 `901a6a4677a3ee247195a1b77c1cdc209b3fd173`
