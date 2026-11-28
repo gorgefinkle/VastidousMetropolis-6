@@ -76,6 +76,7 @@ public final class WildernessTerrainProfile {
       }
       double coreMean=coreSum/coreCount;
       double rimSum=0.0,rimMin=Double.POSITIVE_INFINITY,rimMax=Double.NEGATIVE_INFINITY;
+      double spillX=centerX,spillZ=centerZ;
       int rimHigh=0,rimCount=0;
       for(int i=0;i<40;i++) {
          double a=(Math.PI*2.0*i)/40.0;
@@ -83,7 +84,9 @@ public final class WildernessTerrainProfile {
          int x=(int)Math.round(centerX+c*radiusX*u-s*radiusZ*v);
          int z=(int)Math.round(centerZ+s*radiusX*u+c*radiusZ*v);
          int y=surfaceHeight(x,z);
-         rimSum+=y;rimMin=Math.min(rimMin,y);rimMax=Math.max(rimMax,y);rimCount++;
+         rimSum+=y;
+         if(y<rimMin){rimMin=y;spillX=x;spillZ=z;}
+         rimMax=Math.max(rimMax,y);rimCount++;
       }
       double rimMean=rimSum/rimCount;
       double rise=rimMean-coreMean;
@@ -131,7 +134,7 @@ public final class WildernessTerrainProfile {
       }
       if(maxEdgeStep>15) { this.lastBasinReject="steep-shore";return null; }
       this.lastBasinReject="accepted";
-      return new BasinFit(waterY,coreMean,rimMean,coreMin,rimMin,rise,maxEdgeStep);
+      return new BasinFit(waterY,coreMean,rimMean,coreMin,rimMin,rise,maxEdgeStep,(int)Math.round(spillX),(int)Math.round(spillZ),(int)Math.round(rimMin));
    }
 
    /**
@@ -231,11 +234,14 @@ public final class WildernessTerrainProfile {
       public final int waterY;
       public final double coreMean,rimMean,coreMin,rimMin,relief;
       public final int maximumShoreStep;
+      /** Lowest sampled closed-rim saddle; a natural place for the lake's outlet channel. */
+      public final int spillBlockX,spillBlockZ,spillHeight;
       BasinFit(int waterY,double coreMean,double rimMean,double coreMin,double rimMin,
-               double relief,int maximumShoreStep) {
+               double relief,int maximumShoreStep,int spillBlockX,int spillBlockZ,int spillHeight) {
          this.waterY=waterY;this.coreMean=coreMean;this.rimMean=rimMean;
          this.coreMin=coreMin;this.rimMin=rimMin;this.relief=relief;
          this.maximumShoreStep=maximumShoreStep;
+         this.spillBlockX=spillBlockX;this.spillBlockZ=spillBlockZ;this.spillHeight=spillHeight;
       }
    }
 }
